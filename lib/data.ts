@@ -26,6 +26,9 @@ export interface GameRow {
   is_free?: boolean | null
   last_steam_update?: string | null
   top_tags?: string[] | null
+  short_description?: string | null
+  developer?: string | null
+  publisher?: string | null
 }
 
 export interface StreamRow {

@@ -241,9 +241,13 @@ export async function GET(request: Request) {
           try {
             if (igdbData) {
               console.log(`[IGDB] Found match: ${igdbData.title}, Image: ${igdbData.image_url.substring(0, 50)}...`)
-              const updatePayload: Record<string, string | null> = {
+              const updatePayload: Record<string, string | null | string[]> = {
                 header_image_url: igdbData.image_url,
                 cover_image_url: igdbData.image_url,
+                short_description: igdbData.summary ?? null,
+                developer: igdbData.developer ?? null,
+                publisher: igdbData.publisher ?? null,
+                top_tags: (igdbData.tags ?? []).slice(0, 5),
               }
               if (igdbData.backdrop_url) {
                 updatePayload.background_image_url = igdbData.backdrop_url
@@ -264,6 +268,38 @@ export async function GET(request: Request) {
                   message: `IGDB update failed: ${igdbUpdateError.message}`,
                 })
               } else {
+                // 태그(장르/테마) 저장: tags + game_tags
+                if (igdbData.tags && igdbData.tags.length > 0) {
+                  try {
+                    const tagIds: number[] = []
+                    for (const tagName of igdbData.tags) {
+                      const slug = tagName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+                      const { data: tagData, error: tagError } = await adminSupabase
+                        .from("tags")
+                        .upsert({ name: tagName, slug }, { onConflict: "name", ignoreDuplicates: false })
+                        .select("id")
+                        .single()
+                      if (tagError) {
+                        const { data: existingTag } = await adminSupabase
+                          .from("tags")
+                          .select("id")
+                          .eq("name", tagName)
+                          .single()
+                        if (existingTag) tagIds.push(existingTag.id)
+                      } else if (tagData) {
+                        tagIds.push(tagData.id)
+                      }
+                    }
+                    await adminSupabase.from("game_tags").delete().eq("game_id", game.id)
+                    if (tagIds.length > 0) {
+                      await adminSupabase
+                        .from("game_tags")
+                        .insert(tagIds.map((tagId) => ({ game_id: game.id, tag_id: tagId })))
+                    }
+                  } catch (tagProcessError) {
+                    console.error(`[IGDB] Tag sync error for ${game.title}:`, tagProcessError)
+                  }
+                }
                 console.log(`[IGDB] ✓ Updated: ${game.title}`)
                 results.updated++
                 results.details.push({ id: game.id, title: game.title, steam_appid: null, status: "updated" })
