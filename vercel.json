@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/discover-top-games",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/update-streams",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/update-steam",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
