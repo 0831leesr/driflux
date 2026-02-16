@@ -1,0 +1,15 @@
+name: Daily Game Metadata Update
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 매일 UTC 00:00 (한국 시간 09:00)
+  workflow_dispatch:      # 수동 실행 가능
+
+jobs:
+  update-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Update Steam Metadata
+        run: |
+          curl -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
