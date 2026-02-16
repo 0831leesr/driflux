@@ -270,7 +270,6 @@ export async function GET(request: Request) {
               thumbnail_url: stream.liveImageUrl,
               is_live: true,
               viewer_count: stream.concurrentUserCount,
-              viewers_count: stream.concurrentUserCount, // Try both column names
               stream_category: stream.category || null,
               game_id: game.id > 0 ? game.id : null, // Only set game_id if it's a real game from DB
               last_chzzk_update: new Date().toISOString(),
