@@ -70,7 +70,7 @@ export async function GET(request: Request) {
     // Fetch ALL games (Steam + non-Steam). header_image_url NULL 우선 처리.
     let query = supabase
       .from("games")
-      .select("id, title, steam_appid, header_image_url")
+      .select("id, title, english_title, steam_appid, header_image_url")
       .order("header_image_url", { ascending: true, nullsFirst: true })
 
     // Filter by specific app ID if provided (Steam games only)
@@ -222,9 +222,23 @@ export async function GET(request: Request) {
         }
         // Case B: 비스팀 게임인 경우 (IGDB 사용)
         else {
-          console.log(`[IGDB] Searching metadata for: ${game.title}`)
+          let igdbData = null
+
+          // 1. Try English Title first (IGDB에 영어 검색이 더 정확함)
+          const englishTitle = (game as { english_title?: string | null }).english_title?.trim()
+          if (englishTitle) {
+            console.log(`[IGDB] Trying English title: ${englishTitle}`)
+            igdbData = await searchIGDBGame(englishTitle)
+            await delay(350)
+          }
+
+          // 2. Fallback to Korean Title if English failed or didn't exist
+          if (!igdbData) {
+            console.log(`[IGDB] English failed/missing. Trying Korean title: ${game.title}`)
+            igdbData = await searchIGDBGame(game.title)
+          }
+
           try {
-            const igdbData = await searchIGDBGame(game.title)
             if (igdbData) {
               console.log(`[IGDB] Found match: ${igdbData.title}, Image: ${igdbData.image_url.substring(0, 50)}...`)
               const { error: igdbUpdateError } = await adminSupabase
