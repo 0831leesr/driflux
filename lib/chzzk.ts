@@ -138,10 +138,15 @@ export async function getChzzkLiveStatus(
   channelId: string
 ): Promise<ProcessedChzzkData> {
   try {
-    // Using polling/v2 API instead of service/v1 to avoid Error 9004
-    const url = `${CHZZK_API_BASE}/polling/v2/channels/${channelId}/live-status`
-    
-    // Simplified headers for polling API - User-Agent is still required
+    if (channelId == null || typeof channelId !== "string" || channelId.trim() === "") {
+      console.warn(`[Chzzk API] Skipping invalid channelId:`, JSON.stringify(channelId))
+      return createOfflineStatus("")
+    }
+
+    const trimmedId = channelId.trim()
+    const url = `${CHZZK_API_BASE}/polling/v2/channels/${trimmedId}/live-status`
+    console.log("[Chzzk Request] Fetching:", url)
+
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -154,11 +159,15 @@ export async function getChzzkLiveStatus(
     })
 
     if (!response.ok) {
-      console.error(`[Chzzk API] ✗ HTTP Error: ${response.status} ${response.statusText}`)
-      const errorText = await response.text()
-      console.error(`[Chzzk API] Error Response Body:`, errorText.substring(0, 1000))
-      console.warn(`[Chzzk API] Returning offline status to prevent cron failure`)
-      return createOfflineStatus(channelId)
+      if (response.status === 404) {
+        console.warn(`[Chzzk API] 404 Not Found (channel may not exist): ${url}`)
+      } else {
+        console.error(`[Chzzk API] ✗ HTTP Error: ${response.status} ${response.statusText}`)
+        const errorText = await response.text()
+        console.error(`[Chzzk API] Error Response Body:`, errorText.substring(0, 1000))
+      }
+      console.warn(`[Chzzk API] Returning offline status (soft fail)`)
+      return createOfflineStatus(trimmedId)
     }
 
     const data: ChzzkApiResponse = await response.json()
@@ -168,7 +177,7 @@ export async function getChzzkLiveStatus(
       console.error(`[Chzzk API] ✗ Invalid response structure (no code field)`)
       console.error(`[Chzzk API] Response keys:`, Object.keys(data || {}))
       console.warn(`[Chzzk API] Returning offline status to prevent cron failure`)
-      return createOfflineStatus(channelId)
+      return createOfflineStatus(trimmedId)
     }
 
     if (data.code !== 200) {
@@ -182,13 +191,13 @@ export async function getChzzkLiveStatus(
       }
       
       console.warn(`[Chzzk API] Returning offline status to prevent cron failure`)
-      return createOfflineStatus(channelId)
+      return createOfflineStatus(trimmedId)
     }
 
     if (!data.content) {
       console.warn(`[Chzzk API] ✗ Content is null (channel may not exist or be private)`)
       console.warn(`[Chzzk API] Returning offline status to prevent cron failure`)
-      return createOfflineStatus(channelId)
+      return createOfflineStatus(trimmedId)
     }
 
     const content = data.content
@@ -197,7 +206,7 @@ export async function getChzzkLiveStatus(
     const isLive = content.status === "OPEN"
 
     if (!isLive) {
-      return createOfflineStatus(channelId, content.liveTitle)
+      return createOfflineStatus(trimmedId, content.liveTitle)
     }
 
     // Channel is LIVE - process thumbnail URL
@@ -220,7 +229,7 @@ export async function getChzzkLiveStatus(
 
     // Build processed data object
     const processedData: ProcessedChzzkData = {
-      chzzk_channel_id: channelId,
+      chzzk_channel_id: trimmedId,
       title: content.liveTitle || "제목 없음",
       thumbnail_url: thumbnailUrl,
       is_live: true,
@@ -231,7 +240,7 @@ export async function getChzzkLiveStatus(
     return processedData
 
   } catch (error) {
-    console.error(`[Chzzk API] ✗ Exception occurred while fetching channel ${channelId}`)
+    console.error(`[Chzzk API] ✗ Exception occurred while fetching channel ${channelId}`, error)
     console.error(`[Chzzk API] Error Type: ${error instanceof Error ? error.constructor.name : typeof error}`)
     console.error(`[Chzzk API] Error Message:`, error instanceof Error ? error.message : String(error))
     console.error(`[Chzzk API] Error Stack:`, error instanceof Error ? error.stack : 'N/A')
@@ -321,7 +330,7 @@ export async function getPopularCategories(size: number = 20): Promise<string[]>
     ]
 
     for (const url of possibleEndpoints) {
-
+      console.log("[Chzzk Request] Fetching categories:", url)
       try {
         const response = await fetch(url, {
           method: "GET",
@@ -336,6 +345,7 @@ export async function getPopularCategories(size: number = 20): Promise<string[]>
 
         if (response.ok) {
           const data = await response.json()
+          console.log("[Chzzk Categories] ✓ Success:", url)
 
           // Try to extract categories from different possible response structures
           let categories: string[] = []
@@ -368,9 +378,11 @@ export async function getPopularCategories(size: number = 20): Promise<string[]>
           if (categories.length > 0) {
             return categories
           }
+        } else if (response.status === 404) {
+          console.warn(`[Chzzk Categories] 404 Not Found (soft fail), trying next:`, url)
         }
-      } catch {
-        // Try next endpoint
+      } catch (err) {
+        console.warn(`[Chzzk Categories] Endpoint failed (soft fail):`, err instanceof Error ? err.message : String(err))
       }
     }
 
@@ -395,19 +407,27 @@ export async function searchChzzkLives(
   keyword: string,
   size: number = 20
 ): Promise<SearchedStreamData[]> {
+  if (keyword == null || (typeof keyword === "string" && keyword.trim() === "")) {
+    console.warn("[Chzzk Search] Skipping invalid keyword:", JSON.stringify(keyword))
+    return []
+  }
+
+  const searchKeyword = typeof keyword === "string" ? keyword.trim() : String(keyword)
+
   // Try multiple possible endpoints
   const endpoints = [
     // v1 search
-    `${CHZZK_API_BASE}/service/v1/search/lives?keyword=${encodeURIComponent(keyword)}&size=${size}&offset=0`,
+    `${CHZZK_API_BASE}/service/v1/search/lives?keyword=${encodeURIComponent(searchKeyword)}&size=${size}&offset=0`,
     // v2 search
-    `${CHZZK_API_BASE}/service/v2/search/lives?keyword=${encodeURIComponent(keyword)}&size=${size}`,
+    `${CHZZK_API_BASE}/service/v2/search/lives?keyword=${encodeURIComponent(searchKeyword)}&size=${size}`,
     // polling search
-    `${CHZZK_API_BASE}/polling/v2/search/lives?keyword=${encodeURIComponent(keyword)}&size=${size}`,
+    `${CHZZK_API_BASE}/polling/v2/search/lives?keyword=${encodeURIComponent(searchKeyword)}&size=${size}`,
   ]
 
   for (let i = 0; i < endpoints.length; i++) {
     const url = endpoints[i]
-    
+    console.log("[Chzzk Request] Fetching search:", url)
+
     try {
       const response = await fetch(url, {
         method: "GET",
@@ -421,9 +441,13 @@ export async function searchChzzkLives(
       })
 
       if (!response.ok) {
-        console.error(`[Chzzk Search] ✗ HTTP Error: ${response.status}`)
-        const errorText = await response.text()
-        console.error(`[Chzzk Search] Error Body:`, errorText.substring(0, 500))
+        if (response.status === 404) {
+          console.warn(`[Chzzk Search] 404 Not Found (soft fail), trying next endpoint:`, url)
+        } else {
+          console.error(`[Chzzk Search] ✗ HTTP Error: ${response.status}`)
+          const errorText = await response.text()
+          console.error(`[Chzzk Search] Error Body:`, errorText.substring(0, 500))
+        }
         continue // Try next endpoint
       }
 
