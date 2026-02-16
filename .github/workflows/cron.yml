@@ -1,0 +1,15 @@
+name: Cron - update-streams
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # 10분마다 실행
+  workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+  update-streams:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call update-streams API
+        run: |
+          curl -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-streams" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
