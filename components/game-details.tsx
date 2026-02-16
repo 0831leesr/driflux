@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StreamCard, type StreamData } from "@/components/stream-card"
 import type { GameRow } from "@/lib/data"
+import { getGameImageSrc } from "@/lib/utils"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import {
   AlertDialog,
@@ -107,7 +108,7 @@ export function GameDetailsClient({
           {/* Cover Art */}
           <div className="relative h-52 w-36 shrink-0 overflow-hidden rounded-xl border-2 border-border/50 shadow-2xl sm:h-64 sm:w-44">
             <Image
-              src={game.cover_image_url ?? "/games/elden-ring.jpg"}
+              src={getGameImageSrc(game.header_image_url, game.cover_image_url)}
               alt={game.title}
               fill
               placeholder="empty"

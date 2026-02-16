@@ -9,6 +9,7 @@ const nextConfig = {
       { protocol: "https", hostname: "livecloud-thumb.akamaized.net", pathname: "/**" },
       { protocol: "https", hostname: "image.chzzk.naver.com", pathname: "/**" },
       { protocol: "https", hostname: "via.placeholder.com", pathname: "/**" },
+      { protocol: "https", hostname: "images.igdb.com", pathname: "/igdb/**" },
     ],
   },
 };

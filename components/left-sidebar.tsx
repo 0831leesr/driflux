@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFavoriteGames, useFavoriteTags } from "@/contexts/favorites-context"
 import { useEffect, useState } from "react"
 import { fetchGamesByIds, type GameRow } from "@/lib/data"
+import { getGameImageSrc } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 
 interface LeftSidebarProps {
@@ -136,7 +137,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                     >
                       <div className="relative h-8 w-6 shrink-0 overflow-hidden rounded-sm">
                         <Image
-                          src={game.cover_image_url || "/placeholder.svg"}
+                          src={getGameImageSrc(game.header_image_url, game.cover_image_url)}
                           alt={game.title}
                           fill
                           placeholder="empty"

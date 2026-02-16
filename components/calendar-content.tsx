@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import type { EventRow } from "@/lib/types"
+import { getGameImageSrc } from "@/lib/utils"
 
 /* ── Types ── */
 /* DB event_type: 'Competition' | 'Patch' | 'Discount' */
@@ -29,7 +30,7 @@ interface GameEvent {
   subtitle: string
   description: string
   category: EventCategory
-  image?: string
+  image: string
   externalUrl?: string
 }
 
@@ -76,8 +77,10 @@ function normalizeCategory(eventType: string | null): EventCategory {
 function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
   return events.map((ev) => {
     const startDate = new Date(ev.start_date)
-    const image =
-      ev.games?.cover_image_url ?? ev.games?.header_image_url ?? undefined
+    const image = getGameImageSrc(
+      ev.games?.header_image_url,
+      ev.games?.cover_image_url
+    )
     return {
       id: String(ev.id),
       date: startDate,
@@ -85,7 +88,7 @@ function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
       subtitle: ev.games?.title ?? "",
       description: ev.description ?? "",
       category: normalizeCategory(ev.event_type),
-      image: image ?? undefined,
+      image,
       externalUrl: ev.external_url ?? undefined,
     }
   })
@@ -211,9 +214,7 @@ function HeroCard({ event, today }: { event: GameEvent; today: Date }) {
   return (
     <div className={`group relative flex-1 overflow-hidden rounded-xl border border-border ${isPast ? "opacity-50 grayscale" : ""}`}>
       <div className="relative aspect-[16/7]">
-        {event.image && (
-          <Image src={event.image} alt={event.title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
-        )}
+        <Image src={event.image} alt={event.title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
         <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-end p-4">
           <span className={`mb-1 text-2xl font-black tracking-tight ${

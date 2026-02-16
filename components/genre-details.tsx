@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StreamCard, type StreamData } from "@/components/stream-card"
 import type { TagRow } from "@/lib/data"
+import { getGameImageSrc } from "@/lib/utils"
 
 /* ── Genre Data ── */
 interface GenreInfo {
@@ -313,7 +314,7 @@ export function GenreDetails({
               {/* Portrait Cover */}
               <div className="relative aspect-[3/4] w-full overflow-hidden">
                 <Image
-                  src={game.cover}
+                  src={getGameImageSrc(null, game.cover)}
                   alt={game.name}
                   fill
                   className="object-cover transition-transform duration-300 group-hover:scale-105"

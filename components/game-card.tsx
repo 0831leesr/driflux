@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Heart, Users, Radio } from "lucide-react"
-import { formatKRW, formatDiscountRate, formatViewerCountShort } from "@/lib/utils"
+import { formatKRW, formatDiscountRate, formatViewerCountShort, getGameImageSrc, FALLBACK_IMAGE_URL } from "@/lib/utils"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import { Button } from "@/components/ui/button"
 
@@ -24,7 +24,7 @@ export interface GameCardData {
 }
 
 export function GameCard({ game }: { game: GameCardData }) {
-  const displayImage = game.header_image_url || game.cover_image_url || "/placeholder.svg"
+  const displayImage = getGameImageSrc(game.header_image_url, game.cover_image_url)
   const hasDiscount = game.discount_rate && game.discount_rate > 0
   const isFree = game.is_free || game.price_krw === 0
   
@@ -51,7 +51,7 @@ export function GameCard({ game }: { game: GameCardData }) {
           placeholder="empty"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 100vw"
-          unoptimized={displayImage.startsWith("/placeholder")}
+          unoptimized={displayImage === FALLBACK_IMAGE_URL}
         />
 
         {/* Favorite Button (Heart) */}

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { fetchGameById, fetchStreamsByGameId } from "@/lib/data"
+import { getGameImageSrc } from "@/lib/utils"
 import { GameDetailsPage } from "@/components/game-details-page"
 
 interface PageProps {
@@ -27,7 +28,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const title = `${game.title} - Live on Driflux`
   const description = `Watch live streams of ${game.title}. Find the best streamers and gameplay content.`
-  const ogImage = game.cover_image_url ?? game.header_image_url ?? "/og.png"
+  const ogImage = getGameImageSrc(game.header_image_url, game.cover_image_url)
 
   return {
     title,
@@ -35,7 +36,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     openGraph: {
       title,
       description,
-      images: ogImage ? [{ url: ogImage, width: 1200, height: 630, alt: game.title }] : undefined,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: game.title }],
     },
     twitter: {
       card: "summary_large_image",
