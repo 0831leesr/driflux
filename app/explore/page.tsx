@@ -4,6 +4,8 @@ import { VibeFilter } from "@/components/explore/vibe-filter"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { GameWithTags } from "@/lib/data"
 
+export const dynamic = "force-dynamic"
+
 function toGameCardData(game: GameWithTags): GameCardData {
   const topTag = game.top_tags?.[0] ?? game.tags?.[0]?.name
   return {
