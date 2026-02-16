@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { delay, getPopularCategories } from "@/lib/chzzk"
+import { delay, getPopularCategories, CHZZK_SEARCH_LIVES_URL } from "@/lib/chzzk"
 import { findSteamAppIdWithConfidence, getSteamGameDetails, processSteamData } from "@/lib/steam"
 
 /**
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
     for (const category of allCategories) {
       try {
         // Quick search to check categoryType
-        const testUrl = `https://api.chzzk.naver.com/service/v1/search/lives?keyword=${encodeURIComponent(category)}&size=1&offset=0`
+        const testUrl = `${CHZZK_SEARCH_LIVES_URL}?keyword=${encodeURIComponent(category)}&size=1&offset=0`
         
         const testResponse = await fetch(testUrl, {
           method: "GET",
@@ -165,7 +165,7 @@ export async function GET(request: Request) {
     // Search each game
     for (const keyword of popularGameKeywords) {
       try {
-        const url = `https://api.chzzk.naver.com/service/v1/search/lives?keyword=${encodeURIComponent(keyword)}&size=20&offset=0`
+        const url = `${CHZZK_SEARCH_LIVES_URL}?keyword=${encodeURIComponent(keyword)}&size=20&offset=0`
 
         console.log(`[Top Games Discovery] Searching: ${keyword}`)
 

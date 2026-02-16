@@ -86,7 +86,9 @@ export interface SearchedStreamData {
 }
 
 /* ── Constants ── */
-const CHZZK_API_BASE = "https://api.chzzk.naver.com"
+export const CHZZK_API_BASE = "https://api.chzzk.naver.com"
+const CHZZK_SERVICE_V1 = `${CHZZK_API_BASE}/service/v1`
+export const CHZZK_SEARCH_LIVES_URL = `${CHZZK_SERVICE_V1}/search/lives`
 const RATE_LIMIT_DELAY = 1000 // 1초 (치지직 API Rate Limit 고려)
 const DEFAULT_THUMBNAIL_SIZE = "720" // 썸네일 해상도 (480, 720, 1080 등)
 const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/1280x720/1a1a1a/ffffff?text=No+Thumbnail" // Fallback thumbnail
@@ -321,77 +323,62 @@ export function getChzzkChannelUrl(channelId: string): string {
  */
 export async function getPopularCategories(size: number = 20): Promise<string[]> {
   try {
-    // Try different possible endpoints
-    const possibleEndpoints = [
-      `${CHZZK_API_BASE}/service/v1/lives/categories/popular?size=${size}`,
-      `${CHZZK_API_BASE}/service/v1/categories/live?size=${size}`,
-      `${CHZZK_API_BASE}/service/v1/categories?size=${size}`,
-      `${CHZZK_API_BASE}/service/v2/categories/live?size=${size}`,
-    ]
+    const url = `${CHZZK_SERVICE_V1}/recommend/categories`
+    console.log("[Chzzk Request] Fetching categories:", url)
 
-    for (const url of possibleEndpoints) {
-      console.log("[Chzzk Request] Fetching categories:", url)
-      try {
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "User-Agent": BROWSER_USER_AGENT,
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://chzzk.naver.com/",
-          },
-          next: { revalidate: 300 }, // Cache for 5 minutes
-        })
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": BROWSER_USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://chzzk.naver.com/",
+      },
+      next: { revalidate: 300 }, // Cache for 5 minutes
+    })
 
-        if (response.ok) {
-          const data = await response.json()
-          console.log("[Chzzk Categories] ✓ Success:", url)
-
-          // Try to extract categories from different possible response structures
-          let categories: string[] = []
-
-          // Structure 1: { code: 200, content: { data: [...] } }
-          if (data.content && Array.isArray(data.content.data)) {
-            categories = data.content.data
-              .map((item: any) => item.categoryValue || item.categoryName || item.name)
-              .filter(Boolean)
-          }
-          // Structure 2: { code: 200, content: [...] }
-          else if (data.content && Array.isArray(data.content)) {
-            categories = data.content
-              .map((item: any) => item.categoryValue || item.categoryName || item.name)
-              .filter(Boolean)
-          }
-          // Structure 3: { data: [...] }
-          else if (Array.isArray(data.data)) {
-            categories = data.data
-              .map((item: any) => item.categoryValue || item.categoryName || item.name)
-              .filter(Boolean)
-          }
-          // Structure 4: Direct array
-          else if (Array.isArray(data)) {
-            categories = data
-              .map((item: any) => item.categoryValue || item.categoryName || item.name)
-              .filter(Boolean)
-          }
-
-          if (categories.length > 0) {
-            return categories
-          }
-        } else if (response.status === 404) {
-          console.warn(`[Chzzk Categories] 404 Not Found (soft fail), trying next:`, url)
-        }
-      } catch (err) {
-        console.warn(`[Chzzk Categories] Endpoint failed (soft fail):`, err instanceof Error ? err.message : String(err))
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`[Chzzk Categories] 404 Not Found (soft fail):`, url)
+      } else {
+        console.error(`[Chzzk Categories] ✗ HTTP Error: ${response.status}`)
       }
+      return []
     }
 
-    console.warn(`[Chzzk Categories] No working endpoint found`)
-    return []
+    const data = await response.json()
+    console.log("[Chzzk Categories] ✓ Success:", url)
 
+    let categories: string[] = []
+
+    // Structure 1: { code: 200, content: { data: [...] } }
+    if (data.content && Array.isArray(data.content.data)) {
+      categories = data.content.data
+        .map((item: any) => item.categoryValue || item.categoryName || item.name)
+        .filter(Boolean)
+    }
+    // Structure 2: { code: 200, content: [...] }
+    else if (data.content && Array.isArray(data.content)) {
+      categories = data.content
+        .map((item: any) => item.categoryValue || item.categoryName || item.name)
+        .filter(Boolean)
+    }
+    // Structure 3: { data: [...] }
+    else if (Array.isArray(data.data)) {
+      categories = data.data
+        .map((item: any) => item.categoryValue || item.categoryName || item.name)
+        .filter(Boolean)
+    }
+    // Structure 4: Direct array
+    else if (Array.isArray(data)) {
+      categories = data
+        .map((item: any) => item.categoryValue || item.categoryName || item.name)
+        .filter(Boolean)
+    }
+
+    return categories.slice(0, size)
   } catch (error) {
     console.error(`[Chzzk Categories] ✗ Exception:`, error instanceof Error ? error.message : String(error))
-    console.error(`[Chzzk Categories] ========================================\n`)
     return []
   }
 }
@@ -414,72 +401,58 @@ export async function searchChzzkLives(
 
   const searchKeyword = typeof keyword === "string" ? keyword.trim() : String(keyword)
 
-  // Try multiple possible endpoints
-  const endpoints = [
-    // v1 search
-    `${CHZZK_API_BASE}/service/v1/search/lives?keyword=${encodeURIComponent(searchKeyword)}&size=${size}&offset=0`,
-    // v2 search
-    `${CHZZK_API_BASE}/service/v2/search/lives?keyword=${encodeURIComponent(searchKeyword)}&size=${size}`,
-    // polling search
-    `${CHZZK_API_BASE}/polling/v2/search/lives?keyword=${encodeURIComponent(searchKeyword)}&size=${size}`,
-  ]
+  const url = `${CHZZK_SEARCH_LIVES_URL}?keyword=${encodeURIComponent(searchKeyword)}&size=${size}&offset=0`
+  console.log("[Chzzk Request] Fetching search:", url)
 
-  for (let i = 0; i < endpoints.length; i++) {
-    const url = endpoints[i]
-    console.log("[Chzzk Request] Fetching search:", url)
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": BROWSER_USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://chzzk.naver.com/",
+      },
+      cache: "no-store",
+    })
 
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "User-Agent": BROWSER_USER_AGENT,
-          "Accept": "application/json, text/plain, */*",
-          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Referer": "https://chzzk.naver.com/",
-        },
-        cache: "no-store", // Disable cache for debugging
-      })
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.warn(`[Chzzk Search] 404 Not Found (soft fail), trying next endpoint:`, url)
-        } else {
-          console.error(`[Chzzk Search] ✗ HTTP Error: ${response.status}`)
-          const errorText = await response.text()
-          console.error(`[Chzzk Search] Error Body:`, errorText.substring(0, 500))
-        }
-        continue // Try next endpoint
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`[Chzzk Search] 404 Not Found (soft fail):`, url)
+      } else {
+        console.error(`[Chzzk Search] ✗ HTTP Error: ${response.status}`)
+        const errorText = await response.text()
+        console.error(`[Chzzk Search] Error Body:`, errorText.substring(0, 500))
       }
+      return []
+    }
 
-      const data: ChzzkSearchResponse = await response.json()
+    const data: ChzzkSearchResponse = await response.json()
 
-      if (!data) {
-        console.error(`[Chzzk Search] ✗ Empty response`)
-        continue
-      }
+    if (!data) {
+      console.error(`[Chzzk Search] ✗ Empty response`)
+      return []
+    }
 
-      if (data.code !== 200) {
-        console.error(`[Chzzk Search] ✗ API Error: Code ${data.code}`)
-        continue
-      }
+    if (data.code !== 200) {
+      console.error(`[Chzzk Search] ✗ API Error: Code ${data.code}`)
+      return []
+    }
 
-      // Check different possible response structures
-      let resultsData: any[] = []
+    let resultsData: any[] = []
+    if (data.content?.data) {
+      resultsData = data.content.data
+    } else if (data.content && Array.isArray(data.content)) {
+      resultsData = data.content
+    } else if (Array.isArray(data)) {
+      resultsData = data
+    }
 
-      if (data.content?.data) {
-        resultsData = data.content.data
-      } else if (data.content && Array.isArray(data.content)) {
-        resultsData = data.content
-      } else if (Array.isArray(data)) {
-        resultsData = data
-      }
+    if (resultsData.length === 0) {
+      return []
+    }
 
-      if (resultsData.length === 0) {
-        continue
-      }
-
-      // Process search results
-      const results: SearchedStreamData[] = resultsData
+    const results: SearchedStreamData[] = resultsData
         .filter(item => {
           // Ensure valid data
           if (!item || (!item.channel && !item.live)) return false
@@ -549,22 +522,14 @@ export async function searchChzzkLives(
 
           return result
         })
-        .filter(item => item.channelId) // Remove invalid entries
-        .sort((a, b) => b.concurrentUserCount - a.concurrentUserCount) // Sort by viewers DESC
+        .filter(item => item.channelId)
+        .sort((a, b) => b.concurrentUserCount - a.concurrentUserCount)
 
-      if (results.length > 0) {
-        return results
-      }
-
-    } catch (error) {
-      console.error(`[Chzzk Search] ✗ Exception on attempt ${i + 1}:`, error instanceof Error ? error.message : String(error))
-      if (i === endpoints.length - 1) {
-        console.error(`[Chzzk Search] All endpoints failed`)
-      }
-    }
+    return results
+  } catch (error) {
+    console.error(`[Chzzk Search] ✗ Exception:`, error instanceof Error ? error.message : String(error))
+    return []
   }
-
-  return []
 }
 
 /**
