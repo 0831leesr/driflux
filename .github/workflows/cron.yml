@@ -1,4 +1,4 @@
-name: Cron - update-streams
+name: Cron - discover-top-games & update-streams
 
 on:
   schedule:
@@ -6,10 +6,15 @@ on:
   workflow_dispatch:  # 수동 실행 가능
 
 jobs:
-  update-streams:
+  cron-apis:
     runs-on: ubuntu-latest
     steps:
-      - name: Call update-streams API
+      - name: Trigger Discover Top Games
+        run: |
+          curl -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/discover-top-games" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: Trigger Update Streams
         run: |
           curl -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-streams" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
