@@ -241,12 +241,16 @@ export async function GET(request: Request) {
           try {
             if (igdbData) {
               console.log(`[IGDB] Found match: ${igdbData.title}, Image: ${igdbData.image_url.substring(0, 50)}...`)
+              const updatePayload: Record<string, string | null> = {
+                header_image_url: igdbData.image_url,
+                cover_image_url: igdbData.image_url,
+              }
+              if (igdbData.backdrop_url) {
+                updatePayload.background_image_url = igdbData.backdrop_url
+              }
               const { error: igdbUpdateError } = await adminSupabase
                 .from("games")
-                .update({
-                  header_image_url: igdbData.image_url,
-                  cover_image_url: igdbData.image_url,
-                })
+                .update(updatePayload)
                 .eq("id", game.id)
 
               if (igdbUpdateError) {

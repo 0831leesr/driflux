@@ -14,7 +14,19 @@ const IGDB_GAMES_URL = "https://api.igdb.com/v4/games"
 export interface IGDBGameResult {
   title: string
   image_url: string
+  backdrop_url: string | null
   release_date: number | null
+}
+
+/**
+ * IGDB는 URL을 `//images.igdb.com/...` 형태로 반환함. https: 프로토콜 강제 추가.
+ */
+function ensureHttpsUrl(url: string): string {
+  if (!url?.trim()) return url
+  const trimmed = url.trim()
+  if (trimmed.startsWith("//")) return `https:${trimmed}`
+  if (!trimmed.startsWith("http")) return `https://${trimmed}`
+  return trimmed
 }
 
 /* ── Token cache (reuse within same process) ── */
@@ -73,8 +85,8 @@ export async function searchIGDBGame(gameName: string): Promise<IGDBGameResult |
     throw new Error("TWITCH_CLIENT_ID is required")
   }
 
-  // Apicalypse query body
-  const body = `fields name, cover.url, first_release_date; search "${gameName.trim()}"; limit 1;`
+  // Apicalypse query: cover, screenshots, artworks (배경 이미지용)
+  const body = `fields name, cover.url, first_release_date, screenshots.url, artworks.url; search "${gameName.trim()}"; limit 1;`
 
   const res = await fetch(IGDB_GAMES_URL, {
     method: "POST",
@@ -95,6 +107,8 @@ export async function searchIGDBGame(gameName: string): Promise<IGDBGameResult |
     name?: string
     cover?: { url?: string }
     first_release_date?: number
+    screenshots?: Array<{ url?: string }>
+    artworks?: Array<{ url?: string }>
   }>
 
   if (!Array.isArray(data) || data.length === 0) {
@@ -108,12 +122,22 @@ export async function searchIGDBGame(gameName: string): Promise<IGDBGameResult |
     return null
   }
 
-  // Replace t_thumb with t_cover_big for high-resolution cover
-  const highResUrl = coverUrl.replace(/t_thumb/g, "t_cover_big")
+  // Cover: t_thumb → t_cover_big, https: 강제
+  const highResCover = ensureHttpsUrl(coverUrl.replace(/t_thumb/g, "t_cover_big"))
+
+  // Backdrop: screenshots[0] 우선, 없으면 artworks[0]. t_thumb → t_1080p
+  let backdropUrl: string | null = null
+  const firstScreenshot = game.screenshots?.[0]?.url
+  const firstArtwork = game.artworks?.[0]?.url
+  const rawBackdrop = firstScreenshot || firstArtwork
+  if (rawBackdrop) {
+    backdropUrl = ensureHttpsUrl(rawBackdrop.replace(/t_thumb/g, "t_1080p"))
+  }
 
   return {
     title: game.name ?? gameName,
-    image_url: highResUrl,
+    image_url: highResCover,
+    backdrop_url: backdropUrl,
     release_date: game.first_release_date ?? null,
   }
 }
