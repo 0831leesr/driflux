@@ -3,6 +3,13 @@
 import { createClient } from "@/lib/supabase/server"
 import type { EventRow } from "@/lib/types"
 
+/**
+ * Time Window for stream display - DO NOT add .gt/.gte(updated_at) or last_chzzk_update
+ * filters shorter than 30 minutes in fetch queries. Cron runs every 10 min; a short
+ * window causes data to disappear between runs ("Time Window Gap"). Display queries
+ * use is_live only - no time filter.
+ */
+
 /* ── Types ── */
 export interface GameRow {
   id: number

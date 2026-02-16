@@ -352,57 +352,68 @@ export async function GET(request: Request) {
     }
 
     // Step 5: Handle offline streams
+    // Grace period: only mark offline if last_chzzk_update is older than 30 min (or null).
+    // Prevents "Time Window Gap" - streams added by discover-top-games that we didn't
+    // search in this run should remain visible until next cron cycle.
+    const GRACE_PERIOD_MS = 30 * 60 * 1000 // 30 minutes
+    const graceCutoff = new Date(Date.now() - GRACE_PERIOD_MS).toISOString()
+
     console.log(`\n[Stream Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
     console.log(`[Stream Discovery] Cleaning up offline streams...`)
     console.log(`[Stream Discovery] Active channels in this run: ${activeChannelIds.size}`)
+    console.log(`[Stream Discovery] Grace period: only mark offline if last_chzzk_update < ${graceCutoff}`)
 
     const activeChannelArray = Array.from(activeChannelIds)
     
-    // Find streams that were live but not found in this run
-    const { data: previouslyLiveStreams } = await adminSupabase
-      .from("streams")
-      .select("id, chzzk_channel_id, streamer_name")
-      .eq("is_live", true)
-      .not("chzzk_channel_id", "in", `(${activeChannelArray.map(id => `'${id}'`).join(',')})`)
+    if (activeChannelArray.length === 0) {
+      console.log(`[Stream Discovery] Skipping offline cleanup - no active channels in this run`)
+    } else {
+      // Find streams that were live but not found in this run AND are outside grace period
+      const { data: previouslyLiveStreams } = await adminSupabase
+        .from("streams")
+        .select("id, chzzk_channel_id, streamer_name, last_chzzk_update")
+        .eq("is_live", true)
+        .not("chzzk_channel_id", "in", `(${activeChannelArray.map(id => `'${id}'`).join(',')})`)
+        .or(`last_chzzk_update.lt.${graceCutoff},last_chzzk_update.is.null`)
 
-    if (previouslyLiveStreams && previouslyLiveStreams.length > 0) {
-      if (deleteOffline) {
-        // Option 1: Delete offline streams
-        console.log(`[Stream Discovery] Deleting ${previouslyLiveStreams.length} offline streams`)
-        
-        const { error: deleteError } = await adminSupabase
-          .from("streams")
-          .delete()
-          .eq("is_live", true)
-          .not("chzzk_channel_id", "in", `(${activeChannelArray.map(id => `'${id}'`).join(',')})`)
+      if (previouslyLiveStreams && previouslyLiveStreams.length > 0) {
+        const idsToClean = previouslyLiveStreams.map((s) => s.id)
+        if (deleteOffline) {
+          // Option 1: Delete offline streams (only those outside grace period)
+          console.log(`[Stream Discovery] Deleting ${idsToClean.length} offline streams`)
+          
+          const { error: deleteError } = await adminSupabase
+            .from("streams")
+            .delete()
+            .in("id", idsToClean)
 
-        if (deleteError) {
-          console.error(`[Stream Discovery] ✗ Failed to delete offline streams:`, deleteError.message)
+          if (deleteError) {
+            console.error(`[Stream Discovery] ✗ Failed to delete offline streams:`, deleteError.message)
+          } else {
+            console.log(`[Stream Discovery] ✓ Deleted ${idsToClean.length} offline streams`)
+          }
         } else {
-          console.log(`[Stream Discovery] ✓ Deleted ${previouslyLiveStreams.length} offline streams`)
+          // Option 2: Mark as offline (only those outside grace period)
+          console.log(`[Stream Discovery] Marking ${idsToClean.length} streams as offline`)
+          
+          const { error: offlineError } = await adminSupabase
+            .from("streams")
+            .update({
+              is_live: false,
+              viewer_count: 0,
+              last_chzzk_update: new Date().toISOString(),
+            })
+            .in("id", idsToClean)
+
+          if (offlineError) {
+            console.error(`[Stream Discovery] ✗ Failed to update offline streams:`, offlineError.message)
+          } else {
+            console.log(`[Stream Discovery] ✓ Marked ${idsToClean.length} streams as offline`)
+          }
         }
       } else {
-        // Option 2: Mark as offline
-        console.log(`[Stream Discovery] Marking ${previouslyLiveStreams.length} streams as offline`)
-        
-        const { error: offlineError } = await adminSupabase
-          .from("streams")
-          .update({
-            is_live: false,
-            viewer_count: 0,
-            last_chzzk_update: new Date().toISOString(),
-          })
-          .eq("is_live", true)
-          .not("chzzk_channel_id", "in", `(${activeChannelArray.map(id => `'${id}'`).join(',')})`)
-
-        if (offlineError) {
-          console.error(`[Stream Discovery] ✗ Failed to update offline streams:`, offlineError.message)
-        } else {
-          console.log(`[Stream Discovery] ✓ Marked ${previouslyLiveStreams.length} streams as offline`)
-        }
+        console.log(`[Stream Discovery] No streams to mark as offline (all within 30-min grace period)`)
       }
-    } else {
-      console.log(`[Stream Discovery] No streams to mark as offline`)
     }
 
     const duration = Date.now() - startTime

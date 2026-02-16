@@ -580,8 +580,15 @@ export async function GET(request: Request) {
     }
 
     // Delete offline streams
+    // Grace period: only delete if last_chzzk_update is older than 30 min (or null).
+    // Prevents "Time Window Gap" - streams from update-streams that we didn't fetch
+    // in this run should remain visible until next cron cycle.
+    const GRACE_PERIOD_MS = 30 * 60 * 1000 // 30 minutes
+    const graceCutoff = new Date(Date.now() - GRACE_PERIOD_MS).toISOString()
+
     console.log(`\n[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
     console.log(`[Top Games Discovery] STEP C: Cleaning up offline streams`)
+    console.log(`[Top Games Discovery] Grace period: only delete if last_chzzk_update < ${graceCutoff}`)
     console.log(`[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
     
     const activeArray = Array.from(activeChannelIds)
@@ -591,17 +598,18 @@ export async function GET(request: Request) {
     if (activeArray.length === 0) {
       console.warn(`[Top Games Discovery] ⚠ No active channels found, skipping cleanup`)
     } else {
-      // Find streams that are marked as live but not in our active list
+      // Find streams that are marked as live but not in our active list AND outside grace period
       const { data: offlineStreams, error: selectError } = await adminSupabase
         .from("streams")
         .select("id, chzzk_channel_id, streamer_name")
         .eq("is_live", true)
-        .not("chzzk_channel_id", "in", `(${activeArray.join(',')})`)
+        .not("chzzk_channel_id", "in", `(${activeArray.map(id => `'${id}'`).join(',')})`)
+        .or(`last_chzzk_update.lt.${graceCutoff},last_chzzk_update.is.null`)
 
       if (selectError) {
         console.error(`[Top Games Discovery] ✗ Failed to query offline streams:`, selectError.message)
       } else if (offlineStreams && offlineStreams.length > 0) {
-        console.log(`[Top Games Discovery] Found ${offlineStreams.length} streams to mark as offline`)
+        console.log(`[Top Games Discovery] Found ${offlineStreams.length} streams to delete (outside 30-min grace period)`)
         console.log(`[Top Games Discovery] Offline streams:`, offlineStreams.map(s => s.streamer_name))
 
         const { error: deleteError } = await adminSupabase
@@ -615,7 +623,7 @@ export async function GET(request: Request) {
           console.log(`[Top Games Discovery] ✓ Deleted ${offlineStreams.length} offline streams`)
         }
       } else {
-        console.log(`[Top Games Discovery] ✓ No offline streams to delete`)
+        console.log(`[Top Games Discovery] ✓ No offline streams to delete (all within 30-min grace period)`)
       }
     }
 
