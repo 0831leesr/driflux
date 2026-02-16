@@ -16,13 +16,17 @@ export interface StreamData {
   isLive?: boolean
   saleDiscount?: string
   gameId?: number
+  /** Chzzk channel ID for external link: https://chzzk.naver.com/live/{channelId} */
+  channelId?: string | null
+  /** Direct URL (if provided, takes precedence over channelId) */
+  url?: string | null
   rawData?: {
     streamCategory: string | null
     gameData: any
   }
 }
 
-export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onStreamClick?: () => void }) {
+export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onStreamClick?: (stream: StreamData) => void }) {
   // Use thumbnail first, fallback to game cover
   const displayImage = stream.thumbnail || stream.gameCover || "/placeholder.svg"
   const viewerDisplay = stream.viewersFormatted || formatViewerCountShort(stream.viewers)
@@ -35,7 +39,7 @@ export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onSt
       e.stopPropagation()
       return
     }
-    onStreamClick?.()
+    onStreamClick?.(stream)
   }
 
   return (
@@ -44,7 +48,7 @@ export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onSt
       onClick={handleStreamClick}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onStreamClick?.() }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onStreamClick?.(stream) }}
     >
       {/* Thumbnail */}
       <div className="relative aspect-video w-full overflow-hidden">

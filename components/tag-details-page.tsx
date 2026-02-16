@@ -27,6 +27,7 @@ interface TagDetailsPageProps {
 export function TagDetailsPage({ tagName, streams }: TagDetailsPageProps) {
   const [contentTab, setContentTab] = useState("live")
   const [streamModalOpen, setStreamModalOpen] = useState(false)
+  const [selectedStream, setSelectedStream] = useState<StreamData | null>(null)
   const { isFavorite, toggleFavorite } = useFavoriteTags()
   const isFollowing = isFavorite(tagName)
 
@@ -36,8 +37,15 @@ export function TagDetailsPage({ tagName, streams }: TagDetailsPageProps) {
     ? `${(totalViewers / 1000).toFixed(1)}K` 
     : String(totalViewers)
 
-  function handleStreamClick() {
+  const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
+  function handleStreamClick(stream: StreamData) {
+    setSelectedStream(stream)
     setStreamModalOpen(true)
+  }
+  function handleContinueToExternal() {
+    const url = selectedStream?.url ?? (selectedStream?.channelId ? `${CHZZK_LIVE_URL}/${selectedStream.channelId}` : null)
+    if (url) window.open(url, "_blank")
+    setStreamModalOpen(false)
   }
 
   function handleFollowClick() {
@@ -160,7 +168,10 @@ export function TagDetailsPage({ tagName, streams }: TagDetailsPageProps) {
             <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80">
+            <AlertDialogAction
+              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+              onClick={handleContinueToExternal}
+            >
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

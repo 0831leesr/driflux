@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -15,6 +16,16 @@ import { Badge } from "@/components/ui/badge"
 import { StreamCard, type StreamData } from "@/components/stream-card"
 import type { GameRow } from "@/lib/data"
 import { useFavoriteGames } from "@/contexts/favorites-context"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 /* ── Main Game Details Component ── */
 export function GameDetailsClient({
@@ -26,10 +37,11 @@ export function GameDetailsClient({
   game: GameRow
   streams: StreamData[]
   onBack: () => void
-  onStreamClick?: () => void
+  onStreamClick?: (stream: StreamData) => void
 }) {
   const { isFavorite, toggleFavorite } = useFavoriteGames()
   const isFollowing = isFavorite(game.id)
+  const [steamModalOpen, setSteamModalOpen] = useState(false)
 
   const liveStreams = streams
   
@@ -46,6 +58,17 @@ export function GameDetailsClient({
   
   const handleFollowClick = () => {
     toggleFavorite(game.id)
+  }
+
+  const handleVisitStoreClick = () => {
+    setSteamModalOpen(true)
+  }
+
+  const handleContinueToSteam = () => {
+    if (game.steam_appid != null) {
+      window.open(`https://store.steampowered.com/app/${game.steam_appid}`, "_blank")
+    }
+    setSteamModalOpen(false)
   }
 
   return (
@@ -153,17 +176,48 @@ export function GameDetailsClient({
                 />
                 {isFollowing ? "Following" : "Follow Game"}
               </Button>
-              <Button
-                variant="outline"
-                className="border-border text-foreground hover:bg-secondary"
-              >
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Visit Store
-              </Button>
+              {game.steam_appid != null && (
+                <Button
+                  variant="outline"
+                  className="border-border text-foreground hover:bg-secondary"
+                  onClick={handleVisitStoreClick}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Visit Store
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Steam Store Modal */}
+      <AlertDialog open={steamModalOpen} onOpenChange={setSteamModalOpen}>
+        <AlertDialogContent className="border-border bg-card text-foreground">
+          <AlertDialogHeader>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--neon-purple))]/15">
+              <ExternalLink className="h-6 w-6 text-[hsl(var(--neon-purple))]" />
+            </div>
+            <AlertDialogTitle className="text-foreground">
+              Visit Steam Store?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              You are being redirected to the Steam store. Do you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+              onClick={handleContinueToSteam}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Live Streams */}
       <div className="flex flex-col gap-6 p-4 lg:p-6">

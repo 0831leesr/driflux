@@ -4,12 +4,13 @@ import { useState, FormEvent, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import Link from "next/link"
-import { Search, Bell, LogIn, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { Search, LogIn, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { LeftSidebar } from "@/components/left-sidebar"
+import { NotificationCenter } from "@/components/notification-list"
 
 interface AppShellProps {
   children: React.ReactNode
@@ -89,15 +90,7 @@ export function AppShell({ children }: AppShellProps) {
 
           <div className="flex items-center gap-2">
             <ModeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative text-muted-foreground hover:text-foreground"
-              aria-label="Game Alerts"
-            >
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[hsl(var(--neon-green))]" />
-            </Button>
+            <NotificationCenter />
             <Button
               size="sm"
               className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"

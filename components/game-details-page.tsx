@@ -22,16 +22,26 @@ interface GameDetailsPageProps {
   streams: StreamData[]
 }
 
+const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
+
 export function GameDetailsPage({ game, streams }: GameDetailsPageProps) {
   const router = useRouter()
   const [streamModalOpen, setStreamModalOpen] = useState(false)
+  const [selectedStream, setSelectedStream] = useState<StreamData | null>(null)
 
   function handleBack() {
     router.back()
   }
 
-  function handleStreamClick() {
+  function handleStreamClick(stream: StreamData) {
+    setSelectedStream(stream)
     setStreamModalOpen(true)
+  }
+
+  function handleContinueToExternal() {
+    const url = selectedStream?.url ?? (selectedStream?.channelId ? `${CHZZK_LIVE_URL}/${selectedStream.channelId}` : null)
+    if (url) window.open(url, "_blank")
+    setStreamModalOpen(false)
   }
 
   return (
@@ -64,7 +74,10 @@ export function GameDetailsPage({ game, streams }: GameDetailsPageProps) {
             <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80">
+            <AlertDialogAction
+              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+              onClick={handleContinueToExternal}
+            >
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

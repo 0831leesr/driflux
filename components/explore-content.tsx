@@ -233,7 +233,7 @@ function LiveStreamsSection({
   description
 }: { 
   streams: StreamData[]
-  onStreamClick?: () => void
+  onStreamClick?: (stream: StreamData) => void
   title?: string
   icon?: React.ReactNode
   description?: string

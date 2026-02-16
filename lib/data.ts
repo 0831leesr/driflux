@@ -116,6 +116,7 @@ export async function fetchLiveStreams() {
       ? `-${s.games.discount_rate}%`
       : undefined,
     gameId: s.game_id ?? undefined,
+    channelId: s.chzzk_channel_id ?? undefined,
     // Original data for reference
     rawData: {
       streamCategory: s.stream_category,
@@ -201,6 +202,7 @@ export async function fetchStreamsByGameTitle(gameTitle: string) {
     saleDiscount: game.discount_rate && game.discount_rate > 0
       ? `-${game.discount_rate}%`
       : undefined,
+    channelId: s.chzzk_channel_id ?? undefined,
   }))
 }
 
@@ -298,6 +300,7 @@ export async function fetchStreamsByGameId(gameId: number) {
       ? `-${gameData.discount_rate}%`
       : undefined,
     gameId: gameId,
+    channelId: s.chzzk_channel_id ?? undefined,
   }))
 }
 
@@ -342,6 +345,7 @@ export async function fetchStreamsByTagId(tagId: number) {
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
     gameId: s.game_id ?? undefined,
+    channelId: s.chzzk_channel_id ?? undefined,
   }))
 }
 
@@ -378,6 +382,7 @@ export async function fetchStreamsByTopTag(tagName: string) {
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
     gameId: s.game_id ?? undefined,
+    channelId: s.chzzk_channel_id ?? undefined,
   }))
 }
 
@@ -420,6 +425,7 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
     gameId: s.game_id ?? undefined,
+    channelId: s.chzzk_channel_id ?? undefined,
   }))
 }
 
@@ -727,6 +733,7 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
       ? `-${s.games.discount_rate}%`
       : undefined,
     gameId: s.game_id,
+    channelId: s.chzzk_channel_id ?? undefined,
   }))
 }
 

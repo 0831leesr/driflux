@@ -5,7 +5,7 @@ interface StreamSectionProps {
   title: string
   icon: ReactNode
   streams: StreamData[]
-  onStreamClick?: () => void
+  onStreamClick?: (stream: StreamData) => void
   emptyMessage?: string
 }
 

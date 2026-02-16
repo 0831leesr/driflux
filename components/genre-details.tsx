@@ -191,7 +191,7 @@ export function GenreDetails({
   genreSlug: string
   onBack: () => void
   onGameClick?: (title: string) => void
-  onStreamClick?: () => void
+  onStreamClick?: (stream: StreamData) => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const genre = GENRE_DB[genreSlug]

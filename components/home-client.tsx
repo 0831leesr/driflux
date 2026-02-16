@@ -34,6 +34,7 @@ export function HomeClient({ liveStreams, saleGames, upcomingEvents }: HomeClien
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("main")
   const [streamModalOpen, setStreamModalOpen] = useState(false)
+  const [selectedStream, setSelectedStream] = useState<StreamData | null>(null)
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
   const [followedStreams, setFollowedStreams] = useState<StreamData[]>([])
@@ -79,8 +80,15 @@ export function HomeClient({ liveStreams, saleGames, upcomingEvents }: HomeClien
     loadFollowedTagStreams()
   }, [favoriteTags, tagsInitialized])
 
-  function handleStreamClick() {
+  const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
+  function handleStreamClick(stream: StreamData) {
+    setSelectedStream(stream)
     setStreamModalOpen(true)
+  }
+  function handleContinueToExternal() {
+    const url = selectedStream?.url ?? (selectedStream?.channelId ? `${CHZZK_LIVE_URL}/${selectedStream.channelId}` : null)
+    if (url) window.open(url, "_blank")
+    setStreamModalOpen(false)
   }
 
   /* Use followed streams, show empty if no favorites */
@@ -168,7 +176,10 @@ export function HomeClient({ liveStreams, saleGames, upcomingEvents }: HomeClien
             <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80">
+            <AlertDialogAction
+              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+              onClick={handleContinueToExternal}
+            >
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

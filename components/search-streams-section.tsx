@@ -18,8 +18,21 @@ interface SearchStreamsSectionProps {
   streams: StreamData[]
 }
 
+const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
+
 export function SearchStreamsSection({ streams }: SearchStreamsSectionProps) {
   const [streamModalOpen, setStreamModalOpen] = useState(false)
+  const [selectedStream, setSelectedStream] = useState<StreamData | null>(null)
+
+  function handleStreamClick(stream: StreamData) {
+    setSelectedStream(stream)
+    setStreamModalOpen(true)
+  }
+  function handleContinueToExternal() {
+    const url = selectedStream?.url ?? (selectedStream?.channelId ? `${CHZZK_LIVE_URL}/${selectedStream.channelId}` : null)
+    if (url) window.open(url, "_blank")
+    setStreamModalOpen(false)
+  }
 
   if (streams.length === 0) {
     return (
@@ -42,7 +55,7 @@ export function SearchStreamsSection({ streams }: SearchStreamsSectionProps) {
             <StreamCard
               key={`${stream.id}-${i}`}
               stream={stream}
-              onStreamClick={() => setStreamModalOpen(true)}
+              onStreamClick={handleStreamClick}
             />
           ))}
         </div>
@@ -65,7 +78,10 @@ export function SearchStreamsSection({ streams }: SearchStreamsSectionProps) {
             <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80">
+            <AlertDialogAction
+              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+              onClick={handleContinueToExternal}
+            >
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>
