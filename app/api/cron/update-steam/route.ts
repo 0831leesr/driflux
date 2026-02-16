@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getSteamGameDetails, processSteamData, delay } from "@/lib/steam"
+import { searchIGDBGame } from "@/lib/igdb"
 
 /**
  * Cron Job API: Update Steam Game Data
@@ -302,6 +303,57 @@ export async function GET(request: Request) {
           message: error instanceof Error ? error.message : "Unknown error",
         })
       }
+    }
+
+    // Phase 2: IGDB 이미지 보완 (header_image 없거나 steam_appid 없는 게임)
+    console.log("[Steam Update] Phase 2: IGDB image supplement for games without header image...")
+
+    const { data: gamesNeedingImage, error: igdbFetchError } = await supabase
+      .from("games")
+      .select("id, title, header_image_url, steam_appid")
+      .or("header_image_url.is.null,steam_appid.is.null")
+
+    if (!igdbFetchError && gamesNeedingImage && gamesNeedingImage.length > 0) {
+      const igdbResults = { updated: 0, failed: 0, skipped: 0 }
+
+      for (const game of gamesNeedingImage) {
+        const hasImage = game.header_image_url && game.header_image_url.trim() !== ""
+        if (hasImage) continue
+
+        try {
+          const igdbData = await searchIGDBGame(game.title)
+
+          if (igdbData?.image_url) {
+            const { error: igdbUpdateError } = await adminSupabase
+              .from("games")
+              .update({
+                header_image_url: igdbData.image_url,
+                cover_image_url: igdbData.image_url,
+              })
+              .eq("id", game.id)
+
+            if (igdbUpdateError) {
+              console.warn(`[Steam Update] IGDB update failed for ${game.title}:`, igdbUpdateError.message)
+              igdbResults.failed++
+            } else {
+              console.log(`[Steam Update] ✓ IGDB: ${game.title} ← ${igdbData.image_url.substring(0, 50)}...`)
+              igdbResults.updated++
+            }
+          } else {
+            igdbResults.skipped++
+          }
+        } catch (err) {
+          console.warn(`[Steam Update] IGDB error for ${game.title}:`, err)
+          igdbResults.failed++
+        }
+
+        await delay(350)
+      }
+
+      console.log(`[Steam Update] IGDB phase: ${igdbResults.updated} updated, ${igdbResults.failed} failed, ${igdbResults.skipped} skipped`)
+      results.updated += igdbResults.updated
+      results.failed += igdbResults.failed
+      results.skipped += igdbResults.skipped
     }
 
     const duration = Date.now() - startTime
