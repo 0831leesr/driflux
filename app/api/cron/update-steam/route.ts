@@ -155,7 +155,7 @@ export async function GET(request: Request) {
           koreanTitle || (englishTitle ? null : fallbackTitle),
           englishTitle || fallbackTitle
         )
-        await delay(350)
+        await delay(600)
 
         if (!steamData && !igdbData) {
           console.log(`[Steam Update] Skipped (no data): ${game.title}`)

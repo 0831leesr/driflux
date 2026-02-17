@@ -263,6 +263,7 @@ export async function searchIGDBGame(
       }
     }
   }
+  await new Promise((r) => setTimeout(r, 250))
 
   // ── Step 2: 영문 약칭/대체 이름 매칭 (2순위) ──
   if (english.length >= 1) {
@@ -287,6 +288,7 @@ export async function searchIGDBGame(
       }
     }
   }
+  await new Promise((r) => setTimeout(r, 250))
 
   // ── Step 3: 영문 슬러그 정확 매칭 (3순위) ──
   if (english.length >= 2) {
@@ -301,10 +303,11 @@ export async function searchIGDBGame(
       }
     }
   }
+  await new Promise((r) => setTimeout(r, 250))
 
-  // ── Step 4: 일반 퍼지 검색 (4순위 - Fallback) ──
+  // ── Step 4: 일반 퍼지 검색 (4순위 - Fallback, search 시 sort 불가) ──
   const searchTerm = korean || english
-  const body = `fields ${FIELDS}; search "${esc(searchTerm)}"; where ${COMMON_WHERE}; sort ${COMMON_SORT}; limit 10;`
+  const body = `fields ${FIELDS}; search "${esc(searchTerm)}"; where ${COMMON_WHERE}; limit 10;`
   const data = await igdbGamesFetch(body)
   const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
   if (sorted.length > 0) {
