@@ -9,15 +9,16 @@
  */
 
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
-const IGDB_GAMES_URL = "https://api.igdb.com/v4/games"
-const IGDB_ALT_NAMES_URL = "https://api.igdb.com/v4/alternative_names"
+const IGDB_BASE = "https://api.igdb.com/v4"
+const IGDB_GAMES_URL = `${IGDB_BASE}/games`
+const IGDB_ALT_NAMES_URL = `${IGDB_BASE}/alternative_names`
+const IGDB_GAME_LOCALIZATIONS_URL = `${IGDB_BASE}/game_localizations`
 
 const FIELDS =
   "name, cover.url, first_release_date, screenshots.url, artworks.url, category, total_rating_count, summary, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
 
-/** 메인 게임만 + 인기도 정렬 (공통 쿼리 조건) */
+/** 메인 게임만 (공통 쿼리 조건) */
 const COMMON_WHERE = "category = 0"
-const COMMON_SORT = "total_rating_count desc"
 
 export interface IGDBGameResult {
   title: string
@@ -115,13 +116,6 @@ function parseGameToResult(game: RawGame, fallbackTitle: string): IGDBGameResult
   }
 }
 
-/** 인기도(total_rating_count) 기준 정렬 */
-function sortByPopularity(a: RawGame & { total_rating_count?: number }, b: RawGame & { total_rating_count?: number }): number {
-  const aPop = a.total_rating_count ?? 0
-  const bPop = b.total_rating_count ?? 0
-  return bPop - aPop
-}
-
 /* ── Token cache (reuse within same process) ── */
 let cachedToken: string | null = null
 
@@ -160,13 +154,14 @@ export async function getIGDBToken(): Promise<string> {
   return cachedToken
 }
 
-/** IGDB Games API 호출 */
-async function igdbGamesFetch(body: string): Promise<RawGame[]> {
+/** IGDB API 호출 (엔드포인트별) */
+async function igdbFetch<T = unknown>(endpoint: string, body: string): Promise<T[]> {
   const token = await getIGDBToken()
   const clientId = process.env.TWITCH_CLIENT_ID
   if (!clientId) throw new Error("TWITCH_CLIENT_ID is required")
 
-  const res = await fetch(IGDB_GAMES_URL, {
+  const url = endpoint.startsWith("http") ? endpoint : `${IGDB_BASE}/${endpoint.replace(/^\//, "")}`
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Client-ID": clientId,
@@ -178,61 +173,29 @@ async function igdbGamesFetch(body: string): Promise<RawGame[]> {
 
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`IGDB API failed: ${res.status} ${text}`)
+    throw new Error(`IGDB API failed (${endpoint}): ${res.status} ${text}`)
   }
 
-  const data = (await res.json()) as RawGame[]
-  return Array.isArray(data) ? data : []
+  const data = (await res.json()) as T | T[]
+  return Array.isArray(data) ? data : [data]
 }
 
-/** IGDB Alternative Names API에서 검색 후 game IDs 반환 */
-async function igdbSearchByAltName(searchName: string): Promise<number[]> {
-  const token = await getIGDBToken()
-  const clientId = process.env.TWITCH_CLIENT_ID
-  if (!clientId) throw new Error("TWITCH_CLIENT_ID is required")
-
-  const escaped = searchName.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-  const body = `fields game; where name = "${escaped}"; limit 20;`
-
-  const res = await fetch(IGDB_ALT_NAMES_URL, {
-    method: "POST",
-    headers: {
-      "Client-ID": clientId,
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "text/plain",
-    },
-    body,
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`IGDB alternative_names API failed: ${res.status} ${text}`)
-  }
-
-  const data = (await res.json()) as Array<{ game?: number }>
-  const ids = (Array.isArray(data) ? data : [])
-    .map((r) => r.game)
-    .filter((id): id is number => typeof id === "number")
-  return [...new Set(ids)]
-}
-
-/** game IDs로 Games 조회 (메인게임만, 인기도 정렬) */
-async function igdbFetchGamesByIds(ids: number[]): Promise<RawGame[]> {
-  if (ids.length === 0) return []
-  const idList = ids.join(",")
-  const body = `fields ${FIELDS}; where id = (${idList}) & ${COMMON_WHERE}; sort ${COMMON_SORT}; limit ${ids.length};`
-  return igdbGamesFetch(body)
+/** 게임 ID로 상세 정보 조회 (2단계 검색의 최종 단계) */
+async function fetchGameDetails(gameId: number): Promise<RawGame | null> {
+  const body = `fields ${FIELDS}; where id = ${gameId};`
+  const data = await igdbFetch<RawGame>(IGDB_GAMES_URL, body)
+  const game = data[0]
+  if (!game?.cover?.url) return null
+  return game
 }
 
 /**
- * IGDB 검색 (4단계 Waterfall - 한국어 우선, 인기도 기반)
+ * IGDB 검색 - 엔드포인트 분리 2단계 (ID 탐색 → 상세 조회)
  *
- * 1. 한국어 타이틀 정확 매칭 (alternative_names)
- * 2. 영문 약칭/대체 이름 매칭 (alternative_names)
- * 3. 영문 슬러그 정확 매칭
- * 4. 퍼지 검색 (Fallback)
- *
- * 공통 조건: category = 0 (메인 게임만), sort total_rating_count desc
+ * Step 1: /game_localizations - 한국어 정발명
+ * Step 2: /alternative_names - 약칭/별명
+ * Step 3: /games - 슬러그 정확 매칭
+ * Step 4: /games - 퍼지 검색 (Fallback, sort 금지)
  *
  * @param koreanTitle - 치지직 한글 제목
  * @param englishTitle - 치지직 영문 슬러그/제목
@@ -251,78 +214,61 @@ export async function searchIGDBGame(
   const fallbackTitle = korean || english
   const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
 
-  // ── Step 1: 한국어 타이틀 정확 매칭 (1순위) ──
+  // ── Step 1: 한국어 타이틀 검색 (/game_localizations) ──
   if (korean.length >= 1) {
-    const gameIds = await igdbSearchByAltName(korean)
-    if (gameIds.length > 0) {
-      const data = await igdbFetchGamesByIds(gameIds)
-      const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
-      if (sorted.length > 0) {
-        console.log(`[IGDB] Found "${sorted[0].name}" via Step 1 (Korean: ${korean})`)
-        return parseGameToResult(sorted[0], fallbackTitle)
-      }
+    const body = `fields game; where name = "${esc(korean)}"; limit 1;`
+    const res = await igdbFetch<{ game?: number }>(IGDB_GAME_LOCALIZATIONS_URL, body)
+    const foundId = res[0]?.game
+    if (typeof foundId === "number") {
+      console.log(`[IGDB] Found game ID ${foundId} via Step 1 (Localization: ${korean})`)
+      const game = await fetchGameDetails(foundId)
+      if (game) return parseGameToResult(game, fallbackTitle)
     }
   }
   await new Promise((r) => setTimeout(r, 250))
 
-  // ── Step 2: 영문 정확 매칭 (메인 name + alternative_names) (2순위) ──
-  if (english.length >= 1) {
-    // 2a: 메인 name 정확 매칭
-    const nameBody = `fields ${FIELDS}; where name = "${esc(english)}" & ${COMMON_WHERE}; sort ${COMMON_SORT}; limit 5;`
-    const nameData = await igdbGamesFetch(nameBody)
-    const nameSorted = nameData.filter((g) => g.cover?.url).sort(sortByPopularity)
-    if (nameSorted.length > 0) {
-      console.log(`[IGDB] Found "${nameSorted[0].name}" via Step 2 (Name: ${english})`)
-      return parseGameToResult(nameSorted[0], fallbackTitle)
-    }
-
-    // 2b: alternative_names 매칭
-    const gameIds = await igdbSearchByAltName(english)
-    if (gameIds.length > 0) {
-      const data = await igdbFetchGamesByIds(gameIds)
-      const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
-      if (sorted.length > 0) {
-        console.log(`[IGDB] Found "${sorted[0].name}" via Step 2 (Acronym: ${english})`)
-        return parseGameToResult(sorted[0], fallbackTitle)
-      }
-    }
-    if (english !== english.toLowerCase()) {
-      const gameIds = await igdbSearchByAltName(english.toLowerCase())
-      if (gameIds.length > 0) {
-        const data = await igdbFetchGamesByIds(gameIds)
-        const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
-        if (sorted.length > 0) {
-          console.log(`[IGDB] Found "${sorted[0].name}" via Step 2 (Acronym: ${english})`)
-          return parseGameToResult(sorted[0], fallbackTitle)
-        }
-      }
+  // ── Step 2: 약칭/별명 검색 (/alternative_names) ──
+  const altConditions: string[] = []
+  if (english.length >= 1) altConditions.push(`name = "${esc(english)}"`)
+  if (korean.length >= 1) altConditions.push(`name = "${esc(korean)}"`)
+  if (altConditions.length > 0) {
+    const whereClause = altConditions.join(" | ")
+    const body = `fields game; where ${whereClause}; limit 1;`
+    const res = await igdbFetch<{ game?: number }>(IGDB_ALT_NAMES_URL, body)
+    const foundId = res[0]?.game
+    if (typeof foundId === "number") {
+      console.log(`[IGDB] Found game ID ${foundId} via Step 2 (Alt Name: ${english || korean})`)
+      const game = await fetchGameDetails(foundId)
+      if (game) return parseGameToResult(game, fallbackTitle)
     }
   }
   await new Promise((r) => setTimeout(r, 250))
 
-  // ── Step 3: 슬러그 매칭 (3순위, sort 제거 - 슬러그 유니크) ──
+  // ── Step 3: 슬러그 검색 (/games) ──
   if (english.length >= 2) {
     const slug = toSlug(english)
     if (slug.length >= 2) {
-      const body = `fields ${FIELDS}; where slug = "${esc(slug)}" & ${COMMON_WHERE}; limit 5;`
-      const data = await igdbGamesFetch(body)
-      const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
-      if (sorted.length > 0) {
-        console.log(`[IGDB] Found "${sorted[0].name}" via Step 3 (Slug: ${english})`)
-        return parseGameToResult(sorted[0], fallbackTitle)
+      const body = `fields id; where slug = "${esc(slug)}" & ${COMMON_WHERE}; limit 1;`
+      const res = await igdbFetch<{ id?: number }>(IGDB_GAMES_URL, body)
+      const foundId = res[0]?.id
+      if (typeof foundId === "number") {
+        console.log(`[IGDB] Found game ID ${foundId} via Step 3 (Slug: ${english})`)
+        const game = await fetchGameDetails(foundId)
+        if (game) return parseGameToResult(game, fallbackTitle)
       }
     }
   }
   await new Promise((r) => setTimeout(r, 250))
 
-  // ── Step 4: 퍼지 검색 (4순위 - search 시 sort 절대 금지, 406 에러 원인) ──
-  const searchTerm = korean || english
-  const body = `search "${esc(searchTerm)}"; fields ${FIELDS}; where ${COMMON_WHERE}; limit 10;`
-  const data = await igdbGamesFetch(body)
-  const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
-  if (sorted.length > 0) {
-    console.log(`[IGDB] Found "${sorted[0].name}" via Step 4 (Fuzzy: ${searchTerm})`)
-    return parseGameToResult(sorted[0], fallbackTitle)
+  // ── Step 4: 퍼지 검색 (/games) - search 시 sort 금지 ──
+  const searchTerm = english || korean
+  const body = `search "${esc(searchTerm)}"; fields id; limit 1;`
+  const res = await igdbFetch<{ id?: number }>(IGDB_GAMES_URL, body)
+  const foundId = res[0]?.id
+  if (typeof foundId === "number") {
+    console.log(`[IGDB] Found game ID ${foundId} via Step 4 (Fuzzy: ${searchTerm})`)
+    const game = await fetchGameDetails(foundId)
+    if (game) return parseGameToResult(game, fallbackTitle)
   }
 
   return null
