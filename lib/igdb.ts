@@ -13,7 +13,11 @@ const IGDB_GAMES_URL = "https://api.igdb.com/v4/games"
 const IGDB_ALT_NAMES_URL = "https://api.igdb.com/v4/alternative_names"
 
 const FIELDS =
-  "name, cover.url, first_release_date, screenshots.url, artworks.url, category, summary, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
+  "name, cover.url, first_release_date, screenshots.url, artworks.url, category, total_rating_count, summary, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
+
+/** 메인 게임만 + 인기도 정렬 (공통 쿼리 조건) */
+const COMMON_WHERE = "category = 0"
+const COMMON_SORT = "total_rating_count desc"
 
 export interface IGDBGameResult {
   title: string
@@ -53,6 +57,7 @@ type RawGame = {
   cover?: { url?: string }
   first_release_date?: number
   category?: number
+  total_rating_count?: number
   summary?: string
   screenshots?: Array<{ url?: string }>
   artworks?: Array<{ url?: string }>
@@ -110,11 +115,11 @@ function parseGameToResult(game: RawGame, fallbackTitle: string): IGDBGameResult
   }
 }
 
-/** category 우선순위: 0=메인게임, 1=DLC, 2=확장팩... 메인게임 우선 정렬 */
-function sortByCategory(a: RawGame, b: RawGame): number {
-  const catA = a.category ?? 999
-  const catB = b.category ?? 999
-  return catA - catB
+/** 인기도(total_rating_count) 기준 정렬 */
+function sortByPopularity(a: RawGame & { total_rating_count?: number }, b: RawGame & { total_rating_count?: number }): number {
+  const aPop = a.total_rating_count ?? 0
+  const bPop = b.total_rating_count ?? 0
+  return bPop - aPop
 }
 
 /* ── Token cache (reuse within same process) ── */
@@ -211,21 +216,23 @@ async function igdbSearchByAltName(searchName: string): Promise<number[]> {
   return [...new Set(ids)]
 }
 
-/** game IDs로 Games 조회 */
+/** game IDs로 Games 조회 (메인게임만, 인기도 정렬) */
 async function igdbFetchGamesByIds(ids: number[]): Promise<RawGame[]> {
   if (ids.length === 0) return []
   const idList = ids.join(",")
-  const body = `fields ${FIELDS}; where id = (${idList}); limit ${ids.length};`
+  const body = `fields ${FIELDS}; where id = (${idList}) & ${COMMON_WHERE}; sort ${COMMON_SORT}; limit ${ids.length};`
   return igdbGamesFetch(body)
 }
 
 /**
- * IGDB 검색 (4단계 Waterfall)
+ * IGDB 검색 (4단계 Waterfall - 한국어 우선, 인기도 기반)
  *
- * 1. Slug 직접 매칭 (englishTitle → slug)
- * 2. 한국어 대체 제목 (koreanTitle → alternative_names)
- * 3. 영어 대체 제목/약어 (englishTitle → alternative_names)
- * 4. 퍼지 검색 (koreanTitle으로 search)
+ * 1. 한국어 타이틀 정확 매칭 (alternative_names)
+ * 2. 영문 약칭/대체 이름 매칭 (alternative_names)
+ * 3. 영문 슬러그 정확 매칭
+ * 4. 퍼지 검색 (Fallback)
+ *
+ * 공통 조건: category = 0 (메인 게임만), sort total_rating_count desc
  *
  * @param koreanTitle - 치지직 한글 제목
  * @param englishTitle - 치지직 영문 슬러그/제목
@@ -242,68 +249,66 @@ export async function searchIGDBGame(
   if (!korean && !english) return null
 
   const fallbackTitle = korean || english
-
   const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
 
-  // ── Step 1: Slug 직접 매칭 ──
-  if (english.length >= 2) {
-    const slug = toSlug(english)
-    if (slug.length >= 2) {
-      const body = `fields ${FIELDS}; where slug = "${esc(slug)}"; limit 5;`
-      const data = await igdbGamesFetch(body)
-      const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
-      if (sorted.length > 0) {
-        console.log(`[IGDB] Found "${sorted[0].name}" via Step 1 (Slug): ${english}`)
-        return parseGameToResult(sorted[0], fallbackTitle)
-      }
-    }
-  }
-
-  // ── Step 2: 한국어 대체 제목 검색 ──
+  // ── Step 1: 한국어 타이틀 정확 매칭 (1순위) ──
   if (korean.length >= 1) {
     const gameIds = await igdbSearchByAltName(korean)
     if (gameIds.length > 0) {
       const data = await igdbFetchGamesByIds(gameIds)
-      const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
+      const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
       if (sorted.length > 0) {
-        console.log(`[IGDB] Found "${sorted[0].name}" via Step 2 (Korean Alt Name): ${korean}`)
+        console.log(`[IGDB] Found "${sorted[0].name}" via Step 1 (Korean: ${korean})`)
         return parseGameToResult(sorted[0], fallbackTitle)
       }
     }
   }
 
-  // ── Step 3: 영어 대체 제목/약어 검색 ──
+  // ── Step 2: 영문 약칭/대체 이름 매칭 (2순위) ──
   if (english.length >= 1) {
     const gameIds = await igdbSearchByAltName(english)
     if (gameIds.length > 0) {
       const data = await igdbFetchGamesByIds(gameIds)
-      const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
+      const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
       if (sorted.length > 0) {
-        console.log(`[IGDB] Found "${sorted[0].name}" via Step 3 (English Alt Name): ${english}`)
+        console.log(`[IGDB] Found "${sorted[0].name}" via Step 2 (Acronym: ${english})`)
         return parseGameToResult(sorted[0], fallbackTitle)
       }
     }
-    // 대소문자 변형 시도 (PUBG vs pubg)
     if (english !== english.toLowerCase()) {
       const gameIds = await igdbSearchByAltName(english.toLowerCase())
       if (gameIds.length > 0) {
         const data = await igdbFetchGamesByIds(gameIds)
-        const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
+        const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
         if (sorted.length > 0) {
-          console.log(`[IGDB] Found "${sorted[0].name}" via Step 3 (English Alt Name): ${english}`)
+          console.log(`[IGDB] Found "${sorted[0].name}" via Step 2 (Acronym: ${english})`)
           return parseGameToResult(sorted[0], fallbackTitle)
         }
       }
     }
   }
 
-  // ── Step 4: 퍼지 검색 (최후의 수단) ──
+  // ── Step 3: 영문 슬러그 정확 매칭 (3순위) ──
+  if (english.length >= 2) {
+    const slug = toSlug(english)
+    if (slug.length >= 2) {
+      const body = `fields ${FIELDS}; where slug = "${esc(slug)}" & ${COMMON_WHERE}; sort ${COMMON_SORT}; limit 5;`
+      const data = await igdbGamesFetch(body)
+      const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
+      if (sorted.length > 0) {
+        console.log(`[IGDB] Found "${sorted[0].name}" via Step 3 (Slug: ${english})`)
+        return parseGameToResult(sorted[0], fallbackTitle)
+      }
+    }
+  }
+
+  // ── Step 4: 일반 퍼지 검색 (4순위 - Fallback) ──
   const searchTerm = korean || english
-  const body = `fields ${FIELDS}; search "${esc(searchTerm)}"; limit 10;`
+  const body = `fields ${FIELDS}; search "${esc(searchTerm)}"; where ${COMMON_WHERE}; sort ${COMMON_SORT}; limit 10;`
   const data = await igdbGamesFetch(body)
-  const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
+  const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
   if (sorted.length > 0) {
-    console.log(`[IGDB] Found "${sorted[0].name}" via Step 4 (Fuzzy): ${searchTerm}`)
+    console.log(`[IGDB] Found "${sorted[0].name}" via Step 4 (Fuzzy: ${searchTerm})`)
     return parseGameToResult(sorted[0], fallbackTitle)
   }
 
