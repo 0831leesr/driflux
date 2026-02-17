@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getSteamGameDetails, processSteamData, delay } from "@/lib/steam"
 import { searchIGDBGame } from "@/lib/igdb"
+import { TAG_TRANSLATIONS } from "@/lib/constants"
 
 /**
  * Cron Job API: Update Steam Game Data
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
     // Fetch ALL games (Steam + non-Steam). header_image_url NULL 우선 처리.
     let query = supabase
       .from("games")
-      .select("id, title, english_title, steam_appid, header_image_url")
+      .select("id, title, korean_title, english_title, steam_appid, header_image_url")
       .order("header_image_url", { ascending: true, nullsFirst: true })
 
     // Filter by specific app ID if provided (Steam games only)
@@ -147,14 +148,13 @@ export async function GET(request: Request) {
         }
 
         let igdbData: Awaited<ReturnType<typeof searchIGDBGame>> = null
-        const englishTitle = (game as { english_title?: string | null }).english_title?.trim()
-        if (englishTitle) {
-          igdbData = await searchIGDBGame(englishTitle)
-          await delay(350)
-        }
-        if (!igdbData) {
-          igdbData = await searchIGDBGame(game.title)
-        }
+        const koreanTitle = (game as { korean_title?: string | null }).korean_title?.trim() || null
+        const englishTitle = (game as { english_title?: string | null }).english_title?.trim() || null
+        const fallbackTitle = game.title?.trim() || ""
+        igdbData = await searchIGDBGame(
+          koreanTitle || (englishTitle ? null : fallbackTitle),
+          englishTitle || fallbackTitle
+        )
         await delay(350)
 
         if (!steamData && !igdbData) {
@@ -186,8 +186,9 @@ export async function GET(request: Request) {
           updatePayload.last_steam_update = new Date().toISOString()
         }
 
-        // Step C: 태그 (IGDB genres+themes 우선, 없으면 Steam tags)
-        const tags = (ig?.tags?.length ? ig.tags : st?.tags ?? []) as string[]
+        // Step C: 태그 (IGDB genres+themes 우선, 없으면 Steam tags) + 한글 변환
+        const rawTags = (ig?.tags?.length ? ig.tags : st?.tags ?? []) as string[]
+        const tags = rawTags.map((t) => TAG_TRANSLATIONS[t] ?? t)
         updatePayload.top_tags = tags.slice(0, 5)
 
         const { error: updateError } = await adminSupabase
@@ -210,7 +211,10 @@ export async function GET(request: Request) {
             try {
               const tagIds: number[] = []
               for (const tagName of tags) {
-                const slug = tagName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+                const slug = tagName
+                  .toLowerCase()
+                  .replace(/[^a-z0-9가-힣]+/g, "-")
+                  .replace(/^-|-$/g, "")
                 const { data: tagData, error: tagError } = await adminSupabase
                   .from("tags")
                   .upsert({ name: tagName, slug }, { onConflict: "name", ignoreDuplicates: false })

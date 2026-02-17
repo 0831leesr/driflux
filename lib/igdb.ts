@@ -10,46 +10,7 @@
 
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 const IGDB_GAMES_URL = "https://api.igdb.com/v4/games"
-
-/** 한글/약어 → IGDB 공식 영문 타이틀 매핑 (검색 성공률 향상) */
-const KNOWN_GAME_MAP: Record<string, string> = {
-  "리그 오브 레전드": "League of Legends",
-  lol: "League of Legends",
-  롤: "League of Legends",
-  발로란트: "Valorant",
-  valorant: "Valorant",
-  배틀그라운드: "PUBG: BATTLEGROUNDS",
-  pubg: "PUBG: BATTLEGROUNDS",
-  배그: "PUBG: BATTLEGROUNDS",
-  "오버워치 2": "Overwatch 2",
-  "overwatch 2": "Overwatch 2",
-  "overwatch-2": "Overwatch 2",
-  overwatch2: "Overwatch 2",
-  tft: "Teamfight Tactics",
-  "전략적 팀 전투": "Teamfight Tactics",
-  로스트아크: "Lost Ark",
-  lostark: "Lost Ark",
-  "lost ark": "Lost Ark",
-  마인크래프트: "Minecraft",
-  minecraft: "Minecraft",
-  "던전 앤 파이터": "Dungeon and Fighter",
-  dnf: "Dungeon and Fighter",
-  "카운터 스트라이크 2": "Counter-Strike 2",
-  "counter-strike 2": "Counter-Strike 2",
-  cs2: "Counter-Strike 2",
-  "에이펙스 레전드": "Apex Legends",
-  "apex legends": "Apex Legends",
-  apex: "Apex Legends",
-  "디아블로 4": "Diablo IV",
-  "diablo 4": "Diablo IV",
-  diablo4: "Diablo IV",
-  피파: "EA SPORTS FC 24",
-  fifa: "EA SPORTS FC 24",
-  "이스 포트리스": "Ys",
-  "스타크래프트 2": "StarCraft II",
-  "starcraft 2": "StarCraft II",
-  스2: "StarCraft II",
-}
+const IGDB_ALT_NAMES_URL = "https://api.igdb.com/v4/alternative_names"
 
 const FIELDS =
   "name, cover.url, first_release_date, screenshots.url, artworks.url, category, summary, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
@@ -194,8 +155,8 @@ export async function getIGDBToken(): Promise<string> {
   return cachedToken
 }
 
-/** IGDB API 호출 및 파싱 (body만 전달) */
-async function igdbFetch(body: string): Promise<RawGame[]> {
+/** IGDB Games API 호출 */
+async function igdbGamesFetch(body: string): Promise<RawGame[]> {
   const token = await getIGDBToken()
   const clientId = process.env.TWITCH_CLIENT_ID
   if (!clientId) throw new Error("TWITCH_CLIENT_ID is required")
@@ -219,51 +180,130 @@ async function igdbFetch(body: string): Promise<RawGame[]> {
   return Array.isArray(data) ? data : []
 }
 
+/** IGDB Alternative Names API에서 검색 후 game IDs 반환 */
+async function igdbSearchByAltName(searchName: string): Promise<number[]> {
+  const token = await getIGDBToken()
+  const clientId = process.env.TWITCH_CLIENT_ID
+  if (!clientId) throw new Error("TWITCH_CLIENT_ID is required")
+
+  const escaped = searchName.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+  const body = `fields game; where name = "${escaped}"; limit 20;`
+
+  const res = await fetch(IGDB_ALT_NAMES_URL, {
+    method: "POST",
+    headers: {
+      "Client-ID": clientId,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "text/plain",
+    },
+    body,
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`IGDB alternative_names API failed: ${res.status} ${text}`)
+  }
+
+  const data = (await res.json()) as Array<{ game?: number }>
+  const ids = (Array.isArray(data) ? data : [])
+    .map((r) => r.game)
+    .filter((id): id is number => typeof id === "number")
+  return [...new Set(ids)]
+}
+
+/** game IDs로 Games 조회 */
+async function igdbFetchGamesByIds(ids: number[]): Promise<RawGame[]> {
+  if (ids.length === 0) return []
+  const idList = ids.join(",")
+  const body = `fields ${FIELDS}; where id = (${idList}); limit ${ids.length};`
+  return igdbGamesFetch(body)
+}
+
 /**
- * Search for a game on IGDB (3-stage strategy for higher hit rate).
+ * IGDB 검색 (4단계 Waterfall)
  *
- * 1. Known map: 한글/약어 → 공식 영문 타이틀
- * 2. Slug match: where slug = "..." (정확 일치)
- * 3. Text search: search "..." (fallback)
+ * 1. Slug 직접 매칭 (englishTitle → slug)
+ * 2. 한국어 대체 제목 (koreanTitle → alternative_names)
+ * 3. 영어 대체 제목/약어 (englishTitle → alternative_names)
+ * 4. 퍼지 검색 (koreanTitle으로 search)
  *
- * @param gameName - Game name (Korean, abbreviation, or English)
- * @returns { title, image_url, backdrop_url, release_date } or null
+ * @param koreanTitle - 치지직 한글 제목
+ * @param englishTitle - 치지직 영문 슬러그/제목
+ * @returns { title, image_url, backdrop_url, ... } or null
  */
-export async function searchIGDBGame(gameName: string): Promise<IGDBGameResult | null> {
-  const trimmed = gameName?.trim()
-  if (!trimmed) return null
+export async function searchIGDBGame(
+  koreanTitle?: string | null,
+  englishTitle?: string | null
+): Promise<IGDBGameResult | null> {
+  let korean = koreanTitle?.trim() ?? ""
+  let english = englishTitle?.trim() ?? ""
+  if (!english && korean) english = korean
+  if (!korean && english) korean = english
+  if (!korean && !english) return null
 
-  const fallbackTitle = trimmed
+  const fallbackTitle = korean || english
 
-  // ── Stage 1: Known Games Map ──
-  const mapKey = trimmed.toLowerCase().trim()
-  const mappedTitle = KNOWN_GAME_MAP[mapKey]
-  if (mappedTitle) {
-    const body = `fields ${FIELDS}; search "${mappedTitle.replace(/"/g, '\\"')}"; limit 5;`
-    const data = await igdbFetch(body)
-    const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
-    if (sorted.length > 0) {
-      return parseGameToResult(sorted[0], mappedTitle)
+  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+
+  // ── Step 1: Slug 직접 매칭 ──
+  if (english.length >= 2) {
+    const slug = toSlug(english)
+    if (slug.length >= 2) {
+      const body = `fields ${FIELDS}; where slug = "${esc(slug)}"; limit 5;`
+      const data = await igdbGamesFetch(body)
+      const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
+      if (sorted.length > 0) {
+        console.log(`[IGDB] Found "${sorted[0].name}" via Step 1 (Slug): ${english}`)
+        return parseGameToResult(sorted[0], fallbackTitle)
+      }
     }
   }
 
-  // ── Stage 2: Slug Match (영문/줄임말일 때 정확 매칭) ──
-  const slug = toSlug(trimmed)
-  if (slug.length >= 2) {
-    const body = `fields ${FIELDS}; where slug = "${slug.replace(/"/g, '\\"')}"; limit 5;`
-    const data = await igdbFetch(body)
-    const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
-    if (sorted.length > 0) {
-      return parseGameToResult(sorted[0], fallbackTitle)
+  // ── Step 2: 한국어 대체 제목 검색 ──
+  if (korean.length >= 1) {
+    const gameIds = await igdbSearchByAltName(korean)
+    if (gameIds.length > 0) {
+      const data = await igdbFetchGamesByIds(gameIds)
+      const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
+      if (sorted.length > 0) {
+        console.log(`[IGDB] Found "${sorted[0].name}" via Step 2 (Korean Alt Name): ${korean}`)
+        return parseGameToResult(sorted[0], fallbackTitle)
+      }
     }
   }
 
-  // ── Stage 3: Text Search (Fallback) ──
-  const searchTerm = mappedTitle ?? trimmed
-  const body = `fields ${FIELDS}; search "${searchTerm.replace(/"/g, '\\"')}"; limit 10;`
-  const data = await igdbFetch(body)
+  // ── Step 3: 영어 대체 제목/약어 검색 ──
+  if (english.length >= 1) {
+    const gameIds = await igdbSearchByAltName(english)
+    if (gameIds.length > 0) {
+      const data = await igdbFetchGamesByIds(gameIds)
+      const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
+      if (sorted.length > 0) {
+        console.log(`[IGDB] Found "${sorted[0].name}" via Step 3 (English Alt Name): ${english}`)
+        return parseGameToResult(sorted[0], fallbackTitle)
+      }
+    }
+    // 대소문자 변형 시도 (PUBG vs pubg)
+    if (english !== english.toLowerCase()) {
+      const gameIds = await igdbSearchByAltName(english.toLowerCase())
+      if (gameIds.length > 0) {
+        const data = await igdbFetchGamesByIds(gameIds)
+        const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
+        if (sorted.length > 0) {
+          console.log(`[IGDB] Found "${sorted[0].name}" via Step 3 (English Alt Name): ${english}`)
+          return parseGameToResult(sorted[0], fallbackTitle)
+        }
+      }
+    }
+  }
+
+  // ── Step 4: 퍼지 검색 (최후의 수단) ──
+  const searchTerm = korean || english
+  const body = `fields ${FIELDS}; search "${esc(searchTerm)}"; limit 10;`
+  const data = await igdbGamesFetch(body)
   const sorted = data.filter((g) => g.cover?.url).sort(sortByCategory)
   if (sorted.length > 0) {
+    console.log(`[IGDB] Found "${sorted[0].name}" via Step 4 (Fuzzy): ${searchTerm}`)
     return parseGameToResult(sorted[0], fallbackTitle)
   }
 
