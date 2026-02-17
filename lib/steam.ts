@@ -52,6 +52,7 @@ export interface ProcessedSteamData {
   cover_image_url: string
   header_image_url: string
   background_image_url: string | null
+  short_description: string | null
   price_krw: number | null
   original_price_krw: number | null
   discount_rate: number | null
@@ -356,6 +357,7 @@ export function processSteamData(steamData: SteamGameData): ProcessedSteamData {
     cover_image_url: steamData.header_image,
     header_image_url: steamData.header_image,
     background_image_url: steamData.background || null,
+    short_description: steamData.short_description?.trim() || null,
     price_krw,
     original_price_krw,
     discount_rate,

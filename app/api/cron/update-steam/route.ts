@@ -133,194 +133,105 @@ export async function GET(request: Request) {
       }>,
     }
 
-    /* ── Dual Logic: Steam API (Case A) / IGDB (Case B) ── */
+    /* ── IGDB 우선, Steam 후순위 병합 로직 ── */
     for (const game of games) {
-      console.log(`[Steam Update] Processing game: ${game.title} (SteamID: ${game.steam_appid ?? "null"})`)
+      console.log(`[Steam Update] Processing: ${game.title} (SteamID: ${game.steam_appid ?? "null"})`)
 
       try {
-        // Case A: 스팀 게임인 경우
+        // Step A: 데이터 수집 (Fetch)
+        let steamData: Awaited<ReturnType<typeof processSteamData>> | null = null
         if (game.steam_appid) {
-          const steamAppId = game.steam_appid
-          const steamData = await getSteamGameDetails(steamAppId, "kr")
-
-          if (!steamData) {
-            console.warn(`[Steam Update] ✗ Failed to fetch data for ${game.title}`)
-            results.failed++
-            results.details.push({
-              id: game.id,
-              title: game.title,
-              steam_appid: steamAppId,
-              status: "failed",
-              message: "Steam API returned no data",
-            })
-            await delay(1500)
-          } else {
-            const processedData = processSteamData(steamData)
-            console.log(`[Steam Update] Updating game ${game.id} with Steam data:`, {
-              title: processedData.title,
-              price_krw: processedData.price_krw,
-              discount_rate: processedData.discount_rate,
-            })
-
-            const { error: updateError } = await adminSupabase
-              .from("games")
-              .update({
-                title: processedData.title,
-                cover_image_url: processedData.cover_image_url,
-                header_image_url: processedData.header_image_url,
-                background_image_url: processedData.background_image_url,
-                price_krw: processedData.price_krw,
-                original_price_krw: processedData.original_price_krw,
-                discount_rate: processedData.discount_rate,
-                is_free: processedData.is_free,
-                currency: processedData.currency,
-                last_steam_update: new Date().toISOString(),
-              })
-              .eq("id", game.id)
-              .select()
-
-            if (updateError) {
-              console.error(`[Steam Update] ✗ Database update failed for ${game.title}:`, updateError.message)
-              results.failed++
-              results.details.push({
-                id: game.id,
-                title: game.title,
-                steam_appid: steamAppId,
-                status: "failed",
-                message: `Database update failed: ${updateError.message}`,
-              })
-            } else {
-              if (processedData.tags && processedData.tags.length > 0) {
-                try {
-                  const tagIds: number[] = []
-                  for (const tagName of processedData.tags) {
-                    const slug = tagName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-                    const { data: tagData, error: tagError } = await adminSupabase
-                      .from("tags")
-                      .upsert({ name: tagName, slug }, { onConflict: 'name', ignoreDuplicates: false })
-                      .select('id')
-                      .single()
-                    if (tagError) {
-                      const { data: existingTag } = await adminSupabase.from("tags").select('id').eq('name', tagName).single()
-                      if (existingTag) tagIds.push(existingTag.id)
-                    } else if (tagData) tagIds.push(tagData.id)
-                  }
-                  await adminSupabase.from("game_tags").delete().eq("game_id", game.id)
-                  if (tagIds.length > 0) {
-                    await adminSupabase.from("game_tags").insert(tagIds.map(tagId => ({ game_id: game.id, tag_id: tagId })))
-                  }
-                } catch (tagProcessError) {
-                  console.error(`[Steam Update] ✗ Error processing tags for ${game.title}:`, tagProcessError)
-                }
-              }
-              console.log(`[Steam Update] ✓ Updated (Steam): ${game.title}`)
-              results.updated++
-              results.details.push({ id: game.id, title: game.title, steam_appid: steamAppId, status: "updated" })
-            }
-            await delay(1500)
-          }
+          const raw = await getSteamGameDetails(game.steam_appid, "kr")
+          if (raw) steamData = processSteamData(raw)
+          await delay(1500)
         }
-        // Case B: 비스팀 게임인 경우 (IGDB 사용)
-        else {
-          let igdbData = null
 
-          // 1. Try English Title first (IGDB에 영어 검색이 더 정확함)
-          const englishTitle = (game as { english_title?: string | null }).english_title?.trim()
-          if (englishTitle) {
-            console.log(`[IGDB] Trying English title: ${englishTitle}`)
-            igdbData = await searchIGDBGame(englishTitle)
-            await delay(350)
-          }
+        let igdbData: Awaited<ReturnType<typeof searchIGDBGame>> = null
+        const englishTitle = (game as { english_title?: string | null }).english_title?.trim()
+        if (englishTitle) {
+          igdbData = await searchIGDBGame(englishTitle)
+          await delay(350)
+        }
+        if (!igdbData) {
+          igdbData = await searchIGDBGame(game.title)
+        }
+        await delay(350)
 
-          // 2. Fallback to Korean Title if English failed or didn't exist
-          if (!igdbData) {
-            console.log(`[IGDB] English failed/missing. Trying Korean title: ${game.title}`)
-            igdbData = await searchIGDBGame(game.title)
-          }
+        if (!steamData && !igdbData) {
+          console.log(`[Steam Update] Skipped (no data): ${game.title}`)
+          results.skipped++
+          results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "skipped", message: "No Steam/IGDB data" })
+          continue
+        }
 
-          try {
-            if (igdbData) {
-              console.log(`[IGDB] Found match: ${igdbData.title}, Image: ${igdbData.image_url.substring(0, 50)}...`)
-              const updatePayload: Record<string, string | null | string[]> = {
-                header_image_url: igdbData.image_url,
-                cover_image_url: igdbData.image_url,
-                short_description: igdbData.summary ?? null,
-                developer: igdbData.developer ?? null,
-                publisher: igdbData.publisher ?? null,
-                top_tags: (igdbData.tags ?? []).slice(0, 5),
+        // Step B: 데이터 병합 (Merge) - IGDB 우선
+        const ig = igdbData
+        const st = steamData
+        const updatePayload: Record<string, string | number | boolean | null | string[]> = {
+          cover_image_url: ig?.image_url ?? st?.cover_image_url ?? null,
+          header_image_url: ig?.image_url ?? st?.header_image_url ?? null,
+          background_image_url: ig?.backdrop_url ?? st?.background_image_url ?? null,
+          short_description: ig?.summary ?? st?.short_description ?? null,
+          developer: ig?.developer ?? null,
+          publisher: ig?.publisher ?? null,
+          steam_appid: st ? st.steam_appid : game.steam_appid,
+          price_krw: st ? st.price_krw : null,
+          original_price_krw: st ? st.original_price_krw : null,
+          discount_rate: st ? st.discount_rate : null,
+          is_free: st ? st.is_free : false,
+          currency: st ? st.currency : null,
+        }
+        if (st) {
+          updatePayload.title = st.title
+          updatePayload.last_steam_update = new Date().toISOString()
+        }
+
+        // Step C: 태그 (IGDB genres+themes 우선, 없으면 Steam tags)
+        const tags = (ig?.tags?.length ? ig.tags : st?.tags ?? []) as string[]
+        updatePayload.top_tags = tags.slice(0, 5)
+
+        const { error: updateError } = await adminSupabase
+          .from("games")
+          .update(updatePayload)
+          .eq("id", game.id)
+
+        if (updateError) {
+          console.error(`[Steam Update] ✗ DB update failed:`, updateError.message)
+          results.failed++
+          results.details.push({
+            id: game.id,
+            title: game.title,
+            steam_appid: game.steam_appid ?? null,
+            status: "failed",
+            message: updateError.message,
+          })
+        } else {
+          if (tags.length > 0) {
+            try {
+              const tagIds: number[] = []
+              for (const tagName of tags) {
+                const slug = tagName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+                const { data: tagData, error: tagError } = await adminSupabase
+                  .from("tags")
+                  .upsert({ name: tagName, slug }, { onConflict: "name", ignoreDuplicates: false })
+                  .select("id")
+                  .single()
+                if (tagError) {
+                  const { data: existingTag } = await adminSupabase.from("tags").select("id").eq("name", tagName).single()
+                  if (existingTag) tagIds.push(existingTag.id)
+                } else if (tagData) tagIds.push(tagData.id)
               }
-              if (igdbData.backdrop_url) {
-                updatePayload.background_image_url = igdbData.backdrop_url
+              await adminSupabase.from("game_tags").delete().eq("game_id", game.id)
+              if (tagIds.length > 0) {
+                await adminSupabase.from("game_tags").insert(tagIds.map((tagId) => ({ game_id: game.id, tag_id: tagId })))
               }
-              const { error: igdbUpdateError } = await adminSupabase
-                .from("games")
-                .update(updatePayload)
-                .eq("id", game.id)
-
-              if (igdbUpdateError) {
-                console.error(`[IGDB] Update failed for ${game.title}:`, igdbUpdateError.message)
-                results.failed++
-                results.details.push({
-                  id: game.id,
-                  title: game.title,
-                  steam_appid: null,
-                  status: "failed",
-                  message: `IGDB update failed: ${igdbUpdateError.message}`,
-                })
-              } else {
-                // 태그(장르/테마) 저장: tags + game_tags
-                if (igdbData.tags && igdbData.tags.length > 0) {
-                  try {
-                    const tagIds: number[] = []
-                    for (const tagName of igdbData.tags) {
-                      const slug = tagName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
-                      const { data: tagData, error: tagError } = await adminSupabase
-                        .from("tags")
-                        .upsert({ name: tagName, slug }, { onConflict: "name", ignoreDuplicates: false })
-                        .select("id")
-                        .single()
-                      if (tagError) {
-                        const { data: existingTag } = await adminSupabase
-                          .from("tags")
-                          .select("id")
-                          .eq("name", tagName)
-                          .single()
-                        if (existingTag) tagIds.push(existingTag.id)
-                      } else if (tagData) {
-                        tagIds.push(tagData.id)
-                      }
-                    }
-                    await adminSupabase.from("game_tags").delete().eq("game_id", game.id)
-                    if (tagIds.length > 0) {
-                      await adminSupabase
-                        .from("game_tags")
-                        .insert(tagIds.map((tagId) => ({ game_id: game.id, tag_id: tagId })))
-                    }
-                  } catch (tagProcessError) {
-                    console.error(`[IGDB] Tag sync error for ${game.title}:`, tagProcessError)
-                  }
-                }
-                console.log(`[IGDB] ✓ Updated: ${game.title}`)
-                results.updated++
-                results.details.push({ id: game.id, title: game.title, steam_appid: null, status: "updated" })
-              }
-            } else {
-              console.log(`[IGDB] No data found for: ${game.title}`)
-              results.skipped++
-              results.details.push({ id: game.id, title: game.title, steam_appid: null, status: "skipped", message: "IGDB: No match" })
+            } catch (tagErr) {
+              console.error(`[Steam Update] Tag sync error:`, tagErr)
             }
-          } catch (igdbError) {
-            console.error(`[IGDB] Error processing ${game.title}:`, igdbError)
-            results.failed++
-            results.details.push({
-              id: game.id,
-              title: game.title,
-              steam_appid: null,
-              status: "failed",
-              message: `IGDB error: ${igdbError instanceof Error ? igdbError.message : "Unknown"}`,
-            })
           }
-          await delay(500)
+          console.log(`[Steam Update] ✓ Updated: ${game.title}`)
+          results.updated++
+          results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "updated" })
         }
       } catch (error) {
         console.error(`[Steam Update] ✗ Error processing ${game.title}:`, error)
