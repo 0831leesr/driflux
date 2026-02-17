@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { getSteamGameDetails, processSteamData, delay } from "@/lib/steam"
+import { getSteamGameDetails, processSteamData, delay, searchSteamGameFirst } from "@/lib/steam"
 import { searchIGDBGame } from "@/lib/igdb"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
 
@@ -134,31 +134,51 @@ export async function GET(request: Request) {
       }>,
     }
 
-    /* ── IGDB 우선, Steam 후순위 병합 로직 ── */
+    /* ── IGDB + Steam 하이브리드 검색 (누락 방지) ── */
     for (const game of games) {
       console.log(`[Steam Update] Processing: ${game.title} (SteamID: ${game.steam_appid ?? "null"})`)
 
       try {
-        // Step A: 데이터 수집 (Fetch)
-        let steamData: Awaited<ReturnType<typeof processSteamData>> | null = null
-        if (game.steam_appid) {
-          const raw = await getSteamGameDetails(game.steam_appid, "kr")
-          if (raw) steamData = processSteamData(raw)
-          await delay(1500)
-        }
-
-        let igdbData: Awaited<ReturnType<typeof searchIGDBGame>> = null
         const koreanTitle = (game as { korean_title?: string | null }).korean_title?.trim() || null
         const englishTitle = (game as { english_title?: string | null }).english_title?.trim() || null
         const fallbackTitle = game.title?.trim() || ""
+        let igdbData: Awaited<ReturnType<typeof searchIGDBGame>> = null
+        let steamData: Awaited<ReturnType<typeof processSteamData>> | null = null
+        let steamAppId = game.steam_appid ?? null
+
+        // --- Phase 1: IGDB 검색 ---
         igdbData = await searchIGDBGame(
           koreanTitle || (englishTitle ? null : fallbackTitle),
           englishTitle || fallbackTitle
         )
         await delay(600)
 
-        if (!steamData && !igdbData) {
-          console.log(`[Steam Update] Skipped (no data): ${game.title}`)
+        // --- Phase 2: Steam 검색 (IGDB 실패 시, AppID 없을 때) ---
+        if (!igdbData) {
+          console.log(`[Discovery] IGDB failed for ${game.title}. Trying Steam Search...`)
+
+          if (!steamAppId) {
+            let steamSearchResult = await searchSteamGameFirst(fallbackTitle)
+            if (!steamSearchResult && englishTitle) {
+              steamSearchResult = await searchSteamGameFirst(englishTitle)
+            }
+            if (steamSearchResult) {
+              steamAppId = steamSearchResult.id
+              console.log(`[Discovery] Found on Steam: ${steamSearchResult.name} (${steamAppId})`)
+            }
+            await delay(500)
+          }
+        }
+
+        // --- Phase 3: AppID가 있으면 스팀 상세 정보 가져오기 ---
+        if (steamAppId) {
+          const raw = await getSteamGameDetails(steamAppId, "kr")
+          if (raw) steamData = processSteamData(raw)
+          await delay(1500)
+        }
+
+        if (!igdbData && !steamData) {
+          console.log(`[Discovery] Failed to find data for: ${game.title}`)
           results.skipped++
           results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "skipped", message: "No Steam/IGDB data" })
           continue
@@ -174,7 +194,7 @@ export async function GET(request: Request) {
           short_description: ig?.summary ?? st?.short_description ?? null,
           developer: ig?.developer ?? null,
           publisher: ig?.publisher ?? null,
-          steam_appid: st ? st.steam_appid : game.steam_appid,
+          steam_appid: steamAppId ?? (st ? st.steam_appid : game.steam_appid),
           price_krw: st ? st.price_krw : null,
           original_price_krw: st ? st.original_price_krw : null,
           discount_rate: st ? st.discount_rate : null,

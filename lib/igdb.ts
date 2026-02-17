@@ -265,8 +265,18 @@ export async function searchIGDBGame(
   }
   await new Promise((r) => setTimeout(r, 250))
 
-  // ── Step 2: 영문 약칭/대체 이름 매칭 (2순위) ──
+  // ── Step 2: 영문 정확 매칭 (메인 name + alternative_names) (2순위) ──
   if (english.length >= 1) {
+    // 2a: 메인 name 정확 매칭
+    const nameBody = `fields ${FIELDS}; where name = "${esc(english)}" & ${COMMON_WHERE}; sort ${COMMON_SORT}; limit 5;`
+    const nameData = await igdbGamesFetch(nameBody)
+    const nameSorted = nameData.filter((g) => g.cover?.url).sort(sortByPopularity)
+    if (nameSorted.length > 0) {
+      console.log(`[IGDB] Found "${nameSorted[0].name}" via Step 2 (Name: ${english})`)
+      return parseGameToResult(nameSorted[0], fallbackTitle)
+    }
+
+    // 2b: alternative_names 매칭
     const gameIds = await igdbSearchByAltName(english)
     if (gameIds.length > 0) {
       const data = await igdbFetchGamesByIds(gameIds)
@@ -290,11 +300,11 @@ export async function searchIGDBGame(
   }
   await new Promise((r) => setTimeout(r, 250))
 
-  // ── Step 3: 영문 슬러그 정확 매칭 (3순위) ──
+  // ── Step 3: 슬러그 매칭 (3순위, sort 제거 - 슬러그 유니크) ──
   if (english.length >= 2) {
     const slug = toSlug(english)
     if (slug.length >= 2) {
-      const body = `fields ${FIELDS}; where slug = "${esc(slug)}" & ${COMMON_WHERE}; sort ${COMMON_SORT}; limit 5;`
+      const body = `fields ${FIELDS}; where slug = "${esc(slug)}" & ${COMMON_WHERE}; limit 5;`
       const data = await igdbGamesFetch(body)
       const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
       if (sorted.length > 0) {
@@ -305,9 +315,9 @@ export async function searchIGDBGame(
   }
   await new Promise((r) => setTimeout(r, 250))
 
-  // ── Step 4: 일반 퍼지 검색 (4순위 - Fallback, search 시 sort 불가) ──
+  // ── Step 4: 퍼지 검색 (4순위 - search 시 sort 절대 금지, 406 에러 원인) ──
   const searchTerm = korean || english
-  const body = `fields ${FIELDS}; search "${esc(searchTerm)}"; where ${COMMON_WHERE}; limit 10;`
+  const body = `search "${esc(searchTerm)}"; fields ${FIELDS}; where ${COMMON_WHERE}; limit 10;`
   const data = await igdbGamesFetch(body)
   const sorted = data.filter((g) => g.cover?.url).sort(sortByPopularity)
   if (sorted.length > 0) {

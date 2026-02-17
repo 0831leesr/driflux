@@ -83,6 +83,24 @@ export const FALLBACK_IMAGE_URL =
   "https://via.placeholder.com/600x400/1a1a1a/ffffff?text=No+Image"
 
 /**
+ * 이미지 URL 프로토콜 보정 (// → https:, 유효하지 않으면 placeholder)
+ * DB에서 //images.igdb.com... 형태가 내려올 때 INVALID_IMAGE_OPTIMIZE_REQUEST 방지
+ */
+export function getValidImageUrl(url: string | null | undefined): string {
+  if (!url?.trim()) return FALLBACK_IMAGE_URL
+  const trimmed = url.trim()
+  if (trimmed.startsWith("//")) return `https:${trimmed}`
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("/")
+  ) {
+    return trimmed
+  }
+  return FALLBACK_IMAGE_URL
+}
+
+/**
  * 게임 이미지 소스 결정 (header_image_url → cover_image_url → fallback)
  * next/image의 src에는 반드시 유효한 문자열만 전달하기 위함
  */
@@ -92,7 +110,7 @@ export function getGameImageSrc(
 ): string {
   const header = headerImageUrl?.trim()
   const cover = coverImageUrl?.trim()
-  if (header) return header
-  if (cover) return cover
+  if (header) return getValidImageUrl(header)
+  if (cover) return getValidImageUrl(cover)
   return FALLBACK_IMAGE_URL
 }

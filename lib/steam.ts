@@ -143,6 +143,50 @@ export async function searchSteamGame(
   }
 }
 
+/** storesearch API 첫 결과 (AppID 미확보 시 텍스트 검색용) */
+export interface SteamSearchFirstResult {
+  id: number
+  name: string
+  tiny_image: string
+}
+
+/**
+ * AppID를 모르는 상태에서 게임 제목으로 스팀 상점 검색 후 첫 결과 반환
+ * @param query - 검색어 (한글/영문)
+ * @returns 첫 번째 항목의 id(AppID), name, tiny_image 또는 null
+ */
+export async function searchSteamGameFirst(query: string): Promise<SteamSearchFirstResult | null> {
+  try {
+    const encodedQuery = encodeURIComponent(query.trim())
+    if (!encodedQuery) return null
+
+    const url = `${STEAM_SEARCH_API}/?term=${encodedQuery}&l=koreana&cc=kr`
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "User-Agent": "Driflux/1.0" },
+    })
+
+    if (!response.ok) return null
+
+    const data = (await response.json()) as { items?: Array<{ id?: number; name?: string; tiny_image?: string }> }
+    const items = data.items
+    if (!items || items.length === 0) return null
+
+    const first = items[0]
+    const id = typeof first.id === "number" ? first.id : parseInt(String(first.id), 10)
+    if (isNaN(id) || !first.name) return null
+
+    return {
+      id,
+      name: String(first.name),
+      tiny_image: first.tiny_image?.trim() || "",
+    }
+  } catch (error) {
+    console.error(`[Steam Search] Error searching for "${query}":`, error)
+    return null
+  }
+}
+
 /**
  * Normalize string for comparison (remove spaces, special chars, lowercase)
  */
