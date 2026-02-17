@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { getSteamGameDetails, processSteamData, delay, searchSteamGameFirst } from "@/lib/steam"
+import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence } from "@/lib/steam"
+import { delay } from "@/lib/utils"
 import { searchIGDBGame } from "@/lib/igdb"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
 
@@ -153,18 +154,18 @@ export async function GET(request: Request) {
         )
         await delay(600)
 
-        // --- Phase 2: Steam 검색 (IGDB 실패 시, AppID 없을 때) ---
+        // --- Phase 2: Steam 검색 (IGDB 실패 시, AppID 없을 때) - 유사도 기반 통일 ---
         if (!igdbData) {
           console.log(`[Discovery] IGDB failed for ${game.title}. Trying Steam Search...`)
 
           if (!steamAppId) {
-            let steamSearchResult = await searchSteamGameFirst(fallbackTitle)
-            if (!steamSearchResult && englishTitle) {
-              steamSearchResult = await searchSteamGameFirst(englishTitle)
+            let matchResult = await findSteamAppIdWithConfidence(fallbackTitle, 80)
+            if (!matchResult && englishTitle && englishTitle !== fallbackTitle) {
+              matchResult = await findSteamAppIdWithConfidence(englishTitle, 80)
             }
-            if (steamSearchResult) {
-              steamAppId = steamSearchResult.id
-              console.log(`[Discovery] Found on Steam: ${steamSearchResult.name} (${steamAppId})`)
+            if (matchResult) {
+              steamAppId = matchResult.appId
+              console.log(`[Discovery] Found on Steam: ${matchResult.matchedName} (${steamAppId})`)
             }
             await delay(500)
           }

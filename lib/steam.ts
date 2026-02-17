@@ -6,6 +6,9 @@
  * https://wiki.teamfortress.com/wiki/User:RJackson/StorefrontAPI
  */
 
+import { findMappedSteamAppId } from "@/lib/game-mappings"
+import { delay } from "@/lib/utils"
+
 /* ── Types ── */
 export interface SteamPriceOverview {
   currency: string
@@ -95,13 +98,6 @@ const RATE_LIMIT_DELAY = 1500 // 1.5초 (스팀 API Rate Limit 고려)
 /* ── Helper Functions ── */
 
 /**
- * Delay execution (for rate limiting)
- */
-export function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-/**
  * Search for games on Steam by name
  * 
  * @param gameName - Game name to search (Korean or English)
@@ -140,50 +136,6 @@ export async function searchSteamGame(
   } catch (error) {
     console.error(`[Steam Search] Error searching for "${gameName}":`, error)
     return []
-  }
-}
-
-/** storesearch API 첫 결과 (AppID 미확보 시 텍스트 검색용) */
-export interface SteamSearchFirstResult {
-  id: number
-  name: string
-  tiny_image: string
-}
-
-/**
- * AppID를 모르는 상태에서 게임 제목으로 스팀 상점 검색 후 첫 결과 반환
- * @param query - 검색어 (한글/영문)
- * @returns 첫 번째 항목의 id(AppID), name, tiny_image 또는 null
- */
-export async function searchSteamGameFirst(query: string): Promise<SteamSearchFirstResult | null> {
-  try {
-    const encodedQuery = encodeURIComponent(query.trim())
-    if (!encodedQuery) return null
-
-    const url = `${STEAM_SEARCH_API}/?term=${encodedQuery}&l=koreana&cc=kr`
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "User-Agent": "Driflux/1.0" },
-    })
-
-    if (!response.ok) return null
-
-    const data = (await response.json()) as { items?: Array<{ id?: number; name?: string; tiny_image?: string }> }
-    const items = data.items
-    if (!items || items.length === 0) return null
-
-    const first = items[0]
-    const id = typeof first.id === "number" ? first.id : parseInt(String(first.id), 10)
-    if (isNaN(id) || !first.name) return null
-
-    return {
-      id,
-      name: String(first.name),
-      tiny_image: first.tiny_image?.trim() || "",
-    }
-  } catch (error) {
-    console.error(`[Steam Search] Error searching for "${query}":`, error)
-    return null
   }
 }
 
@@ -272,8 +224,17 @@ export async function findSteamAppIdWithConfidence(
   gameName: string,
   minSimilarity: number = 70
 ): Promise<{ appId: number; confidence: number; matchedName: string } | null> {
-  const results = await searchSteamGame(gameName, 10) // Get top 10 results
-  
+  // 1. 정적 매핑 확인 (LoL, 배그 등 - API 검색 불필요, 100% 정확도)
+  const mappedAppId = findMappedSteamAppId(gameName)
+  if (mappedAppId !== undefined) {
+    if (typeof mappedAppId === "number") {
+      return { appId: mappedAppId, confidence: 100, matchedName: gameName }
+    }
+    return null // null = 스팀에 없는 게임 (검색 금지)
+  }
+
+  // 2. 매핑 없음 → Steam API 검색
+  const results = await searchSteamGame(gameName, 10)
   if (results.length === 0) {
     return null
   }

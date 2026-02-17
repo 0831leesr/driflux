@@ -5,6 +5,8 @@
  * https://api.chzzk.naver.com/service/v1/channels/{channelId}/live-detail
  */
 
+import { delay } from "@/lib/utils"
+
 /* ── Types ── */
 export interface ChzzkLiveContent {
   liveTitle: string
@@ -98,13 +100,6 @@ const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/1280x720/1a1a1a/fffff
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 
 /* ── Helper Functions ── */
-
-/**
- * Delay execution (for rate limiting)
- */
-export function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
 
 /**
  * Replace thumbnail size placeholder in Chzzk image URL

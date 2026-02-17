@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { searchChzzkLives, delay, getPopularCategories } from "@/lib/chzzk"
+import { searchChzzkLives, getPopularCategories } from "@/lib/chzzk"
+import { delay } from "@/lib/utils"
 
 /**
  * Cron Job API: Discover and Update Chzzk Live Streams

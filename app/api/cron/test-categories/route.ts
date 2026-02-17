@@ -14,6 +14,18 @@ import { getPopularCategories } from "@/lib/chzzk"
  * GET /api/cron/test-categories?size=10
  */
 export async function GET(request: Request) {
+  // Security: Verify cron secret (skip in development)
+  if (process.env.NODE_ENV !== "development") {
+    const authHeader = request.headers.get("authorization")
+    const expectedAuth = process.env.CRON_SECRET
+      ? `Bearer ${process.env.CRON_SECRET}`
+      : null
+
+    if (!expectedAuth || authHeader !== expectedAuth) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+  }
+
   const { searchParams } = new URL(request.url)
   const sizeParam = searchParams.get("size")
   const size = sizeParam ? parseInt(sizeParam, 10) : 20

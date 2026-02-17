@@ -1,6 +1,9 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
+/** Rate limiting / throttling용 지연 (Promise) */
+export const delay = (ms: number): Promise<void> => new Promise((res) => setTimeout(res, ms))
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
