@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import type { EventRow } from "@/lib/types"
-import { getGameImageSrc } from "@/lib/utils"
+import { getBestGameImage } from "@/lib/utils"
 
 /**
  * Time Window for stream display - DO NOT add .gt/.gte(updated_at) or last_chzzk_update
@@ -108,7 +108,7 @@ export async function fetchLiveStreams() {
   return (data ?? []).map((s: StreamRow) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(s.games?.header_image_url, s.games?.cover_image_url),
+    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
     // Priority: stream_category (치지직) > game title > "Unknown"
     gameTitle: s.stream_category || s.games?.title || "Unknown Game",
     streamTitle: s.title ?? "Untitled Stream",
@@ -157,7 +157,7 @@ export async function fetchSaleGames() {
     results.push({
       // Stream data
       thumbnail: topStream?.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: getGameImageSrc(game.header_image_url, game.cover_image_url),
+      gameCover: getBestGameImage(game.header_image_url, game.cover_image_url),
       gameTitle: game.title,
       streamerName: topStream?.streamer_name ?? "N/A",
       viewers: formatViewers(topStream?.viewer_count ?? 0),
@@ -196,7 +196,7 @@ export async function fetchStreamsByGameTitle(gameTitle: string) {
   return (streams ?? []).map((s: StreamRow) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(game.header_image_url, game.cover_image_url),
+    gameCover: getBestGameImage(game.header_image_url, game.cover_image_url),
     gameTitle: s.stream_category || game.title,
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
@@ -293,7 +293,7 @@ export async function fetchStreamsByGameId(gameId: number) {
   return allStreams.map((s: StreamRow) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(gameData.header_image_url, gameData.cover_image_url),
+    gameCover: getBestGameImage(gameData.header_image_url, gameData.cover_image_url),
     gameTitle: s.stream_category || gameData.title,
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
@@ -341,7 +341,7 @@ export async function fetchStreamsByTagId(tagId: number) {
   return (streams ?? []).map((s: any) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(s.games?.header_image_url, s.games?.cover_image_url),
+    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
     gameTitle: s.stream_category || s.games?.title || "Unknown Game",
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
@@ -378,7 +378,7 @@ export async function fetchStreamsByTopTag(tagName: string) {
   return (streams ?? []).map((s: any) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(s.games?.header_image_url, s.games?.cover_image_url),
+    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
     gameTitle: s.stream_category || s.games?.title || "Unknown Game",
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
@@ -421,7 +421,7 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
   return (streams ?? []).map((s: any) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(s.games?.header_image_url, s.games?.cover_image_url),
+    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
     gameTitle: s.stream_category || s.games?.title || "Unknown Game",
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
@@ -608,7 +608,7 @@ function formatStreamForDisplay(s: any) {
   return {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(s.games?.header_image_url, s.games?.cover_image_url),
+    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
     gameTitle: s.stream_category || s.games?.title || "Unknown Game",
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
@@ -726,7 +726,7 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
   return (streams ?? []).map((s: any) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(s.games?.header_image_url, s.games?.cover_image_url),
+    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
     gameTitle: s.stream_category || s.games?.title || "Unknown Game",
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
@@ -1125,7 +1125,7 @@ export async function getStreamsForGames(gameIds: number[]) {
   return (streams ?? []).map((s: any) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getGameImageSrc(s.games?.header_image_url, s.games?.cover_image_url),
+    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
     gameTitle: s.stream_category || s.games?.title || "Unknown Game",
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",

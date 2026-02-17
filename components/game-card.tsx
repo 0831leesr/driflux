@@ -1,10 +1,10 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Heart, Users, Radio } from "lucide-react"
-import { formatKRW, formatDiscountRate, formatViewerCountShort, getGameImageSrc, FALLBACK_IMAGE_URL } from "@/lib/utils"
+import { formatKRW, formatDiscountRate, formatViewerCountShort } from "@/lib/utils"
+import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import { Button } from "@/components/ui/button"
 
@@ -24,7 +24,6 @@ export interface GameCardData {
 }
 
 export function GameCard({ game }: { game: GameCardData }) {
-  const displayImage = getGameImageSrc(game.header_image_url, game.cover_image_url)
   const hasDiscount = game.discount_rate && game.discount_rate > 0
   const isFree = game.is_free || game.price_krw === 0
   
@@ -44,14 +43,14 @@ export function GameCard({ game }: { game: GameCardData }) {
     >
       {/* Game Image */}
       <div className="relative aspect-[16/9] w-full overflow-hidden">
-        <Image
-          src={displayImage}
+        <GameImage
+          src={game.header_image_url ?? game.cover_image_url}
+          type="header"
           alt={game.title}
           fill
           placeholder="empty"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 100vw"
-          unoptimized={displayImage === FALLBACK_IMAGE_URL}
         />
 
         {/* Favorite Button (Heart) */}

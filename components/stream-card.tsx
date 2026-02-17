@@ -2,7 +2,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Eye } from "lucide-react"
-import { formatViewerCountShort, getGameImageSrc, FALLBACK_IMAGE_URL } from "@/lib/utils"
+import { formatViewerCountShort, getGameImageSrc, isPlaceholderImage } from "@/lib/utils"
 
 export interface StreamData {
   id: number
@@ -28,7 +28,8 @@ export interface StreamData {
 
 export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onStreamClick?: (stream: StreamData) => void }) {
   // Use thumbnail first, fallback to game cover, then placeholder
-  const displayImage = stream.thumbnail || getGameImageSrc(null, stream.gameCover)
+  const gameCoverSrc = getGameImageSrc(stream.gameCover, "cover")
+  const displayImage = stream.thumbnail || gameCoverSrc
   const viewerDisplay = stream.viewersFormatted || formatViewerCountShort(stream.viewers)
   const isLive = stream.isLive !== false // Default to true if not specified
 
@@ -59,7 +60,7 @@ export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onSt
           placeholder="empty"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 100vw"
-          unoptimized={displayImage === FALLBACK_IMAGE_URL}
+          unoptimized={isPlaceholderImage(displayImage)}
         />
 
         {/* Live indicator with viewer count */}
@@ -90,25 +91,25 @@ export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onSt
             onClick={(e) => e.stopPropagation()}
           >
             <Image
-              src={getGameImageSrc(null, stream.gameCover)}
+              src={gameCoverSrc}
               alt={stream.gameTitle}
               fill
               placeholder="empty"
               className="object-cover"
               sizes="40px"
-              unoptimized={getGameImageSrc(null, stream.gameCover) === FALLBACK_IMAGE_URL}
+              unoptimized={isPlaceholderImage(gameCoverSrc)}
             />
           </Link>
         ) : (
           <div className="absolute -bottom-3 left-3 h-14 w-10 overflow-hidden rounded-md border-2 border-card shadow-lg">
             <Image
-              src={getGameImageSrc(null, stream.gameCover)}
+              src={gameCoverSrc}
               alt={stream.gameTitle}
               fill
               placeholder="empty"
               className="object-cover"
               sizes="40px"
-              unoptimized={getGameImageSrc(null, stream.gameCover) === FALLBACK_IMAGE_URL}
+              unoptimized={isPlaceholderImage(gameCoverSrc)}
             />
           </div>
         )}

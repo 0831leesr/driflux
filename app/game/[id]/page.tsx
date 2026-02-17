@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { fetchGameById, fetchStreamsByGameId } from "@/lib/data"
-import { getGameImageSrc } from "@/lib/utils"
+import { getBestGameImage } from "@/lib/utils"
 import { GameDetailsPage } from "@/components/game-details-page"
 
 interface PageProps {
@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const title = `${game.title} - Live on Driflux`
   const description = `Watch live streams of ${game.title}. Find the best streamers and gameplay content.`
-  const ogImage = getGameImageSrc(game.header_image_url, game.cover_image_url)
+  const ogImage = getBestGameImage(game.header_image_url, game.cover_image_url, "header")
 
   return {
     title,

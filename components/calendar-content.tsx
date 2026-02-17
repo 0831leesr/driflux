@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import type { EventRow } from "@/lib/types"
-import { getGameImageSrc } from "@/lib/utils"
+import { getBestGameImage } from "@/lib/utils"
 
 /* ── Types ── */
 /* DB event_type: 'Competition' | 'Patch' | 'Discount' */
@@ -77,9 +77,10 @@ function normalizeCategory(eventType: string | null): EventCategory {
 function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
   return events.map((ev) => {
     const startDate = new Date(ev.start_date)
-    const image = getGameImageSrc(
+    const image = getBestGameImage(
       ev.games?.header_image_url,
-      ev.games?.cover_image_url
+      ev.games?.cover_image_url,
+      "header"
     )
     return {
       id: String(ev.id),

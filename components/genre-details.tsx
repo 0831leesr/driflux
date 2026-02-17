@@ -314,7 +314,7 @@ export function GenreDetails({
               {/* Portrait Cover */}
               <div className="relative aspect-[3/4] w-full overflow-hidden">
                 <Image
-                  src={getGameImageSrc(null, game.cover)}
+                  src={getGameImageSrc(game.cover, "cover")}
                   alt={game.name}
                   fill
                   className="object-cover transition-transform duration-300 group-hover:scale-105"

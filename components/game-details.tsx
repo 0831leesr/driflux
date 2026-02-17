@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -15,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StreamCard, type StreamData } from "@/components/stream-card"
 import type { GameRow } from "@/lib/data"
-import { getGameImageSrc } from "@/lib/utils"
+import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import {
   AlertDialog,
@@ -91,8 +90,9 @@ export function GameDetailsClient({
       <div className="relative mx-4 mt-3 overflow-hidden rounded-2xl border border-border lg:mx-6">
         {/* Blurred Background */}
         <div className="absolute inset-0">
-          <Image
-            src={liveStreams[0]?.thumbnail ?? "/streams/stream-1.jpg"}
+          <GameImage
+            src={game.background_image_url}
+            type="background"
             alt=""
             fill
             placeholder="empty"
@@ -107,8 +107,9 @@ export function GameDetailsClient({
         <div className="relative flex flex-col gap-6 p-6 sm:flex-row sm:items-end sm:gap-8 sm:p-8">
           {/* Cover Art */}
           <div className="relative h-52 w-36 shrink-0 overflow-hidden rounded-xl border-2 border-border/50 shadow-2xl sm:h-64 sm:w-44">
-            <Image
-              src={getGameImageSrc(game.header_image_url, game.cover_image_url)}
+            <GameImage
+              src={game.header_image_url ?? game.cover_image_url}
+              type="cover"
               alt={game.title}
               fill
               placeholder="empty"

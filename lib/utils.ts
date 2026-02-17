@@ -86,6 +86,25 @@ export const FALLBACK_IMAGE_URL =
   "https://via.placeholder.com/600x400/1a1a1a/ffffff?text=No+Image"
 
 /**
+ * 타입별 기본 이미지 경로 (DB에 이미지가 없을 때 fallback)
+ * 1순위: local (로컬 파일) → 2순위: remote (placehold.co) - 컴포넌트에서 처리
+ */
+export const DEFAULT_IMAGES = {
+  cover: {
+    local: "/images/defaults/cover.png",
+    remote: "https://placehold.co/600x900/333/FFF?text=No+Cover",
+  },
+  header: {
+    local: "/images/defaults/header.png",
+    remote: "https://placehold.co/460x215/333/FFF?text=No+Header",
+  },
+  background: {
+    local: "/images/defaults/background.png",
+    remote: "https://placehold.co/1920x1080/1a1a1a/FFF?text=Background",
+  },
+} as const
+
+/**
  * 이미지 URL 프로토콜 보정 (// → https:, 유효하지 않으면 placeholder)
  * DB에서 //images.igdb.com... 형태가 내려올 때 INVALID_IMAGE_OPTIMIZE_REQUEST 방지
  */
@@ -103,17 +122,44 @@ export function getValidImageUrl(url: string | null | undefined): string {
   return FALLBACK_IMAGE_URL
 }
 
+export type GameImageType = "cover" | "header" | "background"
+
 /**
- * 게임 이미지 소스 결정 (header_image_url → cover_image_url → fallback)
- * next/image의 src에는 반드시 유효한 문자열만 전달하기 위함
+ * 게임 이미지 소스 결정 (url 유효성 검사 + 타입별 fallback)
+ * - url이 유효하면(null/undefined/빈문자열 아님) 프로토콜 보정 후 반환
+ * - url이 없으면 무조건 DEFAULT_IMAGES[type].local 반환 (2차 폴백은 컴포넌트에서 처리)
  */
 export function getGameImageSrc(
-  headerImageUrl?: string | null,
-  coverImageUrl?: string | null
+  url: string | null | undefined,
+  type: keyof typeof DEFAULT_IMAGES
 ): string {
-  const header = headerImageUrl?.trim()
-  const cover = coverImageUrl?.trim()
-  if (header) return getValidImageUrl(header)
-  if (cover) return getValidImageUrl(cover)
-  return FALLBACK_IMAGE_URL
+  if (!url || url.trim() === "") {
+    return DEFAULT_IMAGES[type].local
+  }
+  const trimmed = url.trim()
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`
+  }
+  return trimmed
+}
+
+/**
+ * 기본/placeholder 이미지인지 여부 (unoptimized 옵션 판단용)
+ */
+export function isPlaceholderImage(src: string): boolean {
+  const allDefaults = Object.values(DEFAULT_IMAGES).flatMap((v) => [v.local, v.remote])
+  return (allDefaults as string[]).includes(src) || src === FALLBACK_IMAGE_URL
+}
+
+/**
+ * header_image_url 또는 cover_image_url 중 유효한 것을 선택하여 이미지 src 반환
+ * (기존 header/cover 2파라미터 패턴 호환용)
+ */
+export function getBestGameImage(
+  headerImageUrl?: string | null,
+  coverImageUrl?: string | null,
+  type: GameImageType = "header"
+): string {
+  const url = headerImageUrl?.trim() || coverImageUrl?.trim()
+  return getGameImageSrc(url || null, type)
 }
