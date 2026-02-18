@@ -402,6 +402,22 @@ export async function GET(request: Request) {
       }
     }
 
+    // Step 6: Garbage Collection - delete stale streams (inactive > 20 min)
+    // Must run AFTER all upserts complete. Active streams have fresh updated_at.
+    const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString()
+    const { data: deletedStale, error: deleteStaleError } = await adminSupabase
+      .from("streams")
+      .delete()
+      .or(`updated_at.lt.${twentyMinutesAgo},updated_at.is.null`)
+      .select("id")
+
+    if (deleteStaleError) {
+      console.error("[Stream Discovery] [Cleanup] Failed to delete stale streams:", deleteStaleError.message)
+    } else {
+      const staleCount = deletedStale?.length ?? 0
+      console.log(`[Stream Discovery] [Cleanup] Deleted ${staleCount} stale streams (inactive > 20m).`)
+    }
+
     const duration = Date.now() - startTime
     console.timeEnd("[Stream Discovery] Total duration")
     console.log(`[Stream Discovery] Job completed in ${duration}ms`)
@@ -413,10 +429,11 @@ export async function GET(request: Request) {
     console.log(`[Stream Discovery] Streams failed: ${results.streamsFailed}`)
     console.log(`[Stream Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)
 
+    const staleDeleted = deletedStale?.length ?? 0
     return NextResponse.json({
       success: true,
-      message: `Processed ${results.gamesProcessed} games, found ${results.streamsFound} streams (${results.streamsCreated} new, ${results.streamsUpdated} updated)`,
-      stats: results,
+      message: `Processed ${results.gamesProcessed} games, found ${results.streamsFound} streams (${results.streamsCreated} new, ${results.streamsUpdated} updated), deleted ${staleDeleted} stale`,
+      stats: { ...results, staleDeleted },
       duration,
     })
 
