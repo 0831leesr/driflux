@@ -371,7 +371,9 @@ export async function getPopularCategories(size: number = 20): Promise<string[]>
         .filter(Boolean)
     }
 
-    return categories.slice(0, size)
+    const result = categories.slice(0, size)
+    console.log(`[Chzzk] Fetched ${categories.length} categories, returning ${result.length}.`)
+    return result
   } catch (error) {
     console.error(`[Chzzk Categories] ✗ Exception:`, error instanceof Error ? error.message : String(error))
     return []
@@ -443,6 +445,7 @@ export async function searchChzzkLives(
       resultsData = data
     }
 
+    console.log(`[Chzzk] Fetched ${resultsData.length} items for "${searchKeyword}".`)
     if (resultsData.length === 0) {
       return []
     }
@@ -520,6 +523,7 @@ export async function searchChzzkLives(
         .filter(item => item.channelId)
         .sort((a, b) => b.concurrentUserCount - a.concurrentUserCount)
 
+    console.log(`[Chzzk] After GAME filter: ${results.length} streams for "${searchKeyword}".`)
     return results
   } catch (error) {
     console.error(`[Chzzk Search] ✗ Exception:`, error instanceof Error ? error.message : String(error))

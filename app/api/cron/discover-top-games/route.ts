@@ -3,21 +3,22 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getPopularCategories, CHZZK_SEARCH_LIVES_URL } from "@/lib/chzzk"
 import { delay } from "@/lib/utils"
-import { findSteamAppIdWithConfidence, getSteamGameDetails, processSteamData } from "@/lib/steam"
 
 /**
- * Discover Top Game Streams from Chzzk
- * 
- * This API fetches the most popular GAME streams directly from Chzzk,
- * without relying on our games database.
- * 
+ * Discover Top Game Streams from Chzzk (Chzzk-only, no Steam/IGDB)
+ *
+ * Fetches popular GAME streams from Chzzk and saves to DB.
+ * Steam/IGDB metadata is delegated to update-steam (daily-metadata).
+ *
  * Query Parameters:
  * - size: Number of streams to fetch (default: 50)
- * 
+ *
  * Example:
  * GET /api/cron/discover-top-games?size=100
  */
 export async function GET(request: Request) {
+  console.time("[Top Games Discovery] Total duration")
+
   // Security: Verify cron secret (skip in development)
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
@@ -43,12 +44,6 @@ export async function GET(request: Request) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-    console.log(`[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-    console.log(`[Top Games Discovery] Supabase Configuration:`)
-    console.log(`[Top Games Discovery]   URL: ${supabaseUrl}`)
-    console.log(`[Top Games Discovery]   Service Key: ${supabaseServiceKey?.substring(0, 20)}...`)
-    console.log(`[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-
     if (!supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json(
         { error: "Missing Supabase credentials" },
@@ -65,27 +60,7 @@ export async function GET(request: Request) {
 
     const supabase = await createClient()
 
-    // Test database connection
-    console.log(`[Top Games Discovery] Testing database connection...`)
-    const { data: testData, error: testError } = await adminSupabase
-      .from("streams")
-      .select("count")
-      .limit(1)
-    
-    if (testError) {
-      console.error(`[Top Games Discovery] ✗ Database connection test failed:`, testError)
-    } else {
-      console.log(`[Top Games Discovery] ✓ Database connection successful`)
-    }
-
-    // Check current stream count
-    const { count: currentCount } = await adminSupabase
-      .from("streams")
-      .select("*", { count: "exact", head: true })
-    
-    console.log(`[Top Games Discovery] Current streams in database: ${currentCount}`)
-
-    // Fetch REAL-TIME popular categories from Chzzk
+    // Fetch popular categories from Chzzk
     console.log(`[Top Games Discovery] Fetching real-time popular categories from Chzzk...`)
     
     const allCategories = await getPopularCategories(50) // Get top 50 categories
@@ -135,12 +110,10 @@ export async function GET(request: Request) {
           }
         }
 
-        // Rate limiting to avoid API throttling
-        await delay(500)
+        await delay(100)
 
-        // Stop after finding 20 game categories
-        if (gameCategories.length >= 20) {
-          console.log(`[Top Games Discovery] Found 20 game categories, stopping search`)
+        if (gameCategories.length >= 10) {
+          console.log(`[Top Games Discovery] Found 10 game categories, stopping`)
           break
         }
       } catch (err) {
@@ -183,14 +156,14 @@ export async function GET(request: Request) {
 
         if (response.ok) {
           const data = await response.json()
+          const rawCount = data?.content?.data?.length ?? 0
+          console.log(`[Top Games Discovery] Chzzk API returned ${rawCount} streams for "${keyword}".`)
           if (data?.code === 200 && data.content?.data) {
-            console.log(`[Top Games Discovery] Found ${data.content.data.length} streams for ${keyword}`)
             allStreams.push(...data.content.data)
           }
         }
 
-        // Rate limiting
-        await delay(1000)
+        await delay(100)
       } catch (err) {
         console.error(`[Top Games Discovery] Error searching ${keyword}:`, err)
       }
@@ -321,7 +294,7 @@ export async function GET(request: Request) {
           console.log(`[Top Games Discovery]   English name: "${englishName}"`)
         }
 
-        // Upsert game with statistics and English name
+        // Upsert game: Chzzk data only. Preserve existing cover/header/description (do not include).
         const { data: gameData, error: gameError } = await adminSupabase
           .from("games")
           .upsert(
@@ -370,135 +343,7 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log(`[Top Games Discovery] Successfully saved ${categoryToGameId.size} games to database`)
-
-    // STEP A3: Fetch Steam information for each game
-    console.log(`\n[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-    console.log(`[Top Games Discovery] STEP A3: Fetching Steam information`)
-    console.log(`[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-
-    let steamUpdateCount = 0
-    let nonSteamCount = 0
-    let steamNotFoundCount = 0
-
-    for (const [category, gameId] of categoryToGameId.entries()) {
-      try {
-        const englishName = categoryToEnglishName.get(category) || null
-        
-        console.log(`[Top Games Discovery] Processing: "${category}"`)
-        if (englishName) {
-          console.log(`[Top Games Discovery]   English name: "${englishName}"`)
-        }
-
-        // Search Steam: Try English first, then Korean
-        let matchResult = null
-        
-        if (englishName) {
-          console.log(`[Top Games Discovery] 🔍 Searching Steam with ENGLISH name: "${englishName}"`)
-          matchResult = await findSteamAppIdWithConfidence(englishName, 80)
-          
-          if (matchResult) {
-            console.log(`[Top Games Discovery] ✓ Found match using English name!`)
-          } else {
-            console.log(`[Top Games Discovery] ⚠ English search failed, trying Korean name...`)
-          }
-        }
-        
-        // Fallback to Korean if English search failed
-        if (!matchResult) {
-          console.log(`[Top Games Discovery] 🔍 Searching Steam with KOREAN name: "${category}"`)
-          matchResult = await findSteamAppIdWithConfidence(category, 80)
-        }
-
-        if (!matchResult) {
-          console.log(`[Top Games Discovery] ⊗ "${category}" not found on Steam (or low confidence match)`)
-          console.log(`[Top Games Discovery] Marking as non-Steam game...`)
-          
-          // Update game as non-Steam
-          const { error: platformError } = await adminSupabase
-            .from("games")
-            .update({
-              platform: 'non-steam',
-              steam_appid: null,
-            })
-            .eq('id', gameId)
-
-          if (platformError) {
-            console.error(`[Top Games Discovery] ✗ Failed to update platform for "${category}"`)
-          } else {
-            console.log(`[Top Games Discovery] ✓ Marked "${category}" as non-Steam game`)
-          }
-
-          nonSteamCount++
-          await delay(1000) // Rate limit
-          continue
-        }
-
-        const appId = matchResult.appId
-        console.log(`[Top Games Discovery] ✓ Found Steam match: "${matchResult.matchedName}" (${matchResult.confidence}% confidence)`)
-        console.log(`[Top Games Discovery] Using Steam AppID: ${appId}`)
-
-        // Fetch detailed game info from Steam
-        const steamData = await getSteamGameDetails(appId)
-
-        if (!steamData) {
-          console.log(`[Top Games Discovery] ⚠ Failed to fetch Steam details for appid ${appId}`)
-          steamNotFoundCount++
-          await delay(1500) // Rate limit
-          continue
-        }
-
-        // Process Steam data
-        const processedData = processSteamData(steamData)
-
-        // Limit tags to top 5
-        const topTags = processedData.tags.slice(0, 5)
-
-        console.log(`[Top Games Discovery] Processing Steam data for "${category}":`)
-        console.log(`[Top Games Discovery]   - AppID: ${processedData.steam_appid}`)
-        console.log(`[Top Games Discovery]   - Title: ${processedData.title}`)
-        console.log(`[Top Games Discovery]   - Price: ${processedData.price_krw ? `₩${processedData.price_krw}` : 'Free'}`)
-        console.log(`[Top Games Discovery]   - Tags: ${topTags.join(', ')}`)
-
-        // Update game with Steam information
-        const { error: updateError } = await adminSupabase
-          .from("games")
-          .update({
-            platform: 'steam',
-            steam_appid: processedData.steam_appid,
-            cover_image_url: processedData.cover_image_url,
-            header_image_url: processedData.header_image_url,
-            background_image_url: processedData.background_image_url,
-            price_krw: processedData.price_krw,
-            original_price_krw: processedData.original_price_krw,
-            discount_rate: processedData.discount_rate,
-            is_free: processedData.is_free,
-            top_tags: topTags,
-          })
-          .eq('id', gameId)
-
-        if (updateError) {
-          console.error(`[Top Games Discovery] ✗ Failed to update game ${gameId} with Steam info:`, {
-            code: updateError.code,
-            message: updateError.message,
-          })
-        } else {
-          console.log(`[Top Games Discovery] ✓ Updated game "${category}" with Steam info`)
-          steamUpdateCount++
-        }
-
-        // Rate limiting: 1.5 seconds between Steam API calls
-        await delay(1500)
-
-      } catch (err) {
-        console.error(`[Top Games Discovery] Exception fetching Steam info for "${category}":`, err)
-        nonSteamCount++
-      }
-    }
-
-    console.log(`[Top Games Discovery] Steam update summary:`)
-    console.log(`[Top Games Discovery]   - Successfully updated (Steam): ${steamUpdateCount}`)
-    console.log(`[Top Games Discovery]   - Marked as non-Steam: ${nonSteamCount}`)
+    console.log(`[Top Games Discovery] Saved ${categoryToGameId.size} games (Chzzk-only; Steam/IGDB via daily-metadata)`)
 
     // STEP B: Save streams with mapped game_id
     console.log(`\n[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
@@ -524,50 +369,20 @@ export async function GET(request: Request) {
           stream_category: stream.category || null,
           game_id: gameId,
           last_chzzk_update: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         }
 
-        console.log(`[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-        console.log(`[Top Games Discovery] Saving stream #${gameStreams.indexOf(stream) + 1}/${gameStreams.length}:`)
-        console.log(`[Top Games Discovery]   Channel: ${stream.channelName}`)
-        console.log(`[Top Games Discovery]   Title: ${stream.liveTitle}`)
-        console.log(`[Top Games Discovery]   Viewers: ${stream.viewerCount} (type: ${typeof stream.viewerCount})`)
-        console.log(`[Top Games Discovery]   Category: ${stream.category}`)
-        console.log(`[Top Games Discovery]   Game ID: ${gameId}`)
-
-        // Upsert stream (insert or update based on chzzk_channel_id)
-        const { data: upsertResult, error: upsertError } = await adminSupabase
+        const { error: upsertError } = await adminSupabase
           .from("streams")
           .upsert(streamData, {
             onConflict: 'chzzk_channel_id',
             ignoreDuplicates: false,
           })
-          .select('id, title, viewer_count, stream_category, game_id')
 
         if (upsertError) {
-          console.error(`[Top Games Discovery] ✗✗✗ SUPABASE WRITE ERROR ✗✗✗`)
-          console.error(`[Top Games Discovery] Error Code: ${upsertError.code}`)
-          console.error(`[Top Games Discovery] Error Message: ${upsertError.message}`)
-          console.error(`[Top Games Discovery] Error Details: ${upsertError.details}`)
-          console.error(`[Top Games Discovery] Error Hint: ${upsertError.hint}`)
-          console.error(`[Top Games Discovery] Full Error Object:`, JSON.stringify(upsertError, null, 2))
-          console.error(`[Top Games Discovery] Data that failed:`, JSON.stringify(streamData, null, 2))
+          console.error(`[Top Games Discovery] ✗ Stream write error: ${upsertError.message}`)
           stats.failed++
         } else {
-          console.log(`[Top Games Discovery] ✓✓✓ WRITE SUCCESSFUL ✓✓✓`)
-          console.log(`[Top Games Discovery] Returned from DB:`, JSON.stringify(upsertResult, null, 2))
-          
-          if (upsertResult && upsertResult.length > 0) {
-            // Check if viewer_count was actually saved
-            const savedStream = upsertResult[0]
-            if (savedStream.viewer_count !== stream.viewerCount) {
-              console.warn(`[Top Games Discovery] ⚠⚠⚠ WARNING: viewer_count mismatch!`)
-              console.warn(`[Top Games Discovery] Expected: ${stream.viewerCount}`)
-              console.warn(`[Top Games Discovery] Got: ${savedStream.viewer_count}`)
-            } else {
-              console.log(`[Top Games Discovery] ✓ viewer_count verified: ${savedStream.viewer_count}`)
-            }
-          }
-          
           stats.created++
         }
 
@@ -629,9 +444,8 @@ export async function GET(request: Request) {
     }
 
     const duration = Date.now() - startTime
-
-    console.log(`[Top Games Discovery] Completed in ${duration}ms`)
-    console.log(`[Top Games Discovery] Stats:`, stats)
+    console.timeEnd("[Top Games Discovery] Total duration")
+    console.log(`[Top Games Discovery] Completed in ${duration}ms`, stats)
 
     return NextResponse.json({
       success: true,
@@ -641,6 +455,7 @@ export async function GET(request: Request) {
     })
 
   } catch (error) {
+    console.timeEnd("[Top Games Discovery] Total duration")
     console.error("[Top Games Discovery] Fatal error:", error)
     return NextResponse.json(
       { error: "Internal server error" },

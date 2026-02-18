@@ -28,6 +28,8 @@ import { delay } from "@/lib/utils"
  * GET /api/cron/update-streams?popular=true&deleteOffline=true
  */
 export async function GET(request: Request) {
+  console.time("[Stream Discovery] Total duration")
+
   // Security: Verify cron secret (skip in development)
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
@@ -233,8 +235,7 @@ export async function GET(request: Request) {
             message: "No streams found",
           })
           
-          // Rate limiting between games
-          await delay(1500)
+          await delay(100)
           continue
         }
 
@@ -254,15 +255,7 @@ export async function GET(request: Request) {
               .eq("chzzk_channel_id", stream.channelId)
               .single()
 
-            // DEBUG: Log the stream data before saving
-            console.log(`[Stream Discovery] Stream data to save:`, {
-              title: stream.liveTitle,
-              channelName: stream.channelName,
-              channelId: stream.channelId,
-              viewerCount: stream.concurrentUserCount,
-              category: stream.category,
-            })
-
+            const now = new Date().toISOString()
             const streamData = {
               title: stream.liveTitle,
               streamer_name: stream.channelName,
@@ -272,15 +265,13 @@ export async function GET(request: Request) {
               is_live: true,
               viewer_count: stream.concurrentUserCount,
               stream_category: stream.category || null,
-              game_id: game.id > 0 ? game.id : null, // Only set game_id if it's a real game from DB
-              last_chzzk_update: new Date().toISOString(),
+              game_id: game.id > 0 ? game.id : null,
+              last_chzzk_update: now,
+              updated_at: now,
             }
 
-            console.log(`[Stream Discovery] streamData object:`, streamData)
-
             if (existingStream) {
-              // Update existing stream - Try with explicit SQL
-              const { data: updateData, error: updateError } = await adminSupabase
+              const { error: updateError } = await adminSupabase
                 .from("streams")
                 .update({
                   title: stream.liveTitle,
@@ -288,35 +279,29 @@ export async function GET(request: Request) {
                   stream_url: `https://chzzk.naver.com/live/${stream.channelId}`,
                   thumbnail_url: stream.liveImageUrl,
                   is_live: true,
-                  viewer_count: Number(stream.concurrentUserCount), // Force convert to number
+                  viewer_count: Number(stream.concurrentUserCount),
                   stream_category: stream.category || null,
                   game_id: game.id > 0 ? game.id : null,
-                  last_chzzk_update: new Date().toISOString(),
+                  last_chzzk_update: now,
+                  updated_at: now,
                 })
                 .eq("id", existingStream.id)
-                .select('id, viewer_count, stream_category, title')
 
               if (updateError) {
-                console.error(`[Stream Discovery] ✗ Failed to update stream ${stream.channelId}:`, updateError.message)
-                console.error(`[Stream Discovery] Error details:`, JSON.stringify(updateError, null, 2))
+                console.error(`[Stream Discovery] ✗ Update failed ${stream.channelId}:`, updateError.message)
                 results.streamsFailed++
               } else {
-                console.log(`[Stream Discovery] ✓ Updated: ${stream.channelName} - ${stream.liveTitle}`)
-                console.log(`[Stream Discovery] Input viewer_count: ${stream.concurrentUserCount} (type: ${typeof stream.concurrentUserCount})`)
-                console.log(`[Stream Discovery] DB returned:`, JSON.stringify(updateData, null, 2))
                 results.streamsUpdated++
               }
             } else {
-              // Insert new stream
               const { error: insertError } = await adminSupabase
                 .from("streams")
                 .insert(streamData)
 
               if (insertError) {
-                console.error(`[Stream Discovery] ✗ Failed to insert stream ${stream.channelId}:`, insertError.message)
+                console.error(`[Stream Discovery] ✗ Insert failed ${stream.channelId}:`, insertError.message)
                 results.streamsFailed++
               } else {
-                console.log(`[Stream Discovery] ✓ Created: ${stream.channelName} - ${stream.liveTitle}`)
                 results.streamsCreated++
               }
             }
@@ -335,8 +320,7 @@ export async function GET(request: Request) {
           status: "success",
         })
 
-        // Rate limiting between games
-        await delay(1500)
+        await delay(100)
 
       } catch (gameError) {
         console.error(`[Stream Discovery] ✗ Error processing game ${game.id}:`, gameError)
@@ -396,12 +380,14 @@ export async function GET(request: Request) {
           // Option 2: Mark as offline (only those outside grace period)
           console.log(`[Stream Discovery] Marking ${idsToClean.length} streams as offline`)
           
+          const now = new Date().toISOString()
           const { error: offlineError } = await adminSupabase
             .from("streams")
             .update({
               is_live: false,
               viewer_count: 0,
-              last_chzzk_update: new Date().toISOString(),
+              last_chzzk_update: now,
+              updated_at: now,
             })
             .in("id", idsToClean)
 
@@ -417,8 +403,7 @@ export async function GET(request: Request) {
     }
 
     const duration = Date.now() - startTime
-
-    console.log(`\n[Stream Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+    console.timeEnd("[Stream Discovery] Total duration")
     console.log(`[Stream Discovery] Job completed in ${duration}ms`)
     console.log(`[Stream Discovery] Games processed: ${results.gamesProcessed}`)
     console.log(`[Stream Discovery] Games with streams: ${results.gamesWithStreams}`)
@@ -436,6 +421,7 @@ export async function GET(request: Request) {
     })
 
   } catch (error) {
+    console.timeEnd("[Stream Discovery] Total duration")
     console.error("[Stream Discovery] Fatal error:", error)
     return NextResponse.json(
       {
