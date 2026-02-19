@@ -9,6 +9,9 @@
 import { findMappedSteamAppId } from "@/lib/game-mappings"
 import { delay } from "@/lib/utils"
 
+/** Next.js fetch 확장 옵션 (revalidate 등) */
+type NextFetchOptions = RequestInit & { next?: { revalidate?: number } }
+
 /* ── Types ── */
 export interface SteamPriceOverview {
   currency: string
@@ -290,7 +293,7 @@ export async function getSteamGameDetails(
         "User-Agent": "Driflux/1.0",
       },
       next: { revalidate: 3600 }, // Cache for 1 hour
-    })
+    } as NextFetchOptions)
 
     if (!response.ok) {
       console.error(`[Steam API] HTTP Error: ${response.status}`)
