@@ -107,29 +107,30 @@ export async function GET(request: Request) {
       }
 
       console.log(`[Stream Discovery] Found ${popularCategories.length} popular categories`)
-      console.log(`[Stream Discovery] Categories:`, popularCategories)
+      console.log(`[Stream Discovery] Categories:`, popularCategories.map((c) => c.title))
 
       // Find matching games in our database or create search keywords
       const gameMatches: typeof games = []
 
       for (const category of popularCategories) {
+        const categoryTitle = category.title
         // Try to find game by korean_title or title
         const { data: matchedGames } = await supabase
           .from("games")
           .select("id, title, korean_title")
-          .or(`korean_title.ilike.%${category}%,title.ilike.%${category}%`)
+          .or(`korean_title.ilike.%${categoryTitle}%,title.ilike.%${categoryTitle}%`)
           .limit(1)
 
         if (matchedGames && matchedGames.length > 0) {
           gameMatches.push(matchedGames[0])
-          console.log(`[Stream Discovery] ✓ Matched category "${category}" to game: ${matchedGames[0].title}`)
+          console.log(`[Stream Discovery] ✓ Matched category "${categoryTitle}" to game: ${matchedGames[0].title}`)
         } else {
           // Create a virtual game entry for search (will be added to DB later)
-          console.log(`[Stream Discovery] ⚠ No game found for category "${category}", will search directly`)
+          console.log(`[Stream Discovery] ⚠ No game found for category "${categoryTitle}", will search directly`)
           gameMatches.push({
             id: -1, // Virtual ID (negative to distinguish)
-            title: category,
-            korean_title: category,
+            title: categoryTitle,
+            korean_title: categoryTitle,
           })
         }
       }
