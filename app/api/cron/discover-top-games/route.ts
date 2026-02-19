@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { getPopularCategories, CHZZK_SEARCH_LIVES_URL } from "@/lib/chzzk"
+import { getPopularCategories } from "@/lib/chzzk"
 import { delay } from "@/lib/utils"
 
 /**
@@ -60,10 +60,10 @@ export async function GET(request: Request) {
 
     const supabase = await createClient()
 
-    // Fetch popular categories from Chzzk
+    // Fetch popular GAME categories from Chzzk (categories/live API returns GAME only)
     console.log(`[Top Games Discovery] Fetching real-time popular categories from Chzzk...`)
     
-    const allCategories = await getPopularCategories(50) // Get top 50 categories
+    const allCategories = await getPopularCategories(50)
     
     if (allCategories.length === 0) {
       console.error(`[Top Games Discovery] Failed to fetch popular categories`)
@@ -73,66 +73,10 @@ export async function GET(request: Request) {
       )
     }
 
-    console.log(`[Top Games Discovery] Found ${allCategories.length} total categories`)
-    console.log(`[Top Games Discovery] Filtering for GAME categories only...`)
-
-    // Filter for GAME categories by testing each one
-    const gameCategories: string[] = []
-    
-    for (const category of allCategories) {
-      try {
-        // Quick search to check categoryType
-        const testUrl = `${CHZZK_SEARCH_LIVES_URL}?keyword=${encodeURIComponent(category)}&size=1&offset=0`
-        
-        const testResponse = await fetch(testUrl, {
-          method: "GET",
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Accept": "application/json",
-            "Referer": "https://chzzk.naver.com/",
-          },
-          cache: "no-store",
-        })
-
-        if (testResponse.ok) {
-          const testData = await testResponse.json()
-          if (testData?.code === 200 && testData.content?.data?.[0]) {
-            const firstItem = testData.content.data[0]
-            const liveData = firstItem.live || firstItem
-            const categoryType = liveData.categoryType || liveData.category_type
-            
-            if (categoryType === "GAME") {
-              gameCategories.push(category)
-              console.log(`[Top Games Discovery] ✓ GAME: ${category}`)
-            } else {
-              console.log(`[Top Games Discovery] ✗ ${categoryType || 'UNKNOWN'}: ${category}`)
-            }
-          }
-        }
-
-        await delay(100)
-
-        if (gameCategories.length >= 10) {
-          console.log(`[Top Games Discovery] Found 10 game categories, stopping`)
-          break
-        }
-      } catch (err) {
-        console.error(`[Top Games Discovery] Error checking category ${category}:`, err)
-      }
-    }
-
-    console.log(`[Top Games Discovery] Filtered to ${gameCategories.length} GAME categories`)
-    console.log(`[Top Games Discovery] Game categories:`, gameCategories)
-
-    if (gameCategories.length === 0) {
-      console.error(`[Top Games Discovery] No game categories found`)
-      return NextResponse.json(
-        { error: "No game categories found" },
-        { status: 500 }
-      )
-    }
-
-    const popularGameKeywords = gameCategories
+    // categories/live?categoryType=GAME returns only game categories - no filter needed
+    const popularGameKeywords = allCategories.map((c) => c.title)
+    console.log(`[Top Games Discovery] Found ${popularGameKeywords.length} game categories`)
+    console.log(`[Top Games Discovery] Game categories:`, popularGameKeywords.slice(0, 10))
 
     const allStreams: any[] = []
 
