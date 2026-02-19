@@ -216,18 +216,45 @@ function levenshteinDistance(str1: string, str2: string): number {
 }
 
 /**
+ * 스핀오프 차단: steamTitle이 query를 포함하지만 길이가 비정상적으로 긴 경우 차단
+ * 예: "로스트아크" ↔ "ARK : Lost Colony", "롤" ↔ "리그 오브 레전드 이야기"
+ */
+function shouldExcludeByLengthPenalty(query: string, steamTitle: string): boolean {
+  const queryNorm = normalizeString(query)
+  const steamNorm = normalizeString(steamTitle)
+
+  // 한쪽이 다른 쪽을 포함하는 경우에만 길이 검사
+  const steamContainsQuery = steamNorm.includes(queryNorm)
+  const queryContainsSteam = queryNorm.includes(steamNorm)
+  if (!steamContainsQuery && !queryContainsSteam) {
+    return false
+  }
+
+  // 검색어가 너무 짧을 때 (3글자 이하): 더 엄격한 비율 (1.2배)
+  const minQueryLen = 3
+  const ratioThreshold = queryNorm.length <= minQueryLen ? 1.2 : 1.5
+
+  if (steamNorm.length > queryNorm.length * ratioThreshold) {
+    return true // 스핀오프로 판단 → 제외
+  }
+
+  return false
+}
+
+/**
  * Find best matching Steam game by name with strict matching
  * Returns appid only if confidence is high enough
  * 
  * @param gameName - Game name to search (Korean or English)
- * @param minSimilarity - Minimum similarity threshold (0-100, default: 70)
+ * @param minSimilarity - Minimum similarity threshold (0-100, default: 85)
  * @returns Object with appid and confidence, or null if no good match
  */
 export async function findSteamAppIdWithConfidence(
   gameName: string,
-  minSimilarity: number = 70
+  minSimilarity: number = 85
 ): Promise<{ appId: number; confidence: number; matchedName: string } | null> {
   // 1. 정적 매핑 확인 (LoL, 배그 등 - API 검색 불필요, 100% 정확도)
+  // findMappedSteamAppId는 내부적으로 띄어쓰기·대소문자 정규화 수행
   const mappedAppId = findMappedSteamAppId(gameName)
   if (mappedAppId !== undefined) {
     if (typeof mappedAppId === "number") {
@@ -245,6 +272,11 @@ export async function findSteamAppIdWithConfidence(
   let bestMatch: { appId: number; confidence: number; matchedName: string } | null = null
 
   for (const result of results) {
+    // 스핀오프 차단: steamTitle이 query를 포함하지만 길이가 query의 1.5배 초과 시 제외
+    if (shouldExcludeByLengthPenalty(gameName, result.name)) {
+      continue
+    }
+
     const similarity = calculateSimilarity(gameName, result.name)
 
     if (similarity >= minSimilarity && (!bestMatch || similarity > bestMatch.confidence)) {

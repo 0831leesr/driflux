@@ -28,6 +28,8 @@ export const CHZZK_STEAM_MAPPINGS: Record<string, number | null> = {
   "League of Legends": null,
   "LOL": null,
   "롤": null,
+  "TFT": null,                           // Teamfight Tactics, 라이엇 게임즈
+  "Teamfight Tactics": null,
   
   // 배틀로얄
   "배틀그라운드 모바일": null,           // 모바일 게임
@@ -88,6 +90,7 @@ export const CHZZK_STEAM_MAPPINGS: Record<string, number | null> = {
   
   // MMORPG
   "로스트아크": 1599340,
+  "로스트 아크": 1599340,                // 공백 포함 표기 (ARK: Lost Colony 오탐지 방지)
   "Lost Ark": 1599340,
   
   // 샌드박스 / 생존
@@ -193,6 +196,7 @@ export const CHZZK_STEAM_MAPPINGS: Record<string, number | null> = {
   "FIFA온라인4": null,
   "FIFA Online 4": null,
   "FC온라인": null,
+  "FC Online": null,
   "마블 라이벌즈": 2767030,
   "Marvel Rivals": 2767030,
   "그랜드 테프트 오토 5": 271590,
@@ -213,7 +217,20 @@ export const CHZZK_STEAM_MAPPINGS: Record<string, number | null> = {
 }
 
 /**
+ * 매핑 키 비교용 정규화: 공백 제거 + 소문자 변환
+ * "리그 오브 레전드" ↔ "리그오브레전드", "League of Legends" ↔ "leagueoflegends" 매칭 지원
+ */
+function normalizeForMapping(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .trim()
+}
+
+/**
  * 치지직 게임 이름으로 스팀 AppID 찾기
+ * 
+ * 띄어쓰기·대소문자 무시 정규화 매칭을 수행합니다.
  * 
  * @param chzzkGameName - 치지직 게임 이름
  * @returns 
@@ -228,11 +245,11 @@ export function findMappedSteamAppId(chzzkGameName: string): number | null | und
     return exactMatch
   }
 
-  // 2. 대소문자 무시 매칭
-  const normalizedName = chzzkGameName.toLowerCase().trim()
+  // 2. 정규화된 매칭 (띄어쓰기·대소문자 무시)
+  const normalizedQuery = normalizeForMapping(chzzkGameName)
   
   for (const [key, value] of Object.entries(CHZZK_STEAM_MAPPINGS)) {
-    if (key.toLowerCase().trim() === normalizedName) {
+    if (normalizeForMapping(key) === normalizedQuery) {
       return value
     }
   }
