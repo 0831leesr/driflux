@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence } from "@/lib/steam"
+import { findMappedSteamAppId } from "@/lib/game-mappings"
 import { delay } from "@/lib/utils"
 import { searchIGDBGame } from "@/lib/igdb"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
@@ -146,6 +147,14 @@ export async function GET(request: Request) {
         let igdbData: Awaited<ReturnType<typeof searchIGDBGame>> = null
         let steamData: Awaited<ReturnType<typeof processSteamData>> | null = null
         let steamAppId = game.steam_appid ?? null
+
+        // --- 블랙리스트 선검사: DB에 steam_appid가 있어도, 블랙리스트면 강제 null (오염 데이터 정리) ---
+        const blacklistFallback = findMappedSteamAppId(fallbackTitle)
+        const blacklistEnglish = englishTitle ? findMappedSteamAppId(englishTitle) : undefined
+        if (blacklistFallback === null || blacklistEnglish === null) {
+          steamAppId = null
+          console.log(`[Steam Update] ⊗ Blacklisted (non-Steam): ${game.title} - clearing steam_appid`)
+        }
 
         // --- Phase 1: IGDB 검색 ---
         igdbData = await searchIGDBGame(

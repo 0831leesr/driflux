@@ -269,9 +269,17 @@ export async function findSteamAppIdWithConfidence(
     return null
   }
 
+  const cleanQuery = gameName.toLowerCase().replace(/\s+/g, "")
+
   let bestMatch: { appId: number; confidence: number; matchedName: string } | null = null
 
   for (const result of results) {
+    const cleanSteamTitle = result.name.toLowerCase().replace(/\s+/g, "")
+    // [핵심] 공백 제거한 완벽 일치 → 길이 패널티/유사도와 무관하게 즉시 매칭 (GTFO 등 짧은 이름 오탐지 방지)
+    if (cleanQuery === cleanSteamTitle) {
+      return { appId: result.id, confidence: 100, matchedName: result.name }
+    }
+
     // 스핀오프 차단: steamTitle이 query를 포함하지만 길이가 query의 1.5배 초과 시 제외
     if (shouldExcludeByLengthPenalty(gameName, result.name)) {
       continue
