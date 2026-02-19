@@ -101,7 +101,10 @@ export interface ChzzkPopularCategory {
 /* ── Constants ── */
 export const CHZZK_API_BASE = "https://api.chzzk.naver.com"
 const CHZZK_SERVICE_V1 = `${CHZZK_API_BASE}/service/v1`
+const CHZZK_SERVICE_V2 = `${CHZZK_API_BASE}/service/v2`
 export const CHZZK_SEARCH_LIVES_URL = `${CHZZK_SERVICE_V1}/search/lives`
+export const CHZZK_CATEGORY_LIVES_URL = (categoryId: string) =>
+  `${CHZZK_SERVICE_V2}/categories/GAME/${encodeURIComponent(categoryId)}/lives`
 const RATE_LIMIT_DELAY = 1000 // 1초 (치지직 API Rate Limit 고려)
 const DEFAULT_THUMBNAIL_SIZE = "720" // 썸네일 해상도 (480, 720, 1080 등)
 const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/1280x720/1a1a1a/ffffff?text=No+Thumbnail" // Fallback thumbnail
@@ -371,6 +374,92 @@ export async function getPopularCategories(
     return result
   } catch (error) {
     console.error("[Chzzk] Failed to fetch categories:", error)
+    return []
+  }
+}
+
+/**
+ * Get live streams by category ID (highly accurate, category-specific API)
+ *
+ * API: GET https://api.chzzk.naver.com/service/v2/categories/GAME/{categoryId}/lives
+ * Replaces keyword search with exact category lookup.
+ *
+ * @param categoryId - Chzzk category ID (e.g., "League_of_Legends", "Rimworld")
+ * @returns Array of stream data in SearchedStreamData format
+ */
+export async function getChzzkStreamsByCategory(
+  categoryId: string
+): Promise<SearchedStreamData[]> {
+  if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+    console.warn("[Chzzk Category] Skipping invalid categoryId:", JSON.stringify(categoryId))
+    return []
+  }
+
+  const trimmedId = categoryId.trim()
+  const url = CHZZK_CATEGORY_LIVES_URL(trimmedId)
+  console.log("[Chzzk Request] Fetching category lives:", url)
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": BROWSER_USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://chzzk.naver.com/",
+      },
+      cache: "no-store",
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`[Chzzk Category] 404 Not Found: ${url}`)
+      } else {
+        console.error(`[Chzzk Category] ✗ HTTP Error: ${response.status}`)
+        const errorText = await response.text()
+        console.error(`[Chzzk Category] Error Body:`, errorText.substring(0, 500))
+      }
+      return []
+    }
+
+    const data = await response.json()
+    if (!data || data.code !== 200) {
+      console.error(`[Chzzk Category] ✗ API Error: code=${data?.code}`)
+      return []
+    }
+
+    const items = data.content?.data ?? data.content ?? []
+    console.log(`[Chzzk] Fetched ${items.length} streams for category "${trimmedId}".`)
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return []
+    }
+
+    const results: SearchedStreamData[] = items
+      .filter((item: any) => item?.channel?.channelId)
+      .map((item: any) => {
+        const channelId = item.channel?.channelId ?? item.channelId ?? ""
+        const channelName = item.channel?.channelName ?? item.channelName ?? "Unknown"
+        let thumbnailUrl = item.liveImageUrl ?? ""
+        if (thumbnailUrl && thumbnailUrl.includes("{type}")) {
+          thumbnailUrl = thumbnailUrl.replace(/{type}/g, "1080")
+        }
+        return {
+          channelId,
+          channelName,
+          liveTitle: item.liveTitle ?? item.title ?? "No Title",
+          liveImageUrl: thumbnailUrl,
+          concurrentUserCount: Number(item.concurrentUserCount ?? 0),
+          openDate: item.openDate ?? new Date().toISOString(),
+          category: item.liveCategoryValue ?? item.liveCategory ?? trimmedId,
+        }
+      })
+      .filter((s) => s.channelId)
+      .sort((a, b) => b.concurrentUserCount - a.concurrentUserCount)
+
+    return results
+  } catch (error) {
+    console.error(`[Chzzk Category] ✗ Exception:`, error instanceof Error ? error.message : String(error))
     return []
   }
 }

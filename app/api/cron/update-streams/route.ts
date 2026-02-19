@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { searchChzzkLives, getPopularCategories } from "@/lib/chzzk"
+import { getChzzkStreamsByCategory, searchChzzkLives, getPopularCategories } from "@/lib/chzzk"
 import { delay } from "@/lib/utils"
 
 /**
@@ -86,11 +86,12 @@ export async function GET(request: Request) {
 
     console.log("[Stream Discovery] ✓ Admin client initialized")
 
-    // Step 1: Determine which games to process
-    let games: Array<{ id: number; title: string; korean_title: string | null }> = []
+    // Step 1: Determine which games to process (include categoryId for category API)
+    type GameWithCategory = { id: number; title: string; korean_title: string | null; categoryId?: string | null }
+    let games: GameWithCategory[] = []
 
     if (usePopularMode) {
-      // Mode A: Use popular categories from Chzzk
+      // Mode A: Use popular categories from Chzzk (categoryId = originalId)
       console.log("[Stream Discovery] Fetching popular categories from Chzzk...")
       const popularCategories = await getPopularCategories(popularSize)
 
@@ -107,60 +108,49 @@ export async function GET(request: Request) {
       }
 
       console.log(`[Stream Discovery] Found ${popularCategories.length} popular categories`)
-      console.log(`[Stream Discovery] Categories:`, popularCategories.map((c) => c.title))
-
-      // Find matching games in our database or create search keywords
-      const gameMatches: typeof games = []
 
       for (const category of popularCategories) {
         const categoryTitle = category.title
-        // Try to find game by korean_title or title
         const { data: matchedGames } = await supabase
           .from("games")
-          .select("id, title, korean_title")
+          .select("id, title, korean_title, english_title")
           .or(`korean_title.ilike.%${categoryTitle}%,title.ilike.%${categoryTitle}%`)
           .limit(1)
 
         if (matchedGames && matchedGames.length > 0) {
-          gameMatches.push(matchedGames[0])
-          console.log(`[Stream Discovery] ✓ Matched category "${categoryTitle}" to game: ${matchedGames[0].title}`)
+          const g = matchedGames[0]
+          games.push({
+            id: g.id,
+            title: g.title,
+            korean_title: g.korean_title,
+            categoryId: g.english_title ?? category.originalId,
+          })
         } else {
-          // Create a virtual game entry for search (will be added to DB later)
-          console.log(`[Stream Discovery] ⚠ No game found for category "${categoryTitle}", will search directly`)
-          gameMatches.push({
-            id: -1, // Virtual ID (negative to distinguish)
+          games.push({
+            id: -1,
             title: categoryTitle,
             korean_title: categoryTitle,
+            categoryId: category.originalId,
           })
         }
       }
-
-      games = gameMatches
     } else {
-      // Mode B: Use games from database (original logic)
+      // Mode B: Use games from database (categoryId = english_title)
       let gamesQuery = supabase
         .from("games")
-        .select("id, title, korean_title")
+        .select("id, title, korean_title, english_title")
         .order("id")
 
-      // Filter by specific game if provided
       if (gameIdParam) {
         const gameId = parseInt(gameIdParam, 10)
-        if (!isNaN(gameId)) {
-          gamesQuery = gamesQuery.eq("id", gameId)
-        }
+        if (!isNaN(gameId)) gamesQuery = gamesQuery.eq("id", gameId)
       }
-
-      // Limit games if specified
       if (limitParam) {
         const limit = parseInt(limitParam, 10)
-        if (!isNaN(limit) && limit > 0) {
-          gamesQuery = gamesQuery.limit(limit)
-        }
+        if (!isNaN(limit) && limit > 0) gamesQuery = gamesQuery.limit(limit)
       }
 
       const { data: dbGames, error: gamesError } = await gamesQuery
-
       if (gamesError) {
         console.error("[Stream Discovery] Failed to fetch games:", gamesError)
         return NextResponse.json(
@@ -169,7 +159,12 @@ export async function GET(request: Request) {
         )
       }
 
-      games = dbGames || []
+      games = (dbGames || []).map((g) => ({
+        id: g.id,
+        title: g.title,
+        korean_title: g.korean_title,
+        categoryId: g.english_title ?? null,
+      }))
     }
 
     // Validation
@@ -213,34 +208,38 @@ export async function GET(request: Request) {
 
     for (const game of games) {
       results.gamesProcessed++
-      
-      // Use korean_title if available, otherwise use English title
+      const categoryId = game.categoryId?.trim() || null
       const searchKeyword = game.korean_title || game.title
-      
+
       console.log(`\n[Stream Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
       console.log(`[Stream Discovery] Processing game ${game.id}: ${game.title}`)
-      console.log(`[Stream Discovery] Search keyword: "${searchKeyword}"`)
+      if (categoryId) {
+        console.log(`[Stream Discovery] Category API: "${categoryId}"`)
+      } else {
+        console.log(`[Stream Discovery] Fallback search: "${searchKeyword}"`)
+      }
 
       try {
-        // Search for live streams on Chzzk
-        const streams = await searchChzzkLives(searchKeyword, 20)
+        // Prefer category API (exact match); fallback to keyword search
+        const streams = categoryId
+          ? await getChzzkStreamsByCategory(categoryId)
+          : await searchChzzkLives(searchKeyword, 20)
 
         if (streams.length === 0) {
-          console.log(`[Stream Discovery] No streams found for "${searchKeyword}"`)
+          console.log(`[Stream Discovery] No streams found`)
           results.gameDetails.push({
             gameId: game.id,
             gameTitle: game.title,
-            searchKeyword,
+            searchKeyword: categoryId || searchKeyword,
             streamsFound: 0,
             status: "success",
             message: "No streams found",
           })
-          
-          await delay(100)
+          await delay(150)
           continue
         }
 
-        console.log(`[Stream Discovery] Found ${streams.length} streams for "${searchKeyword}"`)
+        console.log(`[Stream Discovery] Found ${streams.length} streams`)
         results.streamsFound += streams.length
         results.gamesWithStreams++
 
@@ -316,12 +315,12 @@ export async function GET(request: Request) {
         results.gameDetails.push({
           gameId: game.id,
           gameTitle: game.title,
-          searchKeyword,
+          searchKeyword: categoryId || searchKeyword,
           streamsFound: streams.length,
           status: "success",
         })
 
-        await delay(100)
+        await delay(150)
 
       } catch (gameError) {
         console.error(`[Stream Discovery] ✗ Error processing game ${game.id}:`, gameError)
