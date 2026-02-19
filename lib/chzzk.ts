@@ -318,7 +318,7 @@ export function getChzzkChannelUrl(channelId: string): string {
  */
 export async function getPopularCategories(size: number = 20): Promise<string[]> {
   try {
-    const url = `${CHZZK_SERVICE_V1}/recommend/categories`
+    const url = `${CHZZK_SERVICE_V1}/home/recommend/game`
     console.log("[Chzzk Request] Fetching categories:", url)
 
     const response = await fetch(url, {
