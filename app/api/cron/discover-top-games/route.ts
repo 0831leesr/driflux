@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { getPopularCategories } from "@/lib/chzzk"
+import { getPopularCategories, CHZZK_SEARCH_LIVES_URL } from "@/lib/chzzk"
 import { delay } from "@/lib/utils"
 
 /**
