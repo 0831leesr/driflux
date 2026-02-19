@@ -7,6 +7,9 @@
 
 import { delay } from "@/lib/utils"
 
+/** Next.js fetch 확장 옵션 (revalidate 등) */
+type NextFetchOptions = RequestInit & { next?: { revalidate?: number } }
+
 /* ── Types ── */
 export interface ChzzkLiveContent {
   liveTitle: string
@@ -87,6 +90,14 @@ export interface SearchedStreamData {
   category?: string | null
 }
 
+/** 라이브 카테고리 API 응답 아이템 (getPopularCategories) */
+export interface ChzzkPopularCategory {
+  title: string
+  originalId: string
+  viewerCount: number
+  imageUrl: string | null
+}
+
 /* ── Constants ── */
 export const CHZZK_API_BASE = "https://api.chzzk.naver.com"
 const CHZZK_SERVICE_V1 = `${CHZZK_API_BASE}/service/v1`
@@ -153,7 +164,7 @@ export async function getChzzkLiveStatus(
         "Referer": "https://chzzk.naver.com/",
       },
       next: { revalidate: 60 }, // Cache for 1 minute (live data changes frequently)
-    })
+    } as NextFetchOptions)
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -311,71 +322,55 @@ export function getChzzkChannelUrl(channelId: string): string {
 }
 
 /**
- * Get popular live categories from Chzzk
- * 
- * @param size - Number of categories to fetch (default: 20)
- * @returns Array of popular category names
+ * Get popular live game categories from Chzzk (service/v1/categories/live)
+ *
+ * 이전 /home/recommend/game API가 404로 deprecated 되어
+ * 라이브 카테고리 API로 교체됨.
+ *
+ * @param size - 반환할 카테고리 개수 (기본: 50, API에서 최대 50개 fetch)
+ * @returns 인기순 정렬된 게임 카테고리 목록
  */
-export async function getPopularCategories(size: number = 20): Promise<string[]> {
+export async function getPopularCategories(
+  size: number = 50
+): Promise<ChzzkPopularCategory[]> {
   try {
-    const url = `${CHZZK_SERVICE_V1}/home/recommend/game`
-    console.log("[Chzzk Request] Fetching categories:", url)
+    const url = `${CHZZK_SERVICE_V1}/categories/live?categoryType=GAME&size=50&sort=POPULAR`
+    console.log("[Chzzk Request] Fetching live categories:", url)
 
     const response = await fetch(url, {
       method: "GET",
       headers: {
         "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json, text/plain, */*",
+        "Accept": "application/json",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://chzzk.naver.com/",
       },
-      next: { revalidate: 300 }, // Cache for 5 minutes
+      cache: "no-store", // No Cache
     })
 
     if (!response.ok) {
-      if (response.status === 404) {
-        console.warn(`[Chzzk Categories] 404 Not Found (soft fail):`, url)
-      } else {
-        console.error(`[Chzzk Categories] ✗ HTTP Error: ${response.status}`)
-      }
-      return []
+      console.error(`[Chzzk Categories] ✗ HTTP Error: ${response.status}`)
+      throw new Error(`Chzzk API Error: ${response.status}`)
     }
 
-    const data = await response.json()
-    console.log("[Chzzk Categories] ✓ Success:", url)
+    const json = await response.json()
+    const items = json.content?.data ?? []
 
-    let categories: string[] = []
+    const categories: ChzzkPopularCategory[] = items.map((item: any) => ({
+      title: item.categoryValue ?? "",
+      originalId: item.categoryId ?? "",
+      viewerCount: Number(item.concurrentUserCount) ?? 0,
+      imageUrl: item.posterImageUrl ?? null,
+    }))
 
-    // Structure 1: { code: 200, content: { data: [...] } }
-    if (data.content && Array.isArray(data.content.data)) {
-      categories = data.content.data
-        .map((item: any) => item.categoryValue || item.categoryName || item.name)
-        .filter(Boolean)
-    }
-    // Structure 2: { code: 200, content: [...] }
-    else if (data.content && Array.isArray(data.content)) {
-      categories = data.content
-        .map((item: any) => item.categoryValue || item.categoryName || item.name)
-        .filter(Boolean)
-    }
-    // Structure 3: { data: [...] }
-    else if (Array.isArray(data.data)) {
-      categories = data.data
-        .map((item: any) => item.categoryValue || item.categoryName || item.name)
-        .filter(Boolean)
-    }
-    // Structure 4: Direct array
-    else if (Array.isArray(data)) {
-      categories = data
-        .map((item: any) => item.categoryValue || item.categoryName || item.name)
-        .filter(Boolean)
-    }
+    const result = categories
+      .filter((c) => c.title && c.originalId)
+      .slice(0, size)
 
-    const result = categories.slice(0, size)
-    console.log(`[Chzzk] Fetched ${categories.length} categories, returning ${result.length}.`)
+    console.log(`[Chzzk] Fetched ${categories.length} live categories, returning ${result.length}.`)
     return result
   } catch (error) {
-    console.error(`[Chzzk Categories] ✗ Exception:`, error instanceof Error ? error.message : String(error))
+    console.error("[Chzzk] Failed to fetch categories:", error)
     return []
   }
 }
