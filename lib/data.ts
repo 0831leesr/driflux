@@ -57,6 +57,11 @@ export interface GameWithTags extends GameRow {
 }
 
 /* ── Helpers ── */
+/** LIKE/ILIKE 패턴 내 %, _, \\ 이스케이프 (와일드카드 오동작 방지) */
+function escapeForLike(s: string): string {
+  return s.replace(/[%_\\]/g, (c) => (c === "\\" ? "\\\\" : `\\${c}`))
+}
+
 function formatViewers(count: number | null): string {
   if (!count) return "0"
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`
@@ -183,12 +188,17 @@ export async function fetchSaleGames() {
 /* ── Fetch streams for a specific game (by title) ── */
 export async function fetchStreamsByGameTitle(gameTitle: string) {
   const supabase = await createClient()
-  const { data: games } = await supabase
-    .from("games")
-    .select("*")
-    .ilike("title", gameTitle)
-    .limit(1)
-  if (!games || games.length === 0) return []
+  const term = gameTitle?.trim()
+  if (!term) return []
+
+  const pattern = `%${escapeForLike(term)}%`
+  // title 또는 korean_title로 매칭 (한글/영문 둘 다 지원)
+  const { data: byTitle } = await supabase.from("games").select("*").ilike("title", pattern).limit(1)
+  const { data: byKorean } = !byTitle?.length
+    ? await supabase.from("games").select("*").not("korean_title", "is", null).ilike("korean_title", pattern).limit(1)
+    : { data: null }
+  const games = byTitle?.length ? byTitle : byKorean
+  if (!games?.length) return []
   const game = games[0]
 
   const { data: streams, error } = await supabase
@@ -484,6 +494,7 @@ export async function searchGames(query: string): Promise<GameWithTags[]> {
   const trimmed = query?.trim()
   if (!trimmed) return []
 
+  const pattern = `%${escapeForLike(trimmed)}%`
   const supabase = await createClient()
   const gameIds = new Set<number>()
 
@@ -491,17 +502,28 @@ export async function searchGames(query: string): Promise<GameWithTags[]> {
   const { data: gamesByTitle, error: err1 } = await supabase
     .from("games")
     .select("id")
-    .ilike("title", `%${trimmed}%`)
+    .ilike("title", pattern)
 
   if (!err1 && gamesByTitle) {
     gamesByTitle.forEach((g: { id: number }) => gameIds.add(g.id))
+  }
+
+  // 1b) Games where korean_title contains query (한글 검색)
+  const { data: gamesByKoreanTitle, error: err1b } = await supabase
+    .from("games")
+    .select("id")
+    .not("korean_title", "is", null)
+    .ilike("korean_title", pattern)
+
+  if (!err1b && gamesByKoreanTitle) {
+    gamesByKoreanTitle.forEach((g: { id: number }) => gameIds.add(g.id))
   }
 
   // 2) Games linked to tags whose name contains query (tags/game_tags tables)
   const { data: matchingTags, error: err2 } = await supabase
     .from("tags")
     .select("id")
-    .ilike("name", `%${trimmed}%`)
+    .ilike("name", pattern)
 
   if (!err2 && matchingTags && matchingTags.length > 0) {
     const tagIds = matchingTags.map((t: { id: number }) => t.id)
