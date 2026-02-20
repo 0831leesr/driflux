@@ -154,6 +154,8 @@ export async function fetchSaleGames() {
       .order("viewer_count", { ascending: false })
       .limit(1)
     const topStream = streams?.[0]
+    const topTags = Array.isArray(game.top_tags) ? game.top_tags : []
+    const topTag = topTags.length > 0 ? topTags[0] : undefined
     results.push({
       // Stream data
       thumbnail: topStream?.thumbnail_url ?? "/streams/stream-1.jpg",
@@ -171,6 +173,7 @@ export async function fetchSaleGames() {
       original_price_krw: game.original_price_krw,
       discount_rate: game.discount_rate,
       is_free: game.is_free,
+      topTag,
     })
   }
   return results
@@ -655,14 +658,14 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
 
   if (!rows || rows.length === 0) return []
 
-  // trending_games에 game_id가 없으므로 title로 games 테이블에서 id 조회
+  // trending_games에 game_id가 없으므로 title로 games 테이블에서 id, top_tags 조회
   const titles = [...new Set((rows as TrendingGamesViewRow[]).map((r) => r.title.trim()).filter(Boolean))]
-  const { data: games } = await supabase.from("games").select("id, title").in("title", titles)
-  const titleToId = new Map<string, number>()
+  const { data: games } = await supabase.from("games").select("id, title, top_tags").in("title", titles)
+  const titleToGame = new Map<string, { id: number; title: string; top_tags: string[] | null }>()
   const gamesWithTitle: { id: number; title: string }[] = []
   for (const g of games ?? []) {
     const t = String(g.title).trim()
-    titleToId.set(t, g.id)
+    titleToGame.set(t, { id: g.id, title: t, top_tags: g.top_tags ?? null })
     gamesWithTitle.push({ id: g.id, title: t })
   }
 
@@ -670,12 +673,14 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
   const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
 
   return (rows as TrendingGamesViewRow[])
-    .filter((row) => titleToId.has(row.title.trim()))
+    .filter((row) => titleToGame.has(row.title.trim()))
     .map((row) => {
-      const gameId = titleToId.get(row.title.trim())!
-      const stats = streamStats.get(gameId) ?? { totalViewers: 0, liveStreamCount: 0 }
+      const gameData = titleToGame.get(row.title.trim())!
+      const stats = streamStats.get(gameData.id) ?? { totalViewers: 0, liveStreamCount: 0 }
+      const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
+      const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
       return {
-        id: gameId,
+        id: gameData.id,
         title: row.title,
         cover_image_url: row.cover_image_url,
         header_image_url: row.cover_image_url,
@@ -685,7 +690,7 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
         original_price_krw: null,
         currency: null,
         is_free: null,
-        top_tags: null,
+        top_tags: topTags,
         short_description: null,
         developer: null,
         publisher: null,
@@ -693,7 +698,7 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
         totalViewers: stats.totalViewers,
         viewersFormatted: formatViewers(stats.totalViewers),
         liveStreamCount: stats.liveStreamCount,
-        topTag: undefined,
+        topTag,
       }
     }) as TrendingGameRow[]
 }
@@ -846,14 +851,51 @@ export async function searchTagsFromGames(query: string, limit: number = 10): Pr
   return results
 }
 
+/* ── Get top tags from games.top_tags (게임 상세와 동일 출처, 한글 태그) ── */
+async function getTopTagsFromGamesTable(limit: number): Promise<TagRow[]> {
+  const supabase = await createClient()
+  const { data: games, error } = await supabase
+    .from("games")
+    .select("top_tags")
+    .not("top_tags", "is", null)
+    .limit(100)
+
+  if (error || !games?.length) return []
+
+  const seenKeys = new Set<string>()
+  const topTags: TagRow[] = []
+
+  for (const game of games) {
+    const arr = game.top_tags as string[] | null
+    if (!Array.isArray(arr)) continue
+    for (const tagName of arr) {
+      if (topTags.length >= limit) break
+      const name = String(tagName).trim()
+      if (!name) continue
+      const lowerName = name.toLowerCase()
+      const slugBase = lowerName.replace(/\s+/g, "-")
+      const slug = slugBase.replace(/[#?&=/\\]/g, "")
+      const key = slug || lowerName
+      if (seenKeys.has(key)) continue
+      seenKeys.add(key)
+      topTags.push({
+        id: -(topTags.length + 1),
+        name,
+        slug: slug || lowerName.replace(/\s+/g, "-")
+      })
+    }
+  }
+  return topTags
+}
+
 /* ── Get top tags from trending games (for Explore filter) ── */
-/* Uses top_tags from games table, ordered by viewer count (Chzzk streams) */
+/* Uses top_tags from games table - same source as game detail (Korean) */
 export async function getTopGameTags(limit: number = 10): Promise<TagRow[]> {
   try {
     const trendingGames = await fetchTrendingGames()
     
     if (trendingGames.length === 0) {
-      return (await getAllTags()).slice(0, limit)
+      return (await getTopTagsFromGamesTable(limit)).slice(0, limit)
     }
     
     const seenKeys = new Set<string>()
@@ -888,10 +930,10 @@ export async function getTopGameTags(limit: number = 10): Promise<TagRow[]> {
     
     if (topTags.length > 0) return topTags
     
-    return (await getAllTags()).slice(0, limit)
+    return (await getTopTagsFromGamesTable(limit)).slice(0, limit)
   } catch (error) {
     console.error("getTopGameTags error:", error)
-    return (await getAllTags()).slice(0, limit)
+    return (await getTopTagsFromGamesTable(limit)).slice(0, limit)
   }
 }
 

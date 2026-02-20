@@ -216,6 +216,7 @@ function SaleSpotlightSection({ saleGames }: { saleGames: GameRow[] }) {
               original_price_krw: game.original_price_krw ?? null,
               discount_rate: game.discount_rate ?? null,
               is_free: game.is_free ?? null,
+              topTag: (game as { topTag?: string }).topTag,
             }}
           />
         ))}

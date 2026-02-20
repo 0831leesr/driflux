@@ -170,6 +170,7 @@ export async function GET(request: Request) {
         }
 
         // --- 2. Steam 검색/조회 (skip_steam이 아니면) ---
+        let searchPriceFallback: { price_krw: number | null; original_price_krw: number | null; discount_rate: number; currency: string } | null = null
         if (!mapping?.skip_steam) {
           if (!steamAppId) {
             let matchResult = await findSteamAppIdWithConfidence(fallbackTitle, 80)
@@ -178,6 +179,7 @@ export async function GET(request: Request) {
             }
             if (matchResult) {
               steamAppId = matchResult.appId
+              searchPriceFallback = matchResult.priceFromSearch ?? null
               console.log(`[Discovery] Found on Steam: ${matchResult.matchedName} (${steamAppId})`)
             }
             await delay(500)
@@ -203,6 +205,8 @@ export async function GET(request: Request) {
         // --- 3. 데이터 병합 (Merge) - IGDB 우선, Steam 차선 ---
         const ig = igdbData
         const st = steamData
+        const priceFromSteam = st ? st.price_krw : null
+        const priceFallback = searchPriceFallback?.price_krw != null ? searchPriceFallback : null
         const updatePayload: Record<string, string | number | boolean | null | string[]> = {
           cover_image_url: ig?.image_url ?? st?.cover_image_url ?? null,
           header_image_url: ig?.image_url ?? st?.header_image_url ?? null,
@@ -211,11 +215,12 @@ export async function GET(request: Request) {
           developer: ig?.developer ?? null,
           publisher: ig?.publisher ?? null,
           steam_appid: steamAppId ?? (st ? st.steam_appid : game.steam_appid),
-          price_krw: st ? st.price_krw : null,
-          original_price_krw: st ? st.original_price_krw : null,
-          discount_rate: st ? st.discount_rate : null,
+          price_krw: priceFromSteam ?? priceFallback?.price_krw ?? null,
+          original_price_krw: (st ? st.original_price_krw : null) ?? priceFallback?.original_price_krw ?? null,
+          discount_rate: (st ? st.discount_rate : null) ?? priceFallback?.discount_rate ?? null,
           is_free: st ? st.is_free : false,
-          currency: st ? st.currency : null,
+          currency: (st ? st.currency : null) ?? priceFallback?.currency ?? null,
+          platform: mapping?.skip_steam ? "non-steam" : (steamAppId != null ? "steam" : "unknown"),
         }
         if (st) {
           updatePayload.title = st.title

@@ -240,18 +240,31 @@ function shouldExcludeByLengthPenalty(query: string, steamTitle: string): boolea
   return false
 }
 
+/** 가격 정보 (검색 API fallback용) */
+export interface SteamSearchPriceInfo {
+  price_krw: number | null
+  original_price_krw: number | null
+  discount_rate: number
+  currency: string
+}
+
 /**
  * Find best matching Steam game by name with strict matching
  * Returns appid only if confidence is high enough
- * 
+ *
  * @param gameName - Game name to search (Korean or English)
  * @param minSimilarity - Minimum similarity threshold (0-100, default: 85)
- * @returns Object with appid and confidence, or null if no good match
+ * @returns Object with appid, confidence, matchedName, and optional priceFromSearch
  */
 export async function findSteamAppIdWithConfidence(
   gameName: string,
   minSimilarity: number = 85
-): Promise<{ appId: number; confidence: number; matchedName: string } | null> {
+): Promise<{
+  appId: number
+  confidence: number
+  matchedName: string
+  priceFromSearch?: SteamSearchPriceInfo
+} | null> {
   // Steam API 검색 (블랙리스트/매핑은 update-steam 등 호출측에서 DB game_mappings로 처리)
   const results = await searchSteamGame(gameName, 10)
   if (results.length === 0) {
@@ -260,13 +273,23 @@ export async function findSteamAppIdWithConfidence(
 
   const cleanQuery = gameName.toLowerCase().replace(/\s+/g, "")
 
-  let bestMatch: { appId: number; confidence: number; matchedName: string } | null = null
+  let bestMatch: {
+    appId: number
+    confidence: number
+    matchedName: string
+    result: SteamSearchResult
+  } | null = null
 
   for (const result of results) {
     const cleanSteamTitle = result.name.toLowerCase().replace(/\s+/g, "")
     // [핵심] 공백 제거한 완벽 일치 → 길이 패널티/유사도와 무관하게 즉시 매칭 (GTFO 등 짧은 이름 오탐지 방지)
     if (cleanQuery === cleanSteamTitle) {
-      return { appId: result.id, confidence: 100, matchedName: result.name }
+      return {
+        appId: result.id,
+        confidence: 100,
+        matchedName: result.name,
+        priceFromSearch: toSearchPriceInfo(result),
+      }
     }
 
     // 스핀오프 차단: steamTitle이 query를 포함하지만 길이가 query의 1.5배 초과 시 제외
@@ -281,11 +304,29 @@ export async function findSteamAppIdWithConfidence(
         appId: result.id,
         confidence: similarity,
         matchedName: result.name,
+        result,
       }
     }
   }
 
-  return bestMatch
+  if (!bestMatch) return null
+  return {
+    appId: bestMatch.appId,
+    confidence: bestMatch.confidence,
+    matchedName: bestMatch.matchedName,
+    priceFromSearch: toSearchPriceInfo(bestMatch.result),
+  }
+}
+
+function toSearchPriceInfo(r: SteamSearchResult): SteamSearchPriceInfo {
+  const price_krw = r.final_price != null ? r.final_price : null
+  const original_price_krw = r.original_price != null ? r.original_price : null
+  return {
+    price_krw,
+    original_price_krw,
+    discount_rate: r.discount_percent ?? 0,
+    currency: r.currency || "KRW",
+  }
 }
 
 /**
