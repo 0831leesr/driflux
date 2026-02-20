@@ -6,7 +6,6 @@
  * https://wiki.teamfortress.com/wiki/User:RJackson/StorefrontAPI
  */
 
-import { findMappedSteamAppId } from "@/lib/game-mappings"
 import { delay } from "@/lib/utils"
 
 /** Next.js fetch 확장 옵션 (revalidate 등) */
@@ -253,17 +252,7 @@ export async function findSteamAppIdWithConfidence(
   gameName: string,
   minSimilarity: number = 85
 ): Promise<{ appId: number; confidence: number; matchedName: string } | null> {
-  // 1. 정적 매핑 확인 (LoL, 배그 등 - API 검색 불필요, 100% 정확도)
-  // findMappedSteamAppId는 내부적으로 띄어쓰기·대소문자 정규화 수행
-  const mappedAppId = findMappedSteamAppId(gameName)
-  if (mappedAppId !== undefined) {
-    if (typeof mappedAppId === "number") {
-      return { appId: mappedAppId, confidence: 100, matchedName: gameName }
-    }
-    return null // null = 스팀에 없는 게임 (검색 금지)
-  }
-
-  // 2. 매핑 없음 → Steam API 검색
+  // Steam API 검색 (블랙리스트/매핑은 update-steam 등 호출측에서 DB game_mappings로 처리)
   const results = await searchSteamGame(gameName, 10)
   if (results.length === 0) {
     return null

@@ -14,11 +14,12 @@ export function TrendingGames() {
       try {
         const games = await fetchTrendingGames()
         
+        // trending_games 뷰: title, cover_image_url, stream_count, total_viewers, trend_score
         const cardData: GameCardData[] = games.map((game) => ({
           id: game.id,
           title: game.title,
           cover_image_url: game.cover_image_url,
-          header_image_url: game.header_image_url ?? undefined,
+          header_image_url: game.header_image_url ?? game.cover_image_url ?? undefined,
           price_krw: game.price_krw ?? null,
           original_price_krw: game.original_price_krw ?? null,
           discount_rate: game.discount_rate ?? null,
@@ -47,7 +48,7 @@ export function TrendingGames() {
           Now Trending (Don{"'"}t Miss Out)
         </h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="overflow-hidden rounded-xl border border-border bg-card animate-pulse">
               <div className="aspect-[16/9] w-full bg-muted" />
               <div className="p-3">

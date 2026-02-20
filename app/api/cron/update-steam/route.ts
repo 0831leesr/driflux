@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence } from "@/lib/steam"
-import { findMappedSteamAppId } from "@/lib/game-mappings"
+import { getGameMappings, resolveMapping, type GameMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
 import { searchIGDBGame } from "@/lib/igdb"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
@@ -122,6 +122,10 @@ export async function GET(request: Request) {
 
     console.log(`[Steam Update] Found ${games.length} games to update (Steam + non-Steam)`)
 
+    const mappings = await getGameMappings()
+    const uniqueMappings = new Set(Object.values(mappings).map((m) => m.chzzk_title)).size
+    console.log(`[Steam Update] Loaded ${uniqueMappings} game mappings from DB`)
+
     const results = {
       total: games.length,
       updated: 0,
@@ -136,7 +140,7 @@ export async function GET(request: Request) {
       }>,
     }
 
-    /* ── IGDB + Steam 하이브리드 검색 (누락 방지) ── */
+    /* ── IGDB + Steam 하이브리드 검색 (DB 매핑 오버라이드 파이프라인) ── */
     for (const game of games) {
       console.log(`[Steam Update] Processing: ${game.title} (SteamID: ${game.steam_appid ?? "null"})`)
 
@@ -144,29 +148,29 @@ export async function GET(request: Request) {
         const koreanTitle = (game as { korean_title?: string | null }).korean_title?.trim() || null
         const englishTitle = (game as { english_title?: string | null }).english_title?.trim() || null
         const fallbackTitle = game.title?.trim() || ""
+        const mapping = resolveMapping(mappings, fallbackTitle, englishTitle)
+
         let igdbData: Awaited<ReturnType<typeof searchIGDBGame>> = null
         let steamData: Awaited<ReturnType<typeof processSteamData>> | null = null
-        let steamAppId = game.steam_appid ?? null
+        let steamAppId: number | null = mapping?.steam_appid ?? game.steam_appid ?? null
 
-        // --- 블랙리스트 선검사: DB에 steam_appid가 있어도, 블랙리스트면 강제 null (오염 데이터 정리) ---
-        const blacklistFallback = findMappedSteamAppId(fallbackTitle)
-        const blacklistEnglish = englishTitle ? findMappedSteamAppId(englishTitle) : undefined
-        if (blacklistFallback === null || blacklistEnglish === null) {
-          steamAppId = null
-          console.log(`[Steam Update] ⊗ Blacklisted (non-Steam): ${game.title} - clearing steam_appid`)
+        // skip_steam: Steam 검색/조회 완전 스킵 (non-Steam 게임)
+        if (mapping?.skip_steam) {
+          steamAppId = mapping.steam_appid
+          console.log(`[Steam Update] ⊗ skip_steam: ${game.title} - Steam 건너뜀`)
         }
 
-        // --- Phase 1: IGDB 검색 ---
-        igdbData = await searchIGDBGame(
-          koreanTitle || (englishTitle ? null : fallbackTitle),
-          englishTitle || fallbackTitle
-        )
-        await delay(600)
+        // --- 1. IGDB 검색 (skip_igdb가 아니면) ---
+        if (!mapping?.skip_igdb) {
+          igdbData = await searchIGDBGame(
+            koreanTitle || (englishTitle ? null : fallbackTitle),
+            englishTitle || fallbackTitle
+          )
+          await delay(600)
+        }
 
-        // --- Phase 2: Steam 검색 (IGDB 실패 시, AppID 없을 때) - 유사도 기반 통일 ---
-        if (!igdbData) {
-          console.log(`[Discovery] IGDB failed for ${game.title}. Trying Steam Search...`)
-
+        // --- 2. Steam 검색/조회 (skip_steam이 아니면) ---
+        if (!mapping?.skip_steam) {
           if (!steamAppId) {
             let matchResult = await findSteamAppIdWithConfidence(fallbackTitle, 80)
             if (!matchResult && englishTitle && englishTitle !== fallbackTitle) {
@@ -178,23 +182,25 @@ export async function GET(request: Request) {
             }
             await delay(500)
           }
+          if (steamAppId) {
+            const raw = await getSteamGameDetails(steamAppId, "kr")
+            if (raw) steamData = processSteamData(raw)
+            await delay(1500)
+          }
         }
 
-        // --- Phase 3: AppID가 있으면 스팀 상세 정보 가져오기 ---
-        if (steamAppId) {
-          const raw = await getSteamGameDetails(steamAppId, "kr")
-          if (raw) steamData = processSteamData(raw)
-          await delay(1500)
-        }
-
-        if (!igdbData && !steamData) {
+        const hasMappingOverrides = mapping && (
+          mapping.override_cover_image || mapping.override_header_image || mapping.override_background_image ||
+          mapping.override_price != null || mapping.override_is_free != null
+        )
+        if (!igdbData && !steamData && !hasMappingOverrides) {
           console.log(`[Discovery] Failed to find data for: ${game.title}`)
           results.skipped++
           results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "skipped", message: "No Steam/IGDB data" })
           continue
         }
 
-        // Step B: 데이터 병합 (Merge) - IGDB 우선
+        // --- 3. 데이터 병합 (Merge) - IGDB 우선, Steam 차선 ---
         const ig = igdbData
         const st = steamData
         const updatePayload: Record<string, string | number | boolean | null | string[]> = {
@@ -214,6 +220,21 @@ export async function GET(request: Request) {
         if (st) {
           updatePayload.title = st.title
           updatePayload.last_steam_update = new Date().toISOString()
+        }
+
+        // [오버라이드] 매핑 테이블 값이 있으면 최우선 덮어쓰기
+        if (mapping) {
+          if (mapping.override_cover_image) updatePayload.cover_image_url = mapping.override_cover_image
+          if (mapping.override_header_image) updatePayload.header_image_url = mapping.override_header_image
+          if (mapping.override_background_image) updatePayload.background_image_url = mapping.override_background_image
+          if (mapping.override_price !== null) {
+            updatePayload.price_krw = mapping.override_price
+            updatePayload.original_price_krw = mapping.override_price
+            updatePayload.discount_rate = 0
+          }
+          if (mapping.override_is_free !== null) updatePayload.is_free = mapping.override_is_free
+          if (mapping.steam_appid !== null) updatePayload.steam_appid = mapping.steam_appid
+          else if (mapping.steam_appid === null && mapping.skip_steam) updatePayload.steam_appid = null
         }
 
         // Step C: 태그 (IGDB genres+themes 우선, 없으면 Steam tags) + 한글 변환

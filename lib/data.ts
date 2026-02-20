@@ -623,7 +623,7 @@ function formatStreamForDisplay(s: any) {
   }
 }
 
-/* ── Fetch trending games with actual viewer counts ── */
+/* ── Fetch trending games (trending_games view - trend_score 알고리즘 적용) ── */
 export interface TrendingGameRow extends GameRow {
   totalViewers: number
   viewersFormatted: string
@@ -631,65 +631,52 @@ export interface TrendingGameRow extends GameRow {
   topTag?: string
 }
 
+export interface TrendingGamesViewRow {
+  game_id: number
+  title: string
+  cover_image_url: string | null
+  stream_count: number
+  total_viewers: number
+  trend_score: number
+}
+
 export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
   const supabase = await createClient()
-  
-  // Fetch all live streams with their game info
-  const { data: streams, error } = await supabase
-    .from("streams")
-    .select("game_id, viewer_count")
-    .eq("is_live", true)
-  
-  if (error || !streams) {
+
+  const { data: rows, error } = await supabase
+    .from("trending_games")
+    .select("game_id, title, cover_image_url, stream_count, total_viewers, trend_score")
+    .order("trend_score", { ascending: false })
+    .limit(8)
+
+  if (error) {
     console.error("fetchTrendingGames error:", error.message)
     return []
   }
-  
-  // Group by game_id and sum viewer counts + count streams
-  const gameStats = new Map<number, { viewers: number; streamCount: number }>()
-  for (const stream of streams) {
-    if (stream.game_id) {
-      const current = gameStats.get(stream.game_id) || { viewers: 0, streamCount: 0 }
-      gameStats.set(stream.game_id, {
-        viewers: current.viewers + (stream.viewer_count || 0),
-        streamCount: current.streamCount + 1
-      })
-    }
-  }
-  
-  // Sort by viewer count and get top games
-  const sortedGames = Array.from(gameStats.entries())
-    .sort((a, b) => b[1].viewers - a[1].viewers)
-    .slice(0, 10) // Get top 10 trending games
-  
-  if (sortedGames.length === 0) return []
-  
-  // Fetch game details with top_tags
-  const gameIds = sortedGames.map(([id]) => id)
-  const { data: games } = await supabase
-    .from("games")
-    .select("*")
-    .in("id", gameIds)
-  
-  if (!games) return []
-  
-  // Map games with viewer counts, preserving the sort order
-  const gameMap = new Map(games.map(g => [g.id, g]))
-  return sortedGames.map(([gameId, stats]) => {
-    const game = gameMap.get(gameId)
-    if (!game) return null
-    // Use top_tags from database, get first tag
-    const topTag = game.top_tags && Array.isArray(game.top_tags) && game.top_tags.length > 0 
-      ? game.top_tags[0] 
-      : undefined
-    return {
-      ...game,
-      totalViewers: stats.viewers,
-      viewersFormatted: formatViewers(stats.viewers),
-      liveStreamCount: stats.streamCount,
-      topTag
-    }
-  }).filter((g): g is TrendingGameRow => g !== null)
+
+  if (!rows || rows.length === 0) return []
+
+  return rows.map((row: TrendingGamesViewRow) => ({
+    id: row.game_id,
+    title: row.title,
+    cover_image_url: row.cover_image_url,
+    header_image_url: row.cover_image_url,
+    steam_appid: null,
+    discount_rate: null,
+    price_krw: null,
+    original_price_krw: null,
+    currency: null,
+    is_free: null,
+    top_tags: null,
+    short_description: null,
+    developer: null,
+    publisher: null,
+    background_image_url: null,
+    totalViewers: row.total_viewers,
+    viewersFormatted: formatViewers(row.total_viewers),
+    liveStreamCount: row.stream_count,
+    topTag: undefined,
+  })) as TrendingGameRow[]
 }
 
 /* ── Fetch tags by game ID ── */

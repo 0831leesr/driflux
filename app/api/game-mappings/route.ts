@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { CHZZK_STEAM_MAPPINGS, getMappingStats, findMappedSteamAppId } from "@/lib/game-mappings"
+import { getGameMappings, resolveMapping } from "@/lib/mappings"
 
 /**
  * Game Mappings API
- * 
- * 치지직 → 스팀 매핑 상태 확인
- * 
+ *
+ * DB 기반 game_mappings 테이블 조회
+ *
  * Examples:
  * GET /api/game-mappings              - 전체 매핑 보기
  * GET /api/game-mappings?stats=true   - 통계만 보기
@@ -16,22 +16,57 @@ export async function GET(request: Request) {
   const statsOnly = searchParams.get("stats") === "true"
   const gameName = searchParams.get("game")
 
+  const mappings = await getGameMappings()
+
   // 특정 게임 검색
   if (gameName) {
-    const appId = findMappedSteamAppId(gameName)
-    
+    const mapping = resolveMapping(mappings, gameName, gameName)
+
+    if (!mapping) {
+      return NextResponse.json({
+        game: gameName,
+        status: "NOT_MAPPED",
+        message: "DB에 매핑 없음 - 자동 검색 시도",
+        steam_appid: null,
+        steamUrl: null,
+      })
+    }
+
+    const steam_appid = mapping.steam_appid
     return NextResponse.json({
       game: gameName,
-      appId: appId === undefined ? "NOT_MAPPED" : appId === null ? "NOT_ON_STEAM" : appId,
-      status: appId === undefined ? "⚠️ Not mapped - will try automatic search" 
-            : appId === null ? "⊗ Not on Steam - will skip"
-            : "✓ Mapped to Steam",
-      steamUrl: typeof appId === "number" ? `https://store.steampowered.com/app/${appId}` : null,
+      chzzk_title: mapping.chzzk_title,
+      steam_appid,
+      skip_steam: mapping.skip_steam,
+      skip_igdb: mapping.skip_igdb,
+      status: mapping.skip_steam
+        ? "SKIP_STEAM"
+        : steam_appid != null
+          ? "ON_STEAM"
+          : "NOT_ON_STEAM",
+      steamUrl: steam_appid != null ? `https://store.steampowered.com/app/${steam_appid}` : null,
+      overrides: {
+        cover_image: !!mapping.override_cover_image,
+        header_image: !!mapping.override_header_image,
+        background_image: !!mapping.override_background_image,
+        price: mapping.override_price != null,
+        is_free: mapping.override_is_free != null,
+      },
     })
   }
 
   // 통계
-  const stats = getMappingStats()
+  const uniqueMappings = Array.from(
+    new Map(Object.values(mappings).map((m) => [m.chzzk_title, m])).values()
+  )
+  const steamGames = uniqueMappings.filter((m) => m.steam_appid != null && !m.skip_steam)
+  const nonSteamGames = uniqueMappings.filter((m) => m.skip_steam || m.steam_appid === null)
+  const stats = {
+    total: uniqueMappings.length,
+    steamGames: steamGames.length,
+    nonSteamGames: nonSteamGames.length,
+    uniqueAppIds: new Set(steamGames.map((m) => m.steam_appid)).size,
+  }
 
   if (statsOnly) {
     return NextResponse.json({
@@ -41,22 +76,24 @@ export async function GET(request: Request) {
   }
 
   // 전체 매핑
-  const mappings = Object.entries(CHZZK_STEAM_MAPPINGS).map(([name, appId]) => ({
-    chzzkName: name,
-    steamAppId: appId,
-    status: appId === null ? "NOT_ON_STEAM" : "ON_STEAM",
-    steamUrl: appId !== null ? `https://store.steampowered.com/app/${appId}` : null,
+  const steamList = steamGames.map((m) => ({
+    chzzk_title: m.chzzk_title,
+    steam_appid: m.steam_appid,
+    status: "ON_STEAM",
+    steamUrl: m.steam_appid != null ? `https://store.steampowered.com/app/${m.steam_appid}` : null,
   }))
-
-  // 그룹별로 정렬
-  const steamGames = mappings.filter(m => m.status === "ON_STEAM")
-  const nonSteamGames = mappings.filter(m => m.status === "NOT_ON_STEAM")
+  const nonSteamList = nonSteamGames.map((m) => ({
+    chzzk_title: m.chzzk_title,
+    steam_appid: null,
+    status: "SKIP_STEAM",
+    steamUrl: null,
+  }))
 
   return NextResponse.json({
     stats,
     mappings: {
-      steamGames,
-      nonSteamGames,
+      steamGames: steamList,
+      nonSteamGames: nonSteamList,
     },
   })
 }
