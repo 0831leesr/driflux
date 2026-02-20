@@ -148,7 +148,7 @@ export async function GET(request: Request) {
         const koreanTitle = (game as { korean_title?: string | null }).korean_title?.trim() || null
         const englishTitle = (game as { english_title?: string | null }).english_title?.trim() || null
         const fallbackTitle = game.title?.trim() || ""
-        const mapping = resolveMapping(mappings, fallbackTitle, englishTitle)
+        const mapping = resolveMapping(mappings, fallbackTitle, englishTitle, koreanTitle)
 
         let igdbData: Awaited<ReturnType<typeof searchIGDBGame>> = null
         let steamData: Awaited<ReturnType<typeof processSteamData>> | null = null
@@ -291,13 +291,14 @@ export async function GET(request: Request) {
                   .toLowerCase()
                   .replace(/[^a-z0-9가-힣]+/g, "-")
                   .replace(/^-|-$/g, "")
+                  || "untagged"
                 const { data: tagData, error: tagError } = await adminSupabase
                   .from("tags")
-                  .upsert({ name: tagName, slug }, { onConflict: "name", ignoreDuplicates: false })
+                  .upsert({ name: tagName, slug }, { onConflict: "slug", ignoreDuplicates: false })
                   .select("id")
                   .single()
                 if (tagError) {
-                  const { data: existingTag } = await adminSupabase.from("tags").select("id").eq("name", tagName).single()
+                  const { data: existingTag } = await adminSupabase.from("tags").select("id").eq("slug", slug).single()
                   if (existingTag) tagIds.push(existingTag.id)
                 } else if (tagData) tagIds.push(tagData.id)
               }

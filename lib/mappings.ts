@@ -75,17 +75,23 @@ export async function getGameMappings(): Promise<Record<string, GameMapping>> {
 }
 
 /**
- * 게임 제목(들)으로 매핑 조회. fallbackTitle, englishTitle 순으로 시도.
+ * 게임 제목(들)으로 매핑 조회.
+ * chzzk_title(한글) 우선, englishTitle, fallbackTitle 순으로 시도.
  */
 export function resolveMapping(
   mappings: Record<string, GameMapping>,
   fallbackTitle: string,
-  englishTitle?: string | null
+  englishTitle?: string | null,
+  koreanTitle?: string | null
 ): GameMapping | null {
-  const titles = [fallbackTitle?.trim(), englishTitle?.trim()].filter(Boolean)
+  const titles = [
+    koreanTitle?.trim(),
+    englishTitle?.trim(),
+    fallbackTitle?.trim(),
+  ].filter((t): t is string => !!t)
   const seen = new Set<string>()
   for (const t of titles) {
-    if (!t || seen.has(t)) continue
+    if (seen.has(t)) continue
     seen.add(t)
     const m = mappings[t] ?? mappings[normalizeForKey(t)]
     if (m) return m
