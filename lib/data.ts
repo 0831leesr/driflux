@@ -632,7 +632,6 @@ export interface TrendingGameRow extends GameRow {
 }
 
 export interface TrendingGamesViewRow {
-  game_id: number
   title: string
   cover_image_url: string | null
   stream_count: number
@@ -645,7 +644,7 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
 
   const { data: rows, error } = await supabase
     .from("trending_games")
-    .select("game_id, title, cover_image_url, stream_count, total_viewers, trend_score")
+    .select("title, cover_image_url, stream_count, total_viewers, trend_score")
     .order("trend_score", { ascending: false })
     .limit(8)
 
@@ -656,8 +655,18 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
 
   if (!rows || rows.length === 0) return []
 
-  return rows.map((row: TrendingGamesViewRow) => ({
-    id: row.game_id,
+  // trending_games에 game_id가 없으므로 title로 games 테이블에서 id 조회
+  const titles = [...new Set((rows as TrendingGamesViewRow[]).map((r) => r.title.trim()).filter(Boolean))]
+  const { data: games } = await supabase.from("games").select("id, title").in("title", titles)
+  const titleToId = new Map<string, number>()
+  for (const g of games ?? []) {
+    titleToId.set(String(g.title).trim(), g.id)
+  }
+
+  return (rows as TrendingGamesViewRow[])
+    .filter((row) => titleToId.has(row.title.trim()))
+    .map((row) => ({
+    id: titleToId.get(row.title.trim())!,
     title: row.title,
     cover_image_url: row.cover_image_url,
     header_image_url: row.cover_image_url,
