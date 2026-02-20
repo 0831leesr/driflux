@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Heart, Users, Radio } from "lucide-react"
-import { formatKRW, formatDiscountRate, formatViewerCountShort } from "@/lib/utils"
+import { formatKRW, formatDiscountRate, formatViewerCountShort, getDisplayGameTitle } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 export interface GameCardData {
   id: number
   title: string
+  korean_title?: string | null
   cover_image_url: string | null
   header_image_url?: string | null
   price_krw: number | null
@@ -46,7 +47,7 @@ export function GameCard({ game }: { game: GameCardData }) {
         <GameImage
           src={game.header_image_url ?? game.cover_image_url}
           type="header"
-          alt={game.title}
+          alt={getDisplayGameTitle(game)}
           fill
           placeholder="empty"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -87,7 +88,7 @@ export function GameCard({ game }: { game: GameCardData }) {
       {/* Game Info */}
       <div className="p-3">
         <h3 className="mb-2 truncate text-base font-bold text-foreground">
-          {game.title}
+          {getDisplayGameTitle(game)}
         </h3>
 
         {/* Streaming Stats (if available) */}

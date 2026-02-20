@@ -14,6 +14,7 @@ function toGameCardData(
   return {
     id: game.id,
     title: game.title,
+    korean_title: game.korean_title ?? undefined,
     cover_image_url: game.cover_image_url ?? null,
     header_image_url: game.header_image_url ?? undefined,
     price_krw: game.price_krw ?? null,

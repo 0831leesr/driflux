@@ -152,6 +152,19 @@ export function isPlaceholderImage(src: string): boolean {
 }
 
 /**
+ * 게임 표시용 제목: korean_title 우선, 없으면 title
+ * (FE 표준 - 데이터베이스 매칭은 korean_title 위주, 표시는 한글 우선)
+ */
+export function getDisplayGameTitle(game: {
+  korean_title?: string | null
+  title?: string | null
+}): string {
+  const korean = game.korean_title?.trim()
+  const title = game.title?.trim()
+  return korean || title || "Unknown Game"
+}
+
+/**
  * header_image_url 또는 cover_image_url 중 유효한 것을 선택하여 이미지 src 반환
  * (기존 header/cover 2파라미터 패턴 호환용)
  */

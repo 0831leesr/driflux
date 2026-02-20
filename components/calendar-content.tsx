@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import type { EventRow } from "@/lib/types"
-import { getBestGameImage } from "@/lib/utils"
+import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
 
 /* ── Types ── */
 /* DB event_type: 'Competition' | 'Patch' | 'Discount' */
@@ -86,7 +86,7 @@ function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
       id: String(ev.id),
       date: startDate,
       title: ev.title,
-      subtitle: ev.games?.title ?? "",
+      subtitle: ev.games ? getDisplayGameTitle(ev.games) : "",
       description: ev.description ?? "",
       category: normalizeCategory(ev.event_type),
       image,

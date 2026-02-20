@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StreamCard, type StreamData } from "@/components/stream-card"
 import type { GameRow } from "@/lib/data"
+import { getDisplayGameTitle } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import {
@@ -110,7 +111,7 @@ export function GameDetailsClient({
             <GameImage
               src={game.header_image_url ?? game.cover_image_url}
               type="cover"
-              alt={game.title}
+              alt={getDisplayGameTitle(game)}
               fill
               placeholder="empty"
               className="object-cover"
@@ -121,7 +122,7 @@ export function GameDetailsClient({
           {/* Game Info */}
           <div className="flex flex-1 flex-col gap-4">
             <h1 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              {game.title}
+              {getDisplayGameTitle(game)}
             </h1>
 
             {/* Stats Row */}

@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFavoriteGames, useFavoriteTags } from "@/contexts/favorites-context"
 import { useEffect, useState } from "react"
 import { fetchGamesByIds, type GameRow } from "@/lib/data"
-import { getBestGameImage } from "@/lib/utils"
+import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 
 interface LeftSidebarProps {
@@ -126,7 +126,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                     <Link
                       key={game.id}
                       href={href}
-                      title={isCollapsed ? game.title : undefined}
+                      title={isCollapsed ? getDisplayGameTitle(game) : undefined}
                       className={`flex items-center rounded-md py-1.5 text-left transition-all duration-200 animate-in fade-in ${
                         isCollapsed ? "justify-center px-0" : "gap-2.5 px-2"
                       } ${
@@ -138,7 +138,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                       <div className="relative h-8 w-6 shrink-0 overflow-hidden rounded-sm">
                         <Image
                           src={getBestGameImage(game.header_image_url, game.cover_image_url, "header")}
-                          alt={game.title}
+                          alt={getDisplayGameTitle(game)}
                           fill
                           placeholder="empty"
                           className="object-cover"
@@ -148,7 +148,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                       </div>
                       {!isCollapsed && (
                         <>
-                          <span className="truncate text-sm text-foreground">{game.title}</span>
+                          <span className="truncate text-sm text-foreground">{getDisplayGameTitle(game)}</span>
                           <span
                             className="ml-auto h-2 w-2 shrink-0 animate-pulse rounded-full bg-[hsl(var(--live-red))]"
                             aria-label="Live"

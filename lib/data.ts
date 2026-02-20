@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import type { EventRow } from "@/lib/types"
-import { getBestGameImage } from "@/lib/utils"
+import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
 
 /**
  * Time Window for stream display - DO NOT add .gt/.gte(updated_at) or last_chzzk_update
@@ -15,6 +15,7 @@ import { getBestGameImage } from "@/lib/utils"
 export interface GameRow {
   id: number
   title: string
+  korean_title?: string | null
   steam_appid: number | null
   cover_image_url: string | null
   header_image_url?: string | null
@@ -110,7 +111,7 @@ export async function fetchLiveStreams() {
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
     // Priority: stream_category (치지직) > game title > "Unknown"
-    gameTitle: s.stream_category || s.games?.title || "Unknown Game",
+    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
@@ -160,13 +161,13 @@ export async function fetchSaleGames() {
       // Stream data
       thumbnail: topStream?.thumbnail_url ?? "/streams/stream-1.jpg",
       gameCover: getBestGameImage(game.header_image_url, game.cover_image_url),
-      gameTitle: game.title,
+      gameTitle: getDisplayGameTitle(game),
       streamerName: topStream?.streamer_name ?? "N/A",
       viewers: formatViewers(topStream?.viewer_count ?? 0),
       discount: `-${game.discount_rate}% OFF`,
       // Game data (for compatibility with game cards)
       id: game.id,
-      title: game.title,
+      title: getDisplayGameTitle(game),
       cover_image_url: game.cover_image_url,
       header_image_url: game.header_image_url,
       price_krw: game.price_krw,
@@ -200,7 +201,7 @@ export async function fetchStreamsByGameTitle(gameTitle: string) {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(game.header_image_url, game.cover_image_url),
-    gameTitle: s.stream_category || game.title,
+    gameTitle: s.stream_category || getDisplayGameTitle(game),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
@@ -266,14 +267,24 @@ export async function fetchStreamsByGameId(gameId: number) {
     .eq("game_id", gameId)
     .order("viewer_count", { ascending: false })
   
-  // Also fetch streams where stream_category matches the game title
-  // This is a fallback for CHZZK streams that might not have game_id set
-  const { data: streamsByCategory, error: error2 } = await supabase
-    .from("streams")
-    .select("*")
-    .ilike("stream_category", gameData.title)
-    .order("viewer_count", { ascending: false })
-  
+  // Also fetch streams where stream_category matches game (korean_title 우선, 치지직은 한글)
+  // Fallback for CHZZK streams that might not have game_id set
+  const matchTerms = [
+    (gameData as { korean_title?: string | null }).korean_title?.trim(),
+    gameData.title?.trim(),
+  ].filter((t): t is string => !!t)
+  let streamsByCategory: StreamRow[] = []
+  let error2: { message: string } | null = null
+  if (matchTerms.length > 0) {
+    const res = await supabase
+      .from("streams")
+      .select("*")
+      .or(matchTerms.map((t) => `stream_category.ilike.${t}`).join(","))
+      .order("viewer_count", { ascending: false })
+    streamsByCategory = (res.data ?? []) as StreamRow[]
+    error2 = res.error
+  }
+
   if (error1 || error2) {
     console.error('[fetchStreamsByGameId] Error fetching streams:', error1?.message || error2?.message)
     return []
@@ -297,7 +308,7 @@ export async function fetchStreamsByGameId(gameId: number) {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(gameData.header_image_url, gameData.cover_image_url),
-    gameTitle: s.stream_category || gameData.title,
+    gameTitle: s.stream_category || getDisplayGameTitle(gameData as { korean_title?: string | null; title?: string | null }),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
@@ -345,7 +356,7 @@ export async function fetchStreamsByTagId(tagId: number) {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || s.games?.title || "Unknown Game",
+    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
@@ -382,7 +393,7 @@ export async function fetchStreamsByTopTag(tagName: string) {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || s.games?.title || "Unknown Game",
+    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
@@ -425,7 +436,7 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || s.games?.title || "Unknown Game",
+    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
@@ -612,7 +623,7 @@ function formatStreamForDisplay(s: any) {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || s.games?.title || "Unknown Game",
+    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
@@ -636,6 +647,7 @@ export interface TrendingGameRow extends GameRow {
 
 export interface TrendingGamesViewRow {
   title: string
+  korean_title?: string | null
   cover_image_url: string | null
   stream_count: number
   total_viewers: number
@@ -647,7 +659,7 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
 
   const { data: rows, error } = await supabase
     .from("trending_games")
-    .select("title, cover_image_url, stream_count, total_viewers, trend_score")
+    .select("title, korean_title, cover_image_url, stream_count, total_viewers, trend_score")
     .order("trend_score", { ascending: false })
     .limit(8)
 
@@ -658,30 +670,50 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
 
   if (!rows || rows.length === 0) return []
 
-  // trending_games에 game_id가 없으므로 title로 games 테이블에서 id, top_tags 조회
-  const titles = [...new Set((rows as TrendingGamesViewRow[]).map((r) => r.title.trim()).filter(Boolean))]
-  const { data: games } = await supabase.from("games").select("id, title, top_tags").in("title", titles)
-  const titleToGame = new Map<string, { id: number; title: string; top_tags: string[] | null }>()
+  // trending_games: korean_title 우선 사용 (통일성), games는 korean_title로 매칭
+  const koreanTitles = [
+    ...new Set(
+      (rows as TrendingGamesViewRow[])
+        .map((r) => (r.korean_title ?? r.title)?.trim())
+        .filter((t): t is string => !!t)
+    ),
+  ]
+  const { data: games } = await supabase
+    .from("games")
+    .select("id, title, korean_title, top_tags")
+    .in("korean_title", koreanTitles)
+  const titleToGame = new Map<string, { id: number; title: string; korean_title: string | null; top_tags: string[] | null }>()
   const gamesWithTitle: { id: number; title: string }[] = []
   for (const g of games ?? []) {
-    const t = String(g.title).trim()
-    titleToGame.set(t, { id: g.id, title: t, top_tags: g.top_tags ?? null })
-    gamesWithTitle.push({ id: g.id, title: t })
+    const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
+    if (!key) continue
+    titleToGame.set(key, {
+      id: g.id,
+      title: g.title,
+      korean_title: (g as { korean_title?: string | null }).korean_title ?? null,
+      top_tags: g.top_tags ?? null,
+    })
+    gamesWithTitle.push({ id: g.id, title: g.title })
   }
 
   // 게임 상세 페이지와 동일한 로직으로 스트림 통계 산출 (game_id + stream_category)
   const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
 
   return (rows as TrendingGamesViewRow[])
-    .filter((row) => titleToGame.has(row.title.trim()))
+    .filter((row) => {
+      const key = (row.korean_title ?? row.title)?.trim()
+      return key ? titleToGame.has(key) : false
+    })
     .map((row) => {
-      const gameData = titleToGame.get(row.title.trim())!
+      const key = (row.korean_title ?? row.title)?.trim()!
+      const gameData = titleToGame.get(key)!
       const stats = streamStats.get(gameData.id) ?? { totalViewers: 0, liveStreamCount: 0 }
       const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
       const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
+      const displayTitle = getDisplayGameTitle({ korean_title: gameData.korean_title, title: gameData.title })
       return {
         id: gameData.id,
-        title: row.title,
+        title: displayTitle,
         cover_image_url: row.cover_image_url,
         header_image_url: row.cover_image_url,
         steam_appid: null,
@@ -738,7 +770,7 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || s.games?.title || "Unknown Game",
+    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
@@ -1194,7 +1226,7 @@ export async function getStreamsForGames(gameIds: number[]) {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
     gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || s.games?.title || "Unknown Game",
+    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
