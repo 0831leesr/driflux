@@ -13,6 +13,7 @@ const IGDB_BASE = "https://api.igdb.com/v4"
 const IGDB_GAMES_URL = `${IGDB_BASE}/games`
 const IGDB_ALT_NAMES_URL = `${IGDB_BASE}/alternative_names`
 const IGDB_GAME_LOCALIZATIONS_URL = `${IGDB_BASE}/game_localizations`
+const IGDB_EXTERNAL_GAMES_URL = `${IGDB_BASE}/external_games`
 
 const FIELDS =
   "name, cover.url, first_release_date, screenshots.url, artworks.url, category, total_rating_count, summary, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
@@ -29,6 +30,8 @@ export interface IGDBGameResult {
   tags: string[]
   developer: string | null
   publisher: string | null
+  /** IGDB game ID (for Steam App ID lookup via external_games) */
+  igdb_game_id?: number
 }
 
 /**
@@ -72,7 +75,7 @@ type RawGame = {
 }
 
 /** Raw IGDB 응답 → IGDBGameResult 변환 */
-function parseGameToResult(game: RawGame, fallbackTitle: string): IGDBGameResult | null {
+function parseGameToResult(game: RawGame, fallbackTitle: string, igdbGameId?: number): IGDBGameResult | null {
   const coverUrl = game.cover?.url
   if (!coverUrl) return null
 
@@ -113,6 +116,7 @@ function parseGameToResult(game: RawGame, fallbackTitle: string): IGDBGameResult
     tags,
     developer,
     publisher,
+    ...(igdbGameId != null && { igdb_game_id: igdbGameId }),
   }
 }
 
@@ -222,7 +226,7 @@ export async function searchIGDBGame(
     if (typeof foundId === "number") {
       console.log(`[IGDB] Found game ID ${foundId} via Step 1 (Localization: ${korean})`)
       const game = await fetchGameDetails(foundId)
-      if (game) return parseGameToResult(game, fallbackTitle)
+      if (game) return parseGameToResult(game, fallbackTitle, foundId)
     }
   }
   await new Promise((r) => setTimeout(r, 250))
@@ -239,7 +243,7 @@ export async function searchIGDBGame(
     if (typeof foundId === "number") {
       console.log(`[IGDB] Found game ID ${foundId} via Step 2 (Alt Name: ${english || korean})`)
       const game = await fetchGameDetails(foundId)
-      if (game) return parseGameToResult(game, fallbackTitle)
+      if (game) return parseGameToResult(game, fallbackTitle, foundId)
     }
   }
   await new Promise((r) => setTimeout(r, 250))
@@ -254,7 +258,7 @@ export async function searchIGDBGame(
       if (typeof foundId === "number") {
         console.log(`[IGDB] Found game ID ${foundId} via Step 3 (Slug: ${english})`)
         const game = await fetchGameDetails(foundId)
-        if (game) return parseGameToResult(game, fallbackTitle)
+        if (game) return parseGameToResult(game, fallbackTitle, foundId)
       }
     }
   }
@@ -268,8 +272,30 @@ export async function searchIGDBGame(
   if (typeof foundId === "number") {
     console.log(`[IGDB] Found game ID ${foundId} via Step 4 (Fuzzy: ${searchTerm})`)
     const game = await fetchGameDetails(foundId)
-    if (game) return parseGameToResult(game, fallbackTitle)
+    if (game) return parseGameToResult(game, fallbackTitle, foundId)
   }
 
   return null
+}
+
+/** external_game_source: 1 = Steam */
+const IGDB_EXTERNAL_SOURCE_STEAM = 1
+
+/**
+ * IGDB 게임 ID로 Steam App ID 조회 (external_games)
+ * @param igdbGameId - IGDB game id
+ * @returns Steam app ID or null
+ */
+export async function fetchSteamAppIdFromIGDB(igdbGameId: number): Promise<number | null> {
+  try {
+    const esc = (n: number) => String(n)
+    const body = `fields uid; where game = ${esc(igdbGameId)} & external_game_source = ${IGDB_EXTERNAL_SOURCE_STEAM}; limit 1;`
+    const res = await igdbFetch<{ uid?: string }>(IGDB_EXTERNAL_GAMES_URL, body)
+    const uid = res[0]?.uid
+    if (uid == null || uid === "") return null
+    const appId = parseInt(uid, 10)
+    return Number.isNaN(appId) ? null : appId
+  } catch {
+    return null
+  }
 }

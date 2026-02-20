@@ -4,7 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence } from "@/lib/steam"
 import { getGameMappings, resolveMapping, type GameMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
-import { searchIGDBGame } from "@/lib/igdb"
+import { searchIGDBGame, fetchSteamAppIdFromIGDB } from "@/lib/igdb"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
 
 /**
@@ -173,14 +173,34 @@ export async function GET(request: Request) {
         let searchPriceFallback: { price_krw: number | null; original_price_krw: number | null; discount_rate: number; currency: string } | null = null
         if (!mapping?.skip_steam) {
           if (!steamAppId) {
-            let matchResult = await findSteamAppIdWithConfidence(fallbackTitle, 80)
-            if (!matchResult && englishTitle && englishTitle !== fallbackTitle) {
-              matchResult = await findSteamAppIdWithConfidence(englishTitle, 80)
+            // 2a. IGDB external_games로 Steam App ID 직접 조회 (가장 정확)
+            if (igdbData?.igdb_game_id) {
+              const appIdFromIGDB = await fetchSteamAppIdFromIGDB(igdbData.igdb_game_id)
+              if (appIdFromIGDB != null) {
+                steamAppId = appIdFromIGDB
+                console.log(`[Discovery] Found on Steam via IGDB external_games: ${steamAppId}`)
+              }
+              await delay(300)
             }
-            if (matchResult) {
-              steamAppId = matchResult.appId
-              searchPriceFallback = matchResult.priceFromSearch ?? null
-              console.log(`[Discovery] Found on Steam: ${matchResult.matchedName} (${steamAppId})`)
+            // 2b. 이름 기반 Steam 검색 (fallback: 치지직 제목 → 영문 제목 → IGDB 제목)
+            if (!steamAppId) {
+              const titlesToTry = [
+                fallbackTitle,
+                ...(englishTitle && englishTitle !== fallbackTitle ? [englishTitle] : []),
+                ...(igdbData?.title && igdbData.title !== fallbackTitle && igdbData.title !== englishTitle ? [igdbData.title] : []),
+              ]
+              let matchResult: Awaited<ReturnType<typeof findSteamAppIdWithConfidence>> = null
+              for (const t of titlesToTry) {
+                if (!t?.trim()) continue
+                matchResult = await findSteamAppIdWithConfidence(t, 80)
+                if (matchResult) break
+                await delay(300)
+              }
+              if (matchResult) {
+                steamAppId = matchResult.appId
+                searchPriceFallback = matchResult.priceFromSearch ?? null
+                console.log(`[Discovery] Found on Steam: ${matchResult.matchedName} (${steamAppId})`)
+              }
             }
             await delay(500)
           }
