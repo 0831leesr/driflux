@@ -1,12 +1,15 @@
 import { Suspense } from "react"
-import { getTopGameTags, getGamesByTopTagsAND } from "@/lib/data"
+import { getTopGameTags, getGamesByTopTagsAND, getStreamStatsMatchingGameDetails } from "@/lib/data"
 import { VibeFilter } from "@/components/explore/vibe-filter"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { GameWithTags } from "@/lib/data"
 
 export const dynamic = "force-dynamic"
 
-function toGameCardData(game: GameWithTags): GameCardData {
+function toGameCardData(
+  game: GameWithTags,
+  stats?: { totalViewers: number; liveStreamCount: number }
+): GameCardData {
   const topTag = game.top_tags?.[0] ?? game.tags?.[0]?.name
   return {
     id: game.id,
@@ -18,6 +21,8 @@ function toGameCardData(game: GameWithTags): GameCardData {
     discount_rate: game.discount_rate ?? null,
     is_free: game.is_free ?? null,
     topTag,
+    totalViewers: stats?.totalViewers,
+    liveStreamCount: stats?.liveStreamCount,
   }
 }
 
@@ -38,6 +43,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const games = selectedTagNames.length > 0
     ? await getGamesByTopTagsAND(selectedTagNames)
     : []
+  const streamStats = games.length > 0
+    ? await getStreamStatsMatchingGameDetails(games.map((g) => ({ id: g.id, title: g.title })))
+    : new Map<number, { totalViewers: number; liveStreamCount: number }>()
 
   return (
     <div className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
@@ -77,7 +85,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {games.length > 0 ? (
               games.map((game) => (
-                <GameCard key={game.id} game={toGameCardData(game)} />
+                <GameCard key={game.id} game={toGameCardData(game, streamStats.get(game.id))} />
               ))
             ) : (
               <div className="col-span-full py-12 text-center">

@@ -11,7 +11,8 @@ import {
   getGamesByTopTagsAND, 
   fetchTrendingGames,
   fetchLiveStreams,
-  getStreamsForGames
+  getStreamsForGames,
+  getStreamStatsMatchingGameDetails
 } from "@/lib/data"
 import { Gamepad2, Flame, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -72,11 +73,17 @@ export function ExploreTabContent() {
       try {
         // selectedTags are tag names
         const filteredGames = await getGamesByTopTagsAND(selectedTags)
-        setGames(filteredGames)
-        
-        // Get streams for these filtered games
         const gameIds = filteredGames.map(g => g.id)
-        const filteredStreams = await getStreamsForGames(gameIds)
+        const [streamStats, filteredStreams] = await Promise.all([
+          getStreamStatsMatchingGameDetails(filteredGames.map(g => ({ id: g.id, title: g.title }))),
+          getStreamsForGames(gameIds),
+        ])
+        const gamesWithStats = filteredGames.map(g => ({
+          ...g,
+          totalViewers: streamStats.get(g.id)?.totalViewers ?? 0,
+          liveStreamCount: streamStats.get(g.id)?.liveStreamCount ?? 0,
+        }))
+        setGames(gamesWithStats)
         setStreams(filteredStreams)
       } catch (error) {
         console.error("Error loading filtered data:", error)

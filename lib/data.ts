@@ -659,33 +659,43 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
   const titles = [...new Set((rows as TrendingGamesViewRow[]).map((r) => r.title.trim()).filter(Boolean))]
   const { data: games } = await supabase.from("games").select("id, title").in("title", titles)
   const titleToId = new Map<string, number>()
+  const gamesWithTitle: { id: number; title: string }[] = []
   for (const g of games ?? []) {
-    titleToId.set(String(g.title).trim(), g.id)
+    const t = String(g.title).trim()
+    titleToId.set(t, g.id)
+    gamesWithTitle.push({ id: g.id, title: t })
   }
+
+  // 게임 상세 페이지와 동일한 로직으로 스트림 통계 산출 (game_id + stream_category)
+  const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
 
   return (rows as TrendingGamesViewRow[])
     .filter((row) => titleToId.has(row.title.trim()))
-    .map((row) => ({
-    id: titleToId.get(row.title.trim())!,
-    title: row.title,
-    cover_image_url: row.cover_image_url,
-    header_image_url: row.cover_image_url,
-    steam_appid: null,
-    discount_rate: null,
-    price_krw: null,
-    original_price_krw: null,
-    currency: null,
-    is_free: null,
-    top_tags: null,
-    short_description: null,
-    developer: null,
-    publisher: null,
-    background_image_url: null,
-    totalViewers: row.total_viewers,
-    viewersFormatted: formatViewers(row.total_viewers),
-    liveStreamCount: row.stream_count,
-    topTag: undefined,
-  })) as TrendingGameRow[]
+    .map((row) => {
+      const gameId = titleToId.get(row.title.trim())!
+      const stats = streamStats.get(gameId) ?? { totalViewers: 0, liveStreamCount: 0 }
+      return {
+        id: gameId,
+        title: row.title,
+        cover_image_url: row.cover_image_url,
+        header_image_url: row.cover_image_url,
+        steam_appid: null,
+        discount_rate: null,
+        price_krw: null,
+        original_price_krw: null,
+        currency: null,
+        is_free: null,
+        top_tags: null,
+        short_description: null,
+        developer: null,
+        publisher: null,
+        background_image_url: null,
+        totalViewers: stats.totalViewers,
+        viewersFormatted: formatViewers(stats.totalViewers),
+        liveStreamCount: stats.liveStreamCount,
+        topTag: undefined,
+      }
+    }) as TrendingGameRow[]
 }
 
 /* ── Fetch tags by game ID ── */
@@ -762,6 +772,26 @@ export async function getStreamStatsForGameIds(
     })
   }
   return stats
+}
+
+/**
+ * 게임 상세 페이지(fetchStreamsByGameId)와 동일한 로직으로 스트림 통계 계산.
+ * game_id 매칭 + stream_category(게임 제목) 매칭 모두 포함.
+ * 게임 카드에서 게임 상세 페이지와 일치하는 스트리밍 수/시청자 수를 표시하기 위함.
+ */
+export async function getStreamStatsMatchingGameDetails(
+  games: { id: number; title: string }[]
+): Promise<Map<number, { totalViewers: number; liveStreamCount: number }>> {
+  const result = new Map<number, { totalViewers: number; liveStreamCount: number }>()
+  for (const g of games) result.set(g.id, { totalViewers: 0, liveStreamCount: 0 })
+  if (games.length === 0) return result
+
+  for (const game of games) {
+    const streams = await fetchStreamsByGameId(game.id)
+    const totalViewers = streams.reduce((sum, s) => sum + (s.viewers ?? 0), 0)
+    result.set(game.id, { totalViewers, liveStreamCount: streams.length })
+  }
+  return result
 }
 
 /* ── Get all tags (for Explore page filter) ── */

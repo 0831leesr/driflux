@@ -1,5 +1,5 @@
 import { Gamepad2 } from "lucide-react"
-import { searchGames, searchStreams, getStreamStatsForGameIds } from "@/lib/data"
+import { searchGames, searchStreams, getStreamStatsMatchingGameDetails } from "@/lib/data"
 import { SearchStreamsSection } from "@/components/search-streams-section"
 import { SearchGamesSection } from "@/components/search-games-section"
 
@@ -41,11 +41,11 @@ export default async function SearchPage({ searchParams }: PageProps) {
     )
   }
 
-  // Fetch games first, then stream stats and streams in parallel
+  // Fetch games first, then stream stats and streams in parallel (게임 상세와 동일한 stats 로직)
   const games = await searchGames(query)
   const gameIds = games.map((g) => g.id)
   const [streamStatsMap, streams] = await Promise.all([
-    getStreamStatsForGameIds(gameIds),
+    getStreamStatsMatchingGameDetails(games.map((g) => ({ id: g.id, title: g.title }))),
     searchStreams(query, gameIds),
   ])
   // Convert Map to plain object for client component (Map is not JSON-serializable)
