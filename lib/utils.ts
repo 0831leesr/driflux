@@ -91,15 +91,15 @@ export const FALLBACK_IMAGE_URL =
  */
 export const DEFAULT_IMAGES = {
   cover: {
-    local: "/images/defaults/cover.png",
+    local: "/defaults/cover.png",
     remote: "https://placehold.co/600x900/333/FFF?text=No+Cover",
   },
   header: {
-    local: "/images/defaults/header.png",
+    local: "/defaults/header.png",
     remote: "https://placehold.co/460x215/333/FFF?text=No+Header",
   },
   background: {
-    local: "/images/defaults/background.png",
+    local: "/defaults/background.png",
     remote: "https://placehold.co/1920x1080/1a1a1a/FFF?text=Background",
   },
 } as const
