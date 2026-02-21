@@ -752,6 +752,94 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
     }) as TrendingGameRow[]
 }
 
+/* ── Fetch games by viewer count (시청자 수 순, trend_score 아님) ── */
+export async function fetchGamesByViewerCount(limit: number = 50): Promise<TrendingGameRow[]> {
+  const supabase = await createClient()
+
+  const selectCols = "title, korean_title, cover_image_url, stream_count, total_viewers, trend_score"
+  const { data: rows, error } = await supabase
+    .from("trending_games")
+    .select(selectCols)
+    .order("total_viewers", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("fetchGamesByViewerCount error:", error.message)
+    return []
+  }
+
+  if (!rows || rows.length === 0) return []
+
+  const koreanTitles = [
+    ...new Set(
+      (rows as TrendingGamesViewRow[])
+        .map((r) => (r.korean_title ?? r.title)?.trim())
+        .filter((t): t is string => !!t)
+    ),
+  ]
+  const { data: games } = await supabase
+    .from("games")
+    .select("id, title, korean_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
+    .in("korean_title", koreanTitles)
+  type GameWithPrice = {
+    id: number
+    title: string
+    korean_title: string | null
+    top_tags: string[] | null
+    price_krw: number | null
+    original_price_krw: number | null
+    discount_rate: number | null
+    is_free: boolean | null
+    steam_appid: number | null
+  }
+  const titleToGame = new Map<string, GameWithPrice>()
+  const gamesWithTitle: { id: number; title: string }[] = []
+  for (const g of games ?? []) {
+    const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
+    if (!key) continue
+    const gg = g as GameWithPrice
+    titleToGame.set(key, gg)
+    gamesWithTitle.push({ id: gg.id, title: gg.title })
+  }
+
+  const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
+
+  return (rows as TrendingGamesViewRow[])
+    .filter((row) => {
+      const key = (row.korean_title ?? row.title)?.trim()
+      return key ? titleToGame.has(key) : false
+    })
+    .map((row) => {
+      const key = (row.korean_title ?? row.title)?.trim()!
+      const gameData = titleToGame.get(key)!
+      const stats = streamStats.get(gameData.id) ?? { totalViewers: 0, liveStreamCount: 0 }
+      const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
+      const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
+      const displayTitle = getDisplayGameTitle({ korean_title: gameData.korean_title, title: gameData.title })
+      return {
+        id: gameData.id,
+        title: displayTitle,
+        cover_image_url: row.cover_image_url,
+        header_image_url: row.cover_image_url,
+        steam_appid: gameData.steam_appid ?? undefined,
+        discount_rate: gameData.discount_rate ?? null,
+        price_krw: gameData.price_krw ?? null,
+        original_price_krw: gameData.original_price_krw ?? null,
+        currency: null,
+        is_free: gameData.is_free ?? null,
+        top_tags: topTags,
+        short_description: null,
+        developer: null,
+        publisher: null,
+        background_image_url: null,
+        totalViewers: stats.totalViewers,
+        viewersFormatted: formatViewers(stats.totalViewers),
+        liveStreamCount: stats.liveStreamCount,
+        topTag,
+      }
+    }) as TrendingGameRow[]
+}
+
 /* ── Fetch tags by game ID ── */
 export async function fetchTagsByGameId(gameId: number): Promise<TagRow[]> {
   const supabase = await createClient()
@@ -1253,5 +1341,7 @@ export async function getStreamsForGames(gameIds: number[]) {
       ? `-${s.games.discount_rate}%`
       : undefined,
     gameId: s.game_id,
+    channelId: s.chzzk_channel_id ?? undefined,
+    rawData: { streamCategory: s.stream_category, gameData: s.games },
   }))
 }

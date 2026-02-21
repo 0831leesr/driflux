@@ -92,8 +92,8 @@ export function HomeClient({ liveStreams, saleGames, upcomingEvents }: HomeClien
   }
 
   /* Use followed streams, show empty if no favorites */
-  const followingGamesStreams = followedStreams.slice(0, 4)
-  const followingTagsStreams = followedTagStreams.slice(0, 4)
+  const followingGamesStreams = followedStreams
+  const followingTagsStreams = followedTagStreams
 
   return (
     <>
@@ -152,7 +152,7 @@ export function HomeClient({ liveStreams, saleGames, upcomingEvents }: HomeClien
             />
           </div>
         ) : activeTab === "explore" ? (
-          <ExploreTabContent />
+          <ExploreTabContent onStreamClick={handleStreamClick} />
         ) : activeTab === "calendar" ? (
           <CalendarContent events={upcomingEvents} />
         ) : null}

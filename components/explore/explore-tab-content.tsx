@@ -6,25 +6,32 @@ import { Badge } from "@/components/ui/badge"
 import { GameCard } from "@/components/game-card"
 import { StreamCard } from "@/components/stream-card"
 import type { TagRow, GameWithTags, TrendingGameRow } from "@/lib/data"
+import type { StreamData } from "@/components/stream-card"
 import { 
   getTopGameTags, 
   getGamesByTopTagsAND, 
-  fetchTrendingGames,
+  fetchGamesByViewerCount,
   fetchLiveStreams,
   getStreamsForGames,
   getStreamStatsMatchingGameDetails
 } from "@/lib/data"
-import { Gamepad2, Flame, Check } from "lucide-react"
+import { Gamepad2, Check, Radio } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TagSearchInput } from "@/components/explore/tag-search-input"
 
-export function ExploreTabContent() {
+interface ExploreTabContentProps {
+  onStreamClick?: (stream: StreamData) => void
+}
+
+export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [allTags, setAllTags] = useState<TagRow[]>([])
   const [games, setGames] = useState<any[]>([])
   const [streams, setStreams] = useState<any[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([]) // Tag names for filter
+  const [exploreSubTab, setExploreSubTab] = useState<"games" | "live">("games")
   const [isLoading, setIsLoading] = useState(true)
 
   // Load top tags from trending games on mount
@@ -42,15 +49,15 @@ export function ExploreTabContent() {
     loadTags()
   }, [])
 
-  // Load initial data (trending games + live streams)
+  // Load initial data (games by viewer count + live streams)
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [trendingGames, liveStreams] = await Promise.all([
-          fetchTrendingGames(),
-          fetchLiveStreams()
+        const [gamesByViewers, liveStreams] = await Promise.all([
+          fetchGamesByViewerCount(50), // 시청자 수 순
+          fetchLiveStreams()            // 이미 viewer_count 순
         ])
-        setGames(trendingGames)
+        setGames(gamesByViewers)
         setStreams(liveStreams)
       } catch (error) {
         console.error("Error loading initial data:", error)
@@ -71,18 +78,19 @@ export function ExploreTabContent() {
       }
 
       try {
-        // selectedTags are tag names
         const filteredGames = await getGamesByTopTagsAND(selectedTags)
         const gameIds = filteredGames.map(g => g.id)
         const [streamStats, filteredStreams] = await Promise.all([
           getStreamStatsMatchingGameDetails(filteredGames.map(g => ({ id: g.id, title: g.title }))),
-          getStreamsForGames(gameIds),
+          getStreamsForGames(gameIds), // 이미 viewer_count 순
         ])
         const gamesWithStats = filteredGames.map(g => ({
           ...g,
           totalViewers: streamStats.get(g.id)?.totalViewers ?? 0,
           liveStreamCount: streamStats.get(g.id)?.liveStreamCount ?? 0,
         }))
+        // 시청자 수 순 정렬
+        gamesWithStats.sort((a, b) => (b.totalViewers ?? 0) - (a.totalViewers ?? 0))
         setGames(gamesWithStats)
         setStreams(filteredStreams)
       } catch (error) {
@@ -206,84 +214,88 @@ export function ExploreTabContent() {
         )}
       </div>
 
-      {/* Games Section */}
-      <div>
-        <div className="mb-4 flex items-center gap-2">
-          <Gamepad2 className="h-5 w-5 text-[hsl(var(--neon-purple))]" />
-          <h2 className="text-lg font-semibold text-foreground">
-            {selectedTags.length > 0 
-              ? `Games (${games.length})`
-              : "Trending Games"
-            }
-          </h2>
+      {/* Games / Live Sub-tabs */}
+      <Tabs value={exploreSubTab} onValueChange={(v) => setExploreSubTab(v as "games" | "live")} className="w-full">
+        <TabsList className="mb-4 h-10 bg-muted/50 p-1">
+          <TabsTrigger
+            value="games"
+            className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          >
+            <Gamepad2 className="h-4 w-4" />
+            Games {selectedTags.length > 0 && `(${games.length})`}
+          </TabsTrigger>
+          <TabsTrigger
+            value="live"
+            className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          >
+            <Radio className="h-4 w-4" />
+            Live {selectedTags.length > 0 && `(${streams.length})`}
+          </TabsTrigger>
+        </TabsList>
+
+        <div className={exploreSubTab === "games" ? "" : "hidden"}>
+          <div className="mb-3 text-sm text-muted-foreground">
+            시청자 수 순으로 정렬됨
+          </div>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {games.length > 0 ? (
+              games.map((game) => (
+                <GameCard
+                  key={game.id}
+                  game={{
+                    id: game.id,
+                    title: game.title,
+                    korean_title: game.korean_title ?? undefined,
+                    cover_image_url: game.cover_image_url ?? null,
+                    header_image_url: game.header_image_url ?? undefined,
+                    price_krw: game.price_krw ?? null,
+                    original_price_krw: game.original_price_krw ?? null,
+                    discount_rate: game.discount_rate ?? null,
+                    is_free: game.is_free ?? null,
+                    topTag: game.top_tags?.[0] ?? game.tags?.[0]?.name,
+                    totalViewers: game.totalViewers,
+                    liveStreamCount: game.liveStreamCount,
+                  }}
+                />
+              ))
+            ) : (
+              <div className="col-span-full py-12 text-center">
+                <p className="text-lg text-muted-foreground">
+                  No games found matching these tags.
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Try selecting different tags or clear your filters.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {games.length > 0 ? (
-            games.map((game) => (
-              <GameCard
-                key={game.id}
-                game={{
-                  id: game.id,
-                  title: game.title,
-                  korean_title: game.korean_title ?? undefined,
-                  cover_image_url: game.cover_image_url ?? null,
-                  header_image_url: game.header_image_url ?? undefined,
-                  price_krw: game.price_krw ?? null,
-                  original_price_krw: game.original_price_krw ?? null,
-                  discount_rate: game.discount_rate ?? null,
-                  is_free: game.is_free ?? null,
-                  topTag: game.top_tags?.[0] ?? game.tags?.[0]?.name,
-                  totalViewers: game.totalViewers,
-                  liveStreamCount: game.liveStreamCount,
-                }}
-              />
-            ))
-          ) : (
-            <div className="col-span-full py-12 text-center">
-              <p className="text-lg text-muted-foreground">
-                No games found matching these tags.
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Try selecting different tags or clear your filters.
-              </p>
-            </div>
-          )}
+        <div className={exploreSubTab === "live" ? "" : "hidden"}>
+          <div className="mb-3 text-sm text-muted-foreground">
+            시청자 수 순으로 정렬됨
+          </div>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {streams.length > 0 ? (
+              streams.map((stream) => (
+                <StreamCard key={stream.id} stream={stream} onStreamClick={onStreamClick} />
+              ))
+            ) : (
+              <div className="col-span-full py-12 text-center">
+                <p className="text-lg text-muted-foreground">
+                  No live streams found for these games.
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {selectedTags.length > 0 
+                    ? "Try selecting different tags or check back later."
+                    : "No streams are currently live."
+                  }
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* Streams Section */}
-      <div>
-        <div className="mb-4 flex items-center gap-2">
-          <Flame className="h-5 w-5 text-orange-400" />
-          <h2 className="text-lg font-semibold text-foreground">
-            {selectedTags.length > 0 
-              ? `Live Streams (${streams.length})`
-              : "Popular Live Streams"
-            }
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {streams.length > 0 ? (
-            streams.map((stream) => (
-              <StreamCard key={stream.id} stream={stream} />
-            ))
-          ) : (
-            <div className="col-span-full py-12 text-center">
-              <p className="text-lg text-muted-foreground">
-                No live streams found for these games.
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {selectedTags.length > 0 
-                  ? "Try selecting different tags or check back later."
-                  : "No streams are currently live."
-                }
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      </Tabs>
     </div>
   )
 }
