@@ -6,8 +6,8 @@ import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
 
 /* ── Cache config (revalidate in seconds) ── */
-const CACHE_REVALIDATE_TRENDING = 60
-const CACHE_REVALIDATE_STREAMS = 60
+const CACHE_REVALIDATE_TRENDING = 30
+const CACHE_REVALIDATE_STREAMS = 30
 const CACHE_REVALIDATE_EVENTS = 120
 
 /**
@@ -694,7 +694,26 @@ export interface TrendingGamesViewRow {
   trend_score: number
 }
 
-async function fetchTrendingGamesImpl(): Promise<TrendingGameRow[]> {
+type GameWithPrice = {
+  id: number
+  title: string
+  korean_title: string | null
+  top_tags: string[] | null
+  price_krw: number | null
+  original_price_krw: number | null
+  discount_rate: number | null
+  is_free: boolean | null
+  steam_appid: number | null
+}
+
+/** 캐시용 페이로드 (Map 대신 Record 사용 - JSON 직렬화 가능) */
+type TrendingGamesCachePayload = {
+  rows: TrendingGamesViewRow[]
+  gamesWithTitle: { id: number; title: string; korean_title?: string | null }[]
+  titleToGameEntries: [string, GameWithPrice][]
+}
+
+async function fetchTrendingGamesListImpl(): Promise<TrendingGamesCachePayload> {
   const supabase = createClientForCache()
 
   const { data: rows, error } = await supabase
@@ -705,12 +724,11 @@ async function fetchTrendingGamesImpl(): Promise<TrendingGameRow[]> {
 
   if (error) {
     console.error("fetchTrendingGames error:", error.message)
-    return []
+    return { rows: [], gamesWithTitle: [], titleToGameEntries: [] }
   }
 
-  if (!rows || rows.length === 0) return []
+  if (!rows || rows.length === 0) return { rows: [], gamesWithTitle: [], titleToGameEntries: [] }
 
-  // trending_games: korean_title 우선 사용 (통일성), games는 korean_title로 매칭
   const koreanTitles = [
     ...new Set(
       (rows as TrendingGamesViewRow[])
@@ -722,17 +740,6 @@ async function fetchTrendingGamesImpl(): Promise<TrendingGameRow[]> {
     .from("games")
     .select("id, title, korean_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
     .in("korean_title", koreanTitles)
-  type GameWithPrice = {
-    id: number
-    title: string
-    korean_title: string | null
-    top_tags: string[] | null
-    price_krw: number | null
-    original_price_krw: number | null
-    discount_rate: number | null
-    is_free: boolean | null
-    steam_appid: number | null
-  }
   const titleToGame = new Map<string, GameWithPrice>()
   const gamesWithTitle: { id: number; title: string; korean_title?: string | null }[] = []
   for (const g of games ?? []) {
@@ -753,10 +760,24 @@ async function fetchTrendingGamesImpl(): Promise<TrendingGameRow[]> {
     gamesWithTitle.push({ id: gg.id, title: gg.title, korean_title: gg.korean_title ?? null })
   }
 
-  // 게임 상세 페이지와 동일한 로직으로 스트림 통계 산출 (game_id + stream_category)
-  const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle, supabase)
+  return { rows: rows as TrendingGamesViewRow[], gamesWithTitle, titleToGameEntries: [...titleToGame.entries()] }
+}
 
-  return (rows as TrendingGamesViewRow[])
+export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
+  const { rows, gamesWithTitle, titleToGameEntries } = await unstable_cache(
+    fetchTrendingGamesListImpl,
+    ["trending-games"],
+    { revalidate: CACHE_REVALIDATE_TRENDING }
+  )()
+
+  if (rows.length === 0 || gamesWithTitle.length === 0) return []
+
+  const titleToGame = new Map<string, GameWithPrice>(titleToGameEntries)
+
+  // 게임 상세 페이지와 동일: 캐시 없이 streams 테이블에서 실시간 스트림 통계 조회
+  const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
+
+  return rows
     .filter((row) => {
       const key = (row.korean_title ?? row.title)?.trim()
       return key ? titleToGame.has(key) : false
@@ -790,14 +811,6 @@ async function fetchTrendingGamesImpl(): Promise<TrendingGameRow[]> {
         topTag,
       }
     }) as TrendingGameRow[]
-}
-
-export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
-  return unstable_cache(
-    fetchTrendingGamesImpl,
-    ["trending-games"],
-    { revalidate: CACHE_REVALIDATE_TRENDING }
-  )()
 }
 
 /* ── Fetch games by viewer count (시청자 수 순, trend_score 아님) ── */
