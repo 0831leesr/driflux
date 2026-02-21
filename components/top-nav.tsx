@@ -1,6 +1,6 @@
 "use client"
 
-import { Search, Bell, LogIn, Plus } from "lucide-react"
+import { Search, Bell, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -90,14 +90,6 @@ export function TabNav({
           </TabsTrigger>
         </TabsList>
       </Tabs>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <Plus className="mr-1 h-3 w-3" />
-        Add Tab
-      </Button>
     </div>
   )
 }

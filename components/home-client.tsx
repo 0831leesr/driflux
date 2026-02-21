@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Gamepad2, ExternalLink, Plus, Tags } from "lucide-react"
+import { Gamepad2, ExternalLink, Tags } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
@@ -121,14 +121,6 @@ export function HomeClient({ liveStreams, saleGames, upcomingEvents }: HomeClien
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Plus className="mr-1 h-3 w-3" />
-          Add Tab
-        </Button>
       </div>
 
       {/* Main Content */}
