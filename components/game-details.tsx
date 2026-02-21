@@ -97,7 +97,7 @@ export function GameDetailsClient({
             alt=""
             fill
             placeholder="empty"
-            className="object-cover blur-2xl brightness-[0.3] saturate-150"
+            className="object-cover"
             sizes="100vw"
             aria-hidden="true"
           />
