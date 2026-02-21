@@ -203,7 +203,8 @@ function SaleSpotlightSection({ saleGames }: { saleGames: GameRow[] }) {
         <DollarSign className="h-5 w-5 text-amber-400" />
         Steam Sale Spotlight
       </h2>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="card-grid-4">
         {saleGames.slice(0, 8).map((game) => (
           <GameCard
             key={game.id}
@@ -220,6 +221,7 @@ function SaleSpotlightSection({ saleGames }: { saleGames: GameRow[] }) {
             }}
           />
         ))}
+        </div>
       </div>
     </section>
   )
@@ -254,10 +256,12 @@ function LiveStreamsSection({
           {description}
         </p>
       )}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="card-grid-4">
         {streams.slice(0, 8).map((s, i) => (
           <StreamCard key={`${s.streamerName}-${i}`} stream={s} onStreamClick={onStreamClick} />
         ))}
+        </div>
       </div>
     </section>
   )
@@ -334,10 +338,12 @@ export function ExploreContent({ onStreamClick }: { onStreamClick?: () => void }
       <div className="flex flex-col gap-8 p-4 lg:p-6">
         <div className="animate-pulse">
           <div className="mb-4 h-8 w-64 rounded bg-muted" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="card-grid-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-64 rounded-xl bg-muted" />
             ))}
+            </div>
           </div>
         </div>
       </div>

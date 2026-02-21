@@ -83,7 +83,8 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
         {/* Game Grid */}
         {selectedTagNames.length > 0 && (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="card-grid-4">
             {games.length > 0 ? (
               games.map((game) => (
                 <GameCard key={game.id} game={toGameCardData(game, streamStats.get(game.id))} />
@@ -98,6 +99,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 </p>
               </div>
             )}
+            </div>
           </div>
         )}
       </div>

@@ -20,7 +20,8 @@ export function SaleAlertSection({ games, onStreamClick }: { games: SaleGameData
         <DollarSign className="h-5 w-5 text-amber-400" />
         Wishlist Sale Alert
       </h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="card-grid-4">
         {games.map((game) => (
           <Link
             key={game.id}
@@ -66,6 +67,7 @@ export function SaleAlertSection({ games, onStreamClick }: { games: SaleGameData
             </div>
           </Link>
         ))}
+        </div>
       </div>
     </section>
   )

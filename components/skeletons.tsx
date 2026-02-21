@@ -32,10 +32,12 @@ export function GameCardSkeleton() {
 
 export function GameCardGridSkeleton({ count = 12 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div className="card-grid-4">
       {Array.from({ length: count }).map((_, i) => (
         <GameCardSkeleton key={i} />
       ))}
+      </div>
     </div>
   )
 }
@@ -158,10 +160,12 @@ export function SectionSkeleton({
         </div>
       )}
       
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="card-grid-4">
         {Array.from({ length: cardCount }).map((_, i) => (
           <GameCardSkeleton key={i} />
         ))}
+        </div>
       </div>
     </section>
   )

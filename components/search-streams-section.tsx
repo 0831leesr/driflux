@@ -50,7 +50,8 @@ export function SearchStreamsSection({ streams }: SearchStreamsSectionProps) {
     <>
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-foreground">Related Live Streams</h2>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="card-grid-4">
           {streams.map((stream, i) => (
             <StreamCard
               key={`${stream.id}-${i}`}
@@ -58,6 +59,7 @@ export function SearchStreamsSection({ streams }: SearchStreamsSectionProps) {
               onStreamClick={handleStreamClick}
             />
           ))}
+          </div>
         </div>
       </section>
 

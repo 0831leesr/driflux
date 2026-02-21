@@ -41,10 +41,12 @@ export default function GamePageLoading() {
 
                 <div className="mb-8">
                   <Skeleton className="mb-4 h-7 w-40" />
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <div className="card-grid-4">
                     {Array.from({ length: 4 }).map((_, i) => (
                       <StreamCardSkeleton key={i} />
                     ))}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -59,7 +59,7 @@ export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onSt
           fill
           placeholder="empty"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
-          sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 100vw"
+          sizes="(min-width: 872px) 25vw, 200px"
           unoptimized={isPlaceholderImage(displayImage)}
         />
 

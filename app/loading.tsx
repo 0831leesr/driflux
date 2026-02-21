@@ -56,10 +56,12 @@ export default function Loading() {
               </h2>
               <Skeleton className="h-9 w-24" />
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
+              <div className="card-grid-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <StreamCardSkeleton key={i} />
               ))}
+              </div>
             </div>
           </section>
 
@@ -72,10 +74,12 @@ export default function Loading() {
               </h2>
               <Skeleton className="h-9 w-24" />
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
+              <div className="card-grid-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <StreamCardSkeleton key={i} />
               ))}
+              </div>
             </div>
           </section>
 
@@ -85,7 +89,8 @@ export default function Loading() {
               <Skeleton className="mb-2 h-8 w-64" />
               <Skeleton className="h-5 w-96" />
             </div>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
+              <div className="card-grid-4">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
                   <Skeleton className="aspect-[16/9] w-full" />
@@ -98,6 +103,7 @@ export default function Loading() {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           </section>
         </div>

@@ -47,7 +47,8 @@ export function TrendingGames() {
           <Flame className="h-5 w-5 text-orange-400" />
           Now Trending (Don{"'"}t Miss Out)
         </h2>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="card-grid-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="overflow-hidden rounded-xl border border-border bg-card animate-pulse">
               <div className="aspect-[16/9] w-full bg-muted" />
@@ -57,6 +58,7 @@ export function TrendingGames() {
               </div>
             </div>
           ))}
+          </div>
         </div>
       </section>
     )
@@ -68,10 +70,12 @@ export function TrendingGames() {
         <Flame className="h-5 w-5 text-orange-400" />
         Now Trending (Don{"'"}t Miss Out)
       </h2>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="card-grid-4">
         {trendingGames.map((game) => (
           <GameCard key={game.id} game={game} />
         ))}
+        </div>
       </div>
     </section>
   )

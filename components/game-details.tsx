@@ -224,7 +224,8 @@ export function GameDetailsClient({
 
       {/* Live Streams */}
       <div className="flex flex-col gap-6 p-4 lg:p-6">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
+          <div className="card-grid-4">
           {liveStreams.map((stream, i) => (
             <StreamCard
               key={`${stream.streamerName}-${i}`}
@@ -232,6 +233,7 @@ export function GameDetailsClient({
               onStreamClick={onStreamClick}
             />
           ))}
+          </div>
         </div>
       </div>
     </div>

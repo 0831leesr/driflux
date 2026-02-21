@@ -135,4 +135,16 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* 카드 그리드: 항상 4열, 최소 크기 보장, 작은 화면에서 가로 스크롤 */
+  .card-grid-4-wrapper {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .card-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(200px, 1fr));
+    gap: 1.5rem;
+    min-width: 872px; /* 4*200px + 3*24px gap - 최소 크기 미만 시 가로 스크롤 */
+  }
 }

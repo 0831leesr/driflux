@@ -33,6 +33,7 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
   const [selectedTags, setSelectedTags] = useState<string[]>([]) // Tag names for filter
   const [exploreSubTab, setExploreSubTab] = useState<"games" | "live">("games")
   const [isLoading, setIsLoading] = useState(true)
+  const [isDataLoading, setIsDataLoading] = useState(true)
 
   // Load top tags from trending games on mount
   useEffect(() => {
@@ -52,6 +53,8 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
   // Load initial data (games by viewer count + live streams)
   useEffect(() => {
     async function loadInitialData() {
+      if (selectedTags.length > 0) return
+      setIsDataLoading(true)
       try {
         const [gamesByViewers, liveStreams] = await Promise.all([
           fetchGamesByViewerCount(50), // 시청자 수 순
@@ -61,10 +64,11 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
         setStreams(liveStreams)
       } catch (error) {
         console.error("Error loading initial data:", error)
+      } finally {
+        setIsDataLoading(false)
       }
     }
-    
-    // Only load initial data if no tags selected
+
     if (selectedTags.length === 0) {
       loadInitialData()
     }
@@ -73,10 +77,9 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
   // Load filtered games and streams when tags are selected
   useEffect(() => {
     async function loadFilteredData() {
-      if (selectedTags.length === 0) {
-        return // Initial data will be loaded by the other effect
-      }
+      if (selectedTags.length === 0) return
 
+      setIsDataLoading(true)
       try {
         const filteredGames = await getGamesByTopTagsAND(selectedTags)
         const gameIds = filteredGames.map(g => g.id)
@@ -95,9 +98,11 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
         setStreams(filteredStreams)
       } catch (error) {
         console.error("Error loading filtered data:", error)
+      } finally {
+        setIsDataLoading(false)
       }
     }
-    
+
     if (selectedTags.length > 0) {
       loadFilteredData()
     }
@@ -121,13 +126,22 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
     setSelectedTags([])
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center p-4 lg:p-6">
-        <p className="text-muted-foreground">Loading...</p>
+  /* Skeleton: Trending Games와 동일한 가상 썸네일 카드 8개 */
+  const CardGridSkeleton = () => (
+    <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div className="card-grid-4">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="overflow-hidden rounded-xl border border-border bg-card animate-pulse">
+          <div className="aspect-[16/9] w-full bg-muted" />
+          <div className="p-3">
+            <div className="mb-2 h-5 w-3/4 rounded bg-muted" />
+            <div className="h-4 w-1/2 rounded bg-muted" />
+          </div>
+        </div>
+      ))}
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-8 p-4 lg:p-6">
@@ -161,39 +175,46 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
 
         {/* Tag Filter Chips */}
         <div className="flex flex-wrap gap-2">
-          {allTags.map((tag) => {
-            const isSelected = selectedTags.includes(tag.name)
+          {isLoading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-9 w-20 animate-pulse rounded-md bg-muted" />
+            ))
+          ) : (
+            <>
+              {allTags.map((tag) => {
+                const isSelected = selectedTags.includes(tag.name)
 
-            return (
-              <Badge
-                key={tag.id}
-                variant={isSelected ? "default" : "outline"}
-                className={`cursor-pointer select-none gap-1.5 px-4 py-2 text-sm font-medium transition-all hover:scale-105 ${
-                  isSelected
-                    ? "border-2 border-[hsl(var(--neon-purple))] bg-[hsl(var(--neon-purple))] !text-[hsl(var(--primary-foreground))] shadow-md hover:bg-[hsl(var(--neon-purple))]/90 hover:shadow-lg [&_svg]:text-[hsl(var(--primary-foreground))]"
-                    : "border border-border bg-card/50 text-muted-foreground hover:border-[hsl(var(--neon-purple))]/40 hover:bg-card hover:text-foreground"
-                }`}
-                onClick={() => toggleTag(tag.name)}
-              >
-                {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
-                {tag.name}
-              </Badge>
-            )
-          })}
-          {/* Custom tags added via search */}
-          {selectedTags
-            .filter((name) => !allTags.some((t) => t.name === name))
-            .map((tagName) => (
-              <Badge
-                key={tagName}
-                variant="default"
-                className="cursor-pointer select-none gap-1.5 border-2 border-[hsl(var(--neon-purple))] bg-[hsl(var(--neon-purple))] px-4 py-2 text-sm font-medium !text-[hsl(var(--primary-foreground))] shadow-md transition-all hover:scale-105 hover:bg-[hsl(var(--neon-purple))]/90 hover:shadow-lg [&_svg]:text-[hsl(var(--primary-foreground))]"
-                onClick={() => toggleTag(tagName)}
-              >
-                <Check className="h-3.5 w-3.5 shrink-0" />
-                {tagName}
-              </Badge>
-            ))}
+                return (
+                  <Badge
+                    key={tag.id}
+                    variant={isSelected ? "default" : "outline"}
+                    className={`cursor-pointer select-none gap-1.5 px-4 py-2 text-sm font-medium transition-all hover:scale-105 ${
+                      isSelected
+                        ? "border-2 border-[hsl(var(--neon-purple))] bg-[hsl(var(--neon-purple))] !text-[hsl(var(--primary-foreground))] shadow-md hover:bg-[hsl(var(--neon-purple))]/90 hover:shadow-lg [&_svg]:text-[hsl(var(--primary-foreground))]"
+                        : "border border-border bg-card/50 text-muted-foreground hover:border-[hsl(var(--neon-purple))]/40 hover:bg-card hover:text-foreground"
+                    }`}
+                    onClick={() => toggleTag(tag.name)}
+                  >
+                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                    {tag.name}
+                  </Badge>
+                )
+              })}
+              {selectedTags
+                .filter((name) => !allTags.some((t) => t.name === name))
+                .map((tagName) => (
+                  <Badge
+                    key={tagName}
+                    variant="default"
+                    className="cursor-pointer select-none gap-1.5 border-2 border-[hsl(var(--neon-purple))] bg-[hsl(var(--neon-purple))] px-4 py-2 text-sm font-medium !text-[hsl(var(--primary-foreground))] shadow-md transition-all hover:scale-105 hover:bg-[hsl(var(--neon-purple))]/90 hover:shadow-lg [&_svg]:text-[hsl(var(--primary-foreground))]"
+                    onClick={() => toggleTag(tagName)}
+                  >
+                    <Check className="h-3.5 w-3.5 shrink-0" />
+                    {tagName}
+                  </Badge>
+                ))}
+            </>
+          )}
         </div>
 
         {/* Selected Tags Counter */}
@@ -237,9 +258,12 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
           <div className="mb-3 text-sm text-muted-foreground">
             시청자 수 순으로 정렬됨
           </div>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {games.length > 0 ? (
-              games.map((game) => (
+          {isDataLoading ? (
+            <CardGridSkeleton />
+          ) : games.length > 0 ? (
+            <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div className="card-grid-4">
+              {games.map((game) => (
                 <GameCard
                   key={game.id}
                   game={{
@@ -257,43 +281,48 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
                     liveStreamCount: game.liveStreamCount,
                   }}
                 />
-              ))
-            ) : (
-              <div className="col-span-full py-12 text-center">
-                <p className="text-lg text-muted-foreground">
-                  No games found matching these tags.
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Try selecting different tags or clear your filters.
-                </p>
+              ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="py-12 text-center">
+              <p className="text-lg text-muted-foreground">
+                No games found matching these tags.
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Try selecting different tags or clear your filters.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className={exploreSubTab === "live" ? "" : "hidden"}>
           <div className="mb-3 text-sm text-muted-foreground">
             시청자 수 순으로 정렬됨
           </div>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {streams.length > 0 ? (
-              streams.map((stream) => (
+          {isDataLoading ? (
+            <CardGridSkeleton />
+          ) : streams.length > 0 ? (
+            <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div className="card-grid-4">
+              {streams.map((stream) => (
                 <StreamCard key={stream.id} stream={stream} onStreamClick={onStreamClick} />
-              ))
-            ) : (
-              <div className="col-span-full py-12 text-center">
-                <p className="text-lg text-muted-foreground">
-                  No live streams found for these games.
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {selectedTags.length > 0 
-                    ? "Try selecting different tags or check back later."
-                    : "No streams are currently live."
-                  }
-                </p>
+              ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="py-12 text-center">
+              <p className="text-lg text-muted-foreground">
+                No live streams found for these games.
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {selectedTags.length > 0 
+                  ? "Try selecting different tags or check back later."
+                  : "No streams are currently live."
+                }
+              </p>
+            </div>
+          )}
         </div>
       </Tabs>
     </div>
