@@ -143,7 +143,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                           placeholder="empty"
                           className="object-cover"
                           sizes="24px"
-                          unoptimized={!game.cover_image_url}
+                          unoptimized
                         />
                       </div>
                       {!isCollapsed && (

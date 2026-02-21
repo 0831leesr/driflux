@@ -37,6 +37,7 @@ export function SaleAlertSection({ games, onStreamClick }: { games: SaleGameData
                 placeholder="empty"
                 className="object-cover"
                 sizes="128px"
+                unoptimized
               />
               {/* Live badge */}
               <div className="absolute right-1 top-1 flex items-center gap-0.5 rounded bg-[hsl(var(--live-red))] px-1 py-0.5">

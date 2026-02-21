@@ -215,7 +215,7 @@ function HeroCard({ event, today }: { event: GameEvent; today: Date }) {
   return (
     <div className={`group relative flex-1 overflow-hidden rounded-xl border border-border ${isPast ? "opacity-50 grayscale" : ""}`}>
       <div className="relative aspect-[16/7]">
-        <Image src={event.image} alt={event.title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+        <Image src={event.image} alt={event.title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" unoptimized />
         <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-end p-4">
           <span className={`mb-1 text-2xl font-black tracking-tight ${

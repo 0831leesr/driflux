@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Eye } from "lucide-react"
-import { formatViewerCountShort, getGameImageSrc, isPlaceholderImage, DEFAULT_STREAMING_IMAGE } from "@/lib/utils"
+import { formatViewerCountShort, getGameImageSrc, DEFAULT_STREAMING_IMAGE } from "@/lib/utils"
 
 export interface StreamData {
   id: number
@@ -72,7 +72,7 @@ export function StreamCard({ stream, onStreamClick, priority }: { stream: Stream
           placeholder="empty"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(min-width: 872px) 25vw, 200px"
-          unoptimized={isPlaceholderImage(thumbnailSrc)}
+          unoptimized
           onError={handleThumbnailError}
         />
 
@@ -110,7 +110,7 @@ export function StreamCard({ stream, onStreamClick, priority }: { stream: Stream
               placeholder="empty"
               className="object-cover"
               sizes="40px"
-              unoptimized={isPlaceholderImage(gameCoverSrc)}
+              unoptimized
             />
           </Link>
         ) : (
@@ -122,7 +122,7 @@ export function StreamCard({ stream, onStreamClick, priority }: { stream: Stream
               placeholder="empty"
               className="object-cover"
               sizes="40px"
-              unoptimized={isPlaceholderImage(gameCoverSrc)}
+              unoptimized
             />
           </div>
         )}
