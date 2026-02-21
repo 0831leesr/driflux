@@ -28,7 +28,7 @@ export default function Loading() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
                 <Flame className="h-5 w-5 text-orange-400" />
-                Now Trending (Don't Miss Out)
+                Now Trending Games!
               </h2>
               <div className="flex items-center gap-1">
                 <Skeleton className="h-8 w-8" />

@@ -34,12 +34,23 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
   const [exploreSubTab, setExploreSubTab] = useState<"games" | "live">("games")
   const [isLoading, setIsLoading] = useState(true)
   const [isDataLoading, setIsDataLoading] = useState(true)
+  const [gamesDisplayCount, setGamesDisplayCount] = useState(8)
+  const [streamsDisplayCount, setStreamsDisplayCount] = useState(8)
+  const [isGamesLoadingMore, setIsGamesLoadingMore] = useState(false)
+  const [isStreamsLoadingMore, setIsStreamsLoadingMore] = useState(false)
+  const BATCH_SIZE = 8
+
+  // Reset display count when data source changes (tags selected/cleared)
+  useEffect(() => {
+    setGamesDisplayCount(BATCH_SIZE)
+    setStreamsDisplayCount(BATCH_SIZE)
+  }, [selectedTags])
 
   // Load top tags from trending games on mount
   useEffect(() => {
     async function loadTags() {
       try {
-        const tags = await getTopGameTags(10) // Get top 10 tags from trending games
+        const tags = await getTopGameTags(10)
         setAllTags(tags)
       } catch (error) {
         console.error("Error loading tags:", error)
@@ -50,49 +61,95 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
     loadTags()
   }, [])
 
-  // Load initial data (games by viewer count + live streams)
+  // Load initial data: first 8 quickly, then background load more
   useEffect(() => {
+    if (selectedTags.length > 0) return
+
+    let gamesAbort = false
+    let streamsAbort = false
+
     async function loadInitialData() {
-      if (selectedTags.length > 0) return
       setIsDataLoading(true)
+      setGames([])
+      setStreams([])
+
+      // 1) First batch: 8 games + 8 streams → display ASAP
       try {
-        const [gamesByViewers, liveStreams] = await Promise.all([
-          fetchGamesByViewerCount(50), // 시청자 수 순
-          fetchLiveStreams()            // 이미 viewer_count 순
+        const [firstGames, firstStreams] = await Promise.all([
+          fetchGamesByViewerCount(BATCH_SIZE, 0),
+          fetchLiveStreams(BATCH_SIZE, 0),
         ])
-        setGames(gamesByViewers)
-        setStreams(liveStreams)
+        if (!gamesAbort) setGames(firstGames)
+        if (!streamsAbort) setStreams(firstStreams)
       } catch (error) {
         console.error("Error loading initial data:", error)
       } finally {
-        setIsDataLoading(false)
+        if (!gamesAbort && !streamsAbort) setIsDataLoading(false)
+      }
+
+      // 2) Background: load more batches (8 each) - continues after first 8 displayed
+      const maxGames = 50
+      const maxStreamBatches = 10 // up to 80 streams
+      for (let offset = BATCH_SIZE; offset < maxGames; offset += BATCH_SIZE) {
+        if (gamesAbort) break
+        setIsGamesLoadingMore(true)
+        try {
+          const nextGames = await fetchGamesByViewerCount(BATCH_SIZE, offset)
+          if (gamesAbort) break
+          if (nextGames.length === 0) break
+          setGames((prev) => [...prev, ...nextGames])
+        } catch (e) {
+          console.error("Error loading more games:", e)
+          break
+        } finally {
+          if (!gamesAbort) setIsGamesLoadingMore(false)
+        }
+      }
+
+      for (let offset = BATCH_SIZE; offset < BATCH_SIZE * maxStreamBatches; offset += BATCH_SIZE) {
+        if (streamsAbort) break
+        setIsStreamsLoadingMore(true)
+        try {
+          const nextStreams = await fetchLiveStreams(BATCH_SIZE, offset)
+          if (streamsAbort) break
+          if (nextStreams.length === 0) break
+          setStreams((prev) => [...prev, ...nextStreams])
+        } catch (e) {
+          console.error("Error loading more streams:", e)
+          break
+        } finally {
+          if (!streamsAbort) setIsStreamsLoadingMore(false)
+        }
       }
     }
 
-    if (selectedTags.length === 0) {
-      loadInitialData()
+    loadInitialData()
+    return () => {
+      gamesAbort = true
+      streamsAbort = true
     }
   }, [selectedTags])
 
-  // Load filtered games and streams when tags are selected
+  // Load filtered games and streams when tags are selected (all at once)
   useEffect(() => {
-    async function loadFilteredData() {
-      if (selectedTags.length === 0) return
+    if (selectedTags.length === 0) return
 
-      setIsDataLoading(true)
+    setIsDataLoading(true)
+    setGames([])
+    setStreams([])
+    ;(async function loadFilteredData() {
       try {
         const filteredGames = await getGamesByTopTagsAND(selectedTags)
-        const gameIds = filteredGames.map(g => g.id)
+        const gameIds = filteredGames.map((g) => g.id)
         const [streamStats, filteredStreams] = await Promise.all([
-          getStreamStatsMatchingGameDetails(filteredGames.map(g => ({ id: g.id, title: g.title }))),
-          getStreamsForGames(gameIds), // 이미 viewer_count 순
+          getStreamStatsMatchingGameDetails(filteredGames.map((g) => ({ id: g.id, title: g.title }))),
+          getStreamsForGames(gameIds),
         ])
-        const gamesWithStats = filteredGames.map(g => ({
+        const gamesWithStats = filteredGames.map((g) => ({
           ...g,
           totalViewers: streamStats.get(g.id)?.totalViewers ?? 0,
           liveStreamCount: streamStats.get(g.id)?.liveStreamCount ?? 0,
         }))
-        // 시청자 수 순 정렬
         gamesWithStats.sort((a, b) => (b.totalViewers ?? 0) - (a.totalViewers ?? 0))
         setGames(gamesWithStats)
         setStreams(filteredStreams)
@@ -101,11 +158,7 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
       } finally {
         setIsDataLoading(false)
       }
-    }
-
-    if (selectedTags.length > 0) {
-      loadFilteredData()
-    }
+    })()
   }, [selectedTags])
 
   const toggleTag = (tagName: string) => {
@@ -126,19 +179,34 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
     setSelectedTags([])
   }
 
-  /* Skeleton: Trending Games와 동일한 가상 썸네일 카드 8개 */
-  const CardGridSkeleton = () => (
+  const handleLoadMoreGames = () => {
+    setGamesDisplayCount((prev) => prev + BATCH_SIZE)
+  }
+
+  const handleLoadMoreStreams = () => {
+    setStreamsDisplayCount((prev) => prev + BATCH_SIZE)
+  }
+
+  const gamesToShow = games.slice(0, gamesDisplayCount)
+  const streamsToShow = streams.slice(0, streamsDisplayCount)
+  const hasMoreGames = games.length > gamesDisplayCount || isGamesLoadingMore
+  const hasMoreStreams = streams.length > streamsDisplayCount || isStreamsLoadingMore
+  const gamesNeedingSkeleton = gamesDisplayCount > games.length && isGamesLoadingMore
+  const streamsNeedingSkeleton = streamsDisplayCount > streams.length && isStreamsLoadingMore
+
+  /* Skeleton: 8개 = 2라인 (라인당 4개) */
+  const CardGridSkeleton = ({ count = 8 }: { count?: number }) => (
     <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
       <div className="card-grid-4">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="overflow-hidden rounded-xl border border-border bg-card animate-pulse">
-          <div className="aspect-[16/9] w-full bg-muted" />
-          <div className="p-3">
-            <div className="mb-2 h-5 w-3/4 rounded bg-muted" />
-            <div className="h-4 w-1/2 rounded bg-muted" />
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className="overflow-hidden rounded-xl border border-border bg-card animate-pulse">
+            <div className="aspect-[16/9] w-full bg-muted" />
+            <div className="p-3">
+              <div className="mb-2 h-5 w-3/4 rounded bg-muted" />
+              <div className="h-4 w-1/2 rounded bg-muted" />
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
       </div>
     </div>
   )
@@ -261,28 +329,44 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
           {isDataLoading ? (
             <CardGridSkeleton />
           ) : games.length > 0 ? (
-            <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-              <div className="card-grid-4">
-              {games.map((game) => (
-                <GameCard
-                  key={game.id}
-                  game={{
-                    id: game.id,
-                    title: game.title,
-                    korean_title: game.korean_title ?? undefined,
-                    cover_image_url: game.cover_image_url ?? null,
-                    header_image_url: game.header_image_url ?? undefined,
-                    price_krw: game.price_krw ?? null,
-                    original_price_krw: game.original_price_krw ?? null,
-                    discount_rate: game.discount_rate ?? null,
-                    is_free: game.is_free ?? null,
-                    topTag: game.top_tags?.[0] ?? game.tags?.[0]?.name,
-                    totalViewers: game.totalViewers,
-                    liveStreamCount: game.liveStreamCount,
-                  }}
-                />
-              ))}
+            <div className="space-y-6">
+              <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="card-grid-4">
+                  {gamesToShow.map((game) => (
+                    <GameCard
+                      key={game.id}
+                      game={{
+                        id: game.id,
+                        title: game.title,
+                        korean_title: game.korean_title ?? undefined,
+                        cover_image_url: game.cover_image_url ?? null,
+                        header_image_url: game.header_image_url ?? undefined,
+                        price_krw: game.price_krw ?? null,
+                        original_price_krw: game.original_price_krw ?? null,
+                        discount_rate: game.discount_rate ?? null,
+                        is_free: game.is_free ?? null,
+                        topTag: game.top_tags?.[0] ?? game.tags?.[0]?.name,
+                        totalViewers: game.totalViewers,
+                        liveStreamCount: game.liveStreamCount,
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
+              {gamesNeedingSkeleton && <CardGridSkeleton />}
+              {hasMoreGames && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={handleLoadMoreGames}
+                    disabled={gamesNeedingSkeleton}
+                    className="min-w-[140px] border-border"
+                  >
+                    {gamesNeedingSkeleton ? "로딩 중..." : "더 보기"}
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="py-12 text-center">
@@ -303,12 +387,28 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
           {isDataLoading ? (
             <CardGridSkeleton />
           ) : streams.length > 0 ? (
-            <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-              <div className="card-grid-4">
-              {streams.map((stream) => (
-                <StreamCard key={stream.id} stream={stream} onStreamClick={onStreamClick} />
-              ))}
+            <div className="space-y-6">
+              <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="card-grid-4">
+                  {streamsToShow.map((stream) => (
+                    <StreamCard key={stream.id} stream={stream} onStreamClick={onStreamClick} />
+                  ))}
+                </div>
               </div>
+              {streamsNeedingSkeleton && <CardGridSkeleton />}
+              {hasMoreStreams && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={handleLoadMoreStreams}
+                    disabled={streamsNeedingSkeleton}
+                    className="min-w-[140px] border-border"
+                  >
+                    {streamsNeedingSkeleton ? "로딩 중..." : "더 보기"}
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="py-12 text-center">

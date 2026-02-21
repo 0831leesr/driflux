@@ -92,9 +92,11 @@ export async function fetchTags(): Promise<TagRow[]> {
 }
 
 /* ── Fetch live streams with game info ── */
-export async function fetchLiveStreams() {
+/** @param limit - 개수 (undefined면 전체) */
+/** @param offset - 건너뛸 개수 (기본 0), pagination용 */
+export async function fetchLiveStreams(limit?: number, offset: number = 0) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from("streams")
     .select(`
       *,
@@ -102,6 +104,10 @@ export async function fetchLiveStreams() {
     `)
     .eq("is_live", true)
     .order("viewer_count", { ascending: false })
+  if (limit != null) {
+    query = query.range(offset, offset + limit - 1)
+  }
+  const { data, error } = await query
   if (error) {
     console.error("fetchLiveStreams error:", error.message)
     return []
@@ -753,7 +759,9 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
 }
 
 /* ── Fetch games by viewer count (시청자 수 순, trend_score 아님) ── */
-export async function fetchGamesByViewerCount(limit: number = 50): Promise<TrendingGameRow[]> {
+/** @param limit - 개수 (기본 50) */
+/** @param offset - 건너뛸 개수 (기본 0), pagination용 */
+export async function fetchGamesByViewerCount(limit: number = 50, offset: number = 0): Promise<TrendingGameRow[]> {
   const supabase = await createClient()
 
   const selectCols = "title, korean_title, cover_image_url, stream_count, total_viewers, trend_score"
@@ -761,7 +769,7 @@ export async function fetchGamesByViewerCount(limit: number = 50): Promise<Trend
     .from("trending_games")
     .select(selectCols)
     .order("total_viewers", { ascending: false })
-    .limit(limit)
+    .range(offset, offset + limit - 1)
 
   if (error) {
     console.error("fetchGamesByViewerCount error:", error.message)
