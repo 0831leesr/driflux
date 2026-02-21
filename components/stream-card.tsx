@@ -41,7 +41,10 @@ export function StreamCard({ stream, onStreamClick, priority }: { stream: Stream
   }, [stream.thumbnail, gameCoverSrc])
 
   const handleThumbnailError = () => {
-    setThumbnailSrc(DEFAULT_STREAMING_IMAGE)
+    // 썸네일 실패 시 게임 커버 이미지로 대체, 그것도 실패하면 기본 이미지
+    setThumbnailSrc((prev) =>
+      prev === gameCoverSrc ? DEFAULT_STREAMING_IMAGE : gameCoverSrc
+    )
   }
 
   const handleStreamClick = (e: React.MouseEvent) => {
