@@ -215,7 +215,8 @@ export async function GET(request: Request) {
 
         const hasMappingOverrides = mapping && (
           mapping.override_cover_image || mapping.override_header_image || mapping.override_background_image ||
-          mapping.override_price != null || mapping.override_is_free != null
+          mapping.override_price != null || mapping.override_is_free != null ||
+          mapping.skip_steam // skip_steam: Steam 필드 초기화를 위해 업데이트 수행
         )
         if (!igdbData && !steamData && !hasMappingOverrides) {
           console.log(`[Discovery] Failed to find data for: ${game.title}`)
@@ -262,6 +263,18 @@ export async function GET(request: Request) {
           if (mapping.override_is_free !== null) updatePayload.is_free = mapping.override_is_free
           if (mapping.steam_appid !== null) updatePayload.steam_appid = mapping.steam_appid
           else if (mapping.steam_appid === null && mapping.skip_steam) updatePayload.steam_appid = null
+
+          // [skip_steam] 비스팀 게임: Steam 관련 필드 강제 초기화 (잘못 매핑된 데이터 정리)
+          if (mapping.skip_steam) {
+            updatePayload.steam_appid = null
+            updatePayload.platform = "non-steam"
+            updatePayload.last_steam_update = null
+            updatePayload.price_krw = mapping.override_price ?? null
+            updatePayload.original_price_krw = mapping.override_price ?? null
+            updatePayload.discount_rate = mapping.override_price != null ? 0 : null
+            updatePayload.currency = null
+            updatePayload.is_free = mapping.override_is_free ?? null
+          }
         }
 
         // Step C: 태그 (IGDB genres+themes 우선, 없으면 Steam tags) + 한글 변환
