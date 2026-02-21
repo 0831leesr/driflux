@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS game_mappings (
   steam_appid INTEGER,
   skip_steam BOOLEAN NOT NULL DEFAULT false,
   skip_igdb BOOLEAN NOT NULL DEFAULT false,
+  steam_title TEXT,
+  igdb_title TEXT,
   override_cover_image TEXT,
   override_header_image TEXT,
   override_background_image TEXT,
@@ -32,6 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_game_mappings_chzzk_title_lower
 COMMENT ON TABLE game_mappings IS 'Chzzk game title → Steam/IGDB overrides. Replaces hardcoded CHZZK_STEAM_MAPPINGS.';
 COMMENT ON COLUMN game_mappings.skip_steam IS 'true = Steam 검색/조회 스킵 (non-Steam 게임)';
 COMMENT ON COLUMN game_mappings.skip_igdb IS 'true = IGDB 검색 스킵';
+COMMENT ON COLUMN game_mappings.steam_title IS 'Steam 검색 시 사용할 타이틀 (null이면 기본 검색어 사용)';
+COMMENT ON COLUMN game_mappings.igdb_title IS 'IGDB 검색 시 사용할 타이틀 (null이면 기본 검색어 사용)';
 COMMENT ON COLUMN game_mappings.override_price IS '덮어쓸 가격 (KRW), null이면 API 결과 유지';
 
 -- 시드: 리그 오브 레전드 (skip_steam, override_is_free)

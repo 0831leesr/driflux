@@ -162,45 +162,47 @@ export async function GET(request: Request) {
 
         // --- 1. IGDB 검색 (skip_igdb가 아니면) ---
         if (!mapping?.skip_igdb) {
-          igdbData = await searchIGDBGame(
-            koreanTitle || (englishTitle ? null : fallbackTitle),
-            englishTitle || fallbackTitle
-          )
+          const igdbSearchTitle = mapping?.igdb_title ?? null
+          const koreanForIGDB = igdbSearchTitle ?? (koreanTitle || (englishTitle ? null : fallbackTitle))
+          const englishForIGDB = igdbSearchTitle ?? (englishTitle || fallbackTitle)
+          igdbData = await searchIGDBGame(koreanForIGDB, englishForIGDB)
           await delay(600)
         }
 
         // --- 2. Steam 검색/조회 (skip_steam이 아니면) ---
+        // 2-1. steam_appid 우선: mapping/game에 있으면 해당 ID로 직접 조회
+        // 2-2. steam_appid가 NULL이면 steam_title로 이름 기반 검색
         let searchPriceFallback: { price_krw: number | null; original_price_krw: number | null; discount_rate: number; currency: string } | null = null
         if (!mapping?.skip_steam) {
           if (!steamAppId) {
-            // 2a. IGDB external_games로 Steam App ID 직접 조회 (가장 정확)
-            if (igdbData?.igdb_game_id) {
+            // 2a. steam_title로 이름 기반 Steam 검색 (steam_appid가 NULL일 때)
+            const steamSearchTitle = mapping?.steam_title ?? null
+            const titlesToTry = steamSearchTitle
+              ? [steamSearchTitle]
+              : [
+                  fallbackTitle,
+                  ...(englishTitle && englishTitle !== fallbackTitle ? [englishTitle] : []),
+                  ...(igdbData?.title && igdbData.title !== fallbackTitle && igdbData.title !== englishTitle ? [igdbData.title] : []),
+                ]
+            for (const t of titlesToTry) {
+              if (!t?.trim()) continue
+              const matchResult = await findSteamAppIdWithConfidence(t, 80)
+              if (matchResult) {
+                steamAppId = matchResult.appId
+                searchPriceFallback = matchResult.priceFromSearch ?? null
+                console.log(`[Discovery] Found on Steam: ${matchResult.matchedName} (${steamAppId})`)
+                break
+              }
+              await delay(300)
+            }
+            // 2b. IGDB external_games로 Steam App ID 조회 (이름 검색 실패 시)
+            if (!steamAppId && igdbData?.igdb_game_id) {
               const appIdFromIGDB = await fetchSteamAppIdFromIGDB(igdbData.igdb_game_id)
               if (appIdFromIGDB != null) {
                 steamAppId = appIdFromIGDB
                 console.log(`[Discovery] Found on Steam via IGDB external_games: ${steamAppId}`)
               }
               await delay(300)
-            }
-            // 2b. 이름 기반 Steam 검색 (fallback: 치지직 제목 → 영문 제목 → IGDB 제목)
-            if (!steamAppId) {
-              const titlesToTry = [
-                fallbackTitle,
-                ...(englishTitle && englishTitle !== fallbackTitle ? [englishTitle] : []),
-                ...(igdbData?.title && igdbData.title !== fallbackTitle && igdbData.title !== englishTitle ? [igdbData.title] : []),
-              ]
-              let matchResult: Awaited<ReturnType<typeof findSteamAppIdWithConfidence>> = null
-              for (const t of titlesToTry) {
-                if (!t?.trim()) continue
-                matchResult = await findSteamAppIdWithConfidence(t, 80)
-                if (matchResult) break
-                await delay(300)
-              }
-              if (matchResult) {
-                steamAppId = matchResult.appId
-                searchPriceFallback = matchResult.priceFromSearch ?? null
-                console.log(`[Discovery] Found on Steam: ${matchResult.matchedName} (${steamAppId})`)
-              }
             }
             await delay(500)
           }

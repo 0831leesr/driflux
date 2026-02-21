@@ -31,8 +31,8 @@ export function TrendingGames({ games }: { games: TrendingGameRow[] }) {
       </h2>
       <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="card-grid-4">
-        {trendingGames.map((game) => (
-          <GameCard key={game.id} game={game} />
+        {trendingGames.map((game, index) => (
+          <GameCard key={game.id} game={game} priority={index < 4} />
         ))}
         </div>
       </div>

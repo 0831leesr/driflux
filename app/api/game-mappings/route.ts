@@ -39,6 +39,8 @@ export async function GET(request: Request) {
       steam_appid,
       skip_steam: mapping.skip_steam,
       skip_igdb: mapping.skip_igdb,
+      steam_title: mapping.steam_title,
+      igdb_title: mapping.igdb_title,
       status: mapping.skip_steam
         ? "SKIP_STEAM"
         : steam_appid != null

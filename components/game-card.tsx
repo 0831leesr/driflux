@@ -24,7 +24,7 @@ export interface GameCardData {
   topTag?: string
 }
 
-export function GameCard({ game }: { game: GameCardData }) {
+export function GameCard({ game, priority }: { game: GameCardData; priority?: boolean }) {
   const hasDiscount = game.discount_rate && game.discount_rate > 0
   const isFree = game.is_free || game.price_krw === 0
   
@@ -49,7 +49,7 @@ export function GameCard({ game }: { game: GameCardData }) {
           type="header"
           alt={getDisplayGameTitle(game)}
           fill
-          placeholder="empty"
+          priority={priority}
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(min-width: 872px) 25vw, 200px"
         />

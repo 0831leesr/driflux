@@ -29,7 +29,7 @@ export interface StreamData {
   }
 }
 
-export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onStreamClick?: (stream: StreamData) => void }) {
+export function StreamCard({ stream, onStreamClick, priority }: { stream: StreamData; onStreamClick?: (stream: StreamData) => void; priority?: boolean }) {
   const gameCoverSrc = getGameImageSrc(stream.gameCover, "cover")
   const initialThumbnail = stream.thumbnail || gameCoverSrc
   const [thumbnailSrc, setThumbnailSrc] = useState(initialThumbnail)
@@ -68,6 +68,7 @@ export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onSt
           src={thumbnailSrc}
           alt={`${stream.streamerName} streaming ${stream.gameTitle}`}
           fill
+          priority={priority}
           placeholder="empty"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(min-width: 872px) 25vw, 200px"

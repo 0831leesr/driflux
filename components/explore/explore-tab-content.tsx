@@ -38,12 +38,16 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
   const [streamsDisplayCount, setStreamsDisplayCount] = useState(8)
   const [isGamesLoadingMore, setIsGamesLoadingMore] = useState(false)
   const [isStreamsLoadingMore, setIsStreamsLoadingMore] = useState(false)
+  const [hasReachedEndGames, setHasReachedEndGames] = useState(false)
+  const [hasReachedEndStreams, setHasReachedEndStreams] = useState(false)
   const BATCH_SIZE = 8
 
-  // Reset display count when data source changes (tags selected/cleared)
+  // Reset display count and end flags when data source changes (tags selected/cleared)
   useEffect(() => {
     setGamesDisplayCount(BATCH_SIZE)
     setStreamsDisplayCount(BATCH_SIZE)
+    setHasReachedEndGames(false)
+    setHasReachedEndStreams(false)
   }, [selectedTags])
 
   // Load top tags from trending games on mount
@@ -61,72 +65,36 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
     loadTags()
   }, [])
 
-  // Load initial data: first 8 quickly, then background load more
+  // Load initial data: first 8 games + 8 streams only (더 보기 클릭 시 추가 로드)
   useEffect(() => {
     if (selectedTags.length > 0) return
 
-    let gamesAbort = false
-    let streamsAbort = false
+    let aborted = false
 
     async function loadInitialData() {
       setIsDataLoading(true)
       setGames([])
       setStreams([])
 
-      // 1) First batch: 8 games + 8 streams → display ASAP
       try {
         const [firstGames, firstStreams] = await Promise.all([
           fetchGamesByViewerCount(BATCH_SIZE, 0),
           fetchLiveStreams(BATCH_SIZE, 0),
         ])
-        if (!gamesAbort) setGames(firstGames)
-        if (!streamsAbort) setStreams(firstStreams)
+        if (!aborted) {
+          setGames(firstGames)
+          setStreams(firstStreams)
+        }
       } catch (error) {
         console.error("Error loading initial data:", error)
       } finally {
-        if (!gamesAbort && !streamsAbort) setIsDataLoading(false)
-      }
-
-      // 2) Background: load more batches (8 each) - continues after first 8 displayed
-      const maxGames = 50
-      const maxStreamBatches = 10 // up to 80 streams
-      for (let offset = BATCH_SIZE; offset < maxGames; offset += BATCH_SIZE) {
-        if (gamesAbort) break
-        setIsGamesLoadingMore(true)
-        try {
-          const nextGames = await fetchGamesByViewerCount(BATCH_SIZE, offset)
-          if (gamesAbort) break
-          if (nextGames.length === 0) break
-          setGames((prev) => [...prev, ...nextGames])
-        } catch (e) {
-          console.error("Error loading more games:", e)
-          break
-        } finally {
-          if (!gamesAbort) setIsGamesLoadingMore(false)
-        }
-      }
-
-      for (let offset = BATCH_SIZE; offset < BATCH_SIZE * maxStreamBatches; offset += BATCH_SIZE) {
-        if (streamsAbort) break
-        setIsStreamsLoadingMore(true)
-        try {
-          const nextStreams = await fetchLiveStreams(BATCH_SIZE, offset)
-          if (streamsAbort) break
-          if (nextStreams.length === 0) break
-          setStreams((prev) => [...prev, ...nextStreams])
-        } catch (e) {
-          console.error("Error loading more streams:", e)
-          break
-        } finally {
-          if (!streamsAbort) setIsStreamsLoadingMore(false)
-        }
+        if (!aborted) setIsDataLoading(false)
       }
     }
 
     loadInitialData()
     return () => {
-      gamesAbort = true
-      streamsAbort = true
+      aborted = true
     }
   }, [selectedTags])
 
@@ -179,18 +147,52 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
     setSelectedTags([])
   }
 
-  const handleLoadMoreGames = () => {
-    setGamesDisplayCount((prev) => prev + BATCH_SIZE)
+  const handleLoadMoreGames = async () => {
+    const nextDisplayCount = gamesDisplayCount + BATCH_SIZE
+    setGamesDisplayCount(nextDisplayCount)
+
+    if (games.length < nextDisplayCount && !isGamesLoadingMore && !hasReachedEndGames) {
+      setIsGamesLoadingMore(true)
+      try {
+        const nextGames = await fetchGamesByViewerCount(BATCH_SIZE, games.length)
+        if (nextGames.length === 0) setHasReachedEndGames(true)
+        setGames((prev) => [...prev, ...nextGames])
+      } catch (e) {
+        console.error("Error loading more games:", e)
+      } finally {
+        setIsGamesLoadingMore(false)
+      }
+    }
   }
 
-  const handleLoadMoreStreams = () => {
-    setStreamsDisplayCount((prev) => prev + BATCH_SIZE)
+  const handleLoadMoreStreams = async () => {
+    const nextDisplayCount = streamsDisplayCount + BATCH_SIZE
+    setStreamsDisplayCount(nextDisplayCount)
+
+    if (streams.length < nextDisplayCount && !isStreamsLoadingMore && !hasReachedEndStreams) {
+      setIsStreamsLoadingMore(true)
+      try {
+        const nextStreams = await fetchLiveStreams(BATCH_SIZE, streams.length)
+        if (nextStreams.length === 0) setHasReachedEndStreams(true)
+        setStreams((prev) => [...prev, ...nextStreams])
+      } catch (e) {
+        console.error("Error loading more streams:", e)
+      } finally {
+        setIsStreamsLoadingMore(false)
+      }
+    }
   }
 
   const gamesToShow = games.slice(0, gamesDisplayCount)
   const streamsToShow = streams.slice(0, streamsDisplayCount)
-  const hasMoreGames = games.length > gamesDisplayCount || isGamesLoadingMore
-  const hasMoreStreams = streams.length > streamsDisplayCount || isStreamsLoadingMore
+  const hasMoreGames =
+    games.length > gamesDisplayCount ||
+    isGamesLoadingMore ||
+    (games.length >= BATCH_SIZE && !hasReachedEndGames && selectedTags.length === 0)
+  const hasMoreStreams =
+    streams.length > streamsDisplayCount ||
+    isStreamsLoadingMore ||
+    (streams.length >= BATCH_SIZE && !hasReachedEndStreams && selectedTags.length === 0)
   const gamesNeedingSkeleton = gamesDisplayCount > games.length && isGamesLoadingMore
   const streamsNeedingSkeleton = streamsDisplayCount > streams.length && isStreamsLoadingMore
 
@@ -332,9 +334,10 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
             <div className="space-y-6">
               <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
                 <div className="card-grid-4">
-                  {gamesToShow.map((game) => (
+                  {gamesToShow.map((game, index) => (
                     <GameCard
                       key={game.id}
+                      priority={index < 4}
                       game={{
                         id: game.id,
                         title: game.title,
@@ -390,8 +393,8 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
             <div className="space-y-6">
               <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
                 <div className="card-grid-4">
-                  {streamsToShow.map((stream) => (
-                    <StreamCard key={stream.id} stream={stream} onStreamClick={onStreamClick} />
+                  {streamsToShow.map((stream, index) => (
+                    <StreamCard key={stream.id} stream={stream} onStreamClick={onStreamClick} priority={index < 4} />
                   ))}
                 </div>
               </div>
