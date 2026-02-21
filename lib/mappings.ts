@@ -5,7 +5,7 @@
  * game_mappings 테이블에서 매핑을 로드하고 Map으로 반환.
  */
 
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 
 export interface GameMapping {
   chzzk_title: string
@@ -38,7 +38,7 @@ function normalizeForKey(str: string): string {
  * @returns Record<normalizedKey, GameMapping> - 여러 chzzk_title 변형이 동일 매핑을 가리킬 수 있음
  */
 export async function getGameMappings(): Promise<Record<string, GameMapping>> {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data: rows, error } = await supabase
     .from("game_mappings")
