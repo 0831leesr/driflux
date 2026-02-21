@@ -1,8 +1,14 @@
 "use server"
 
-import { createClient } from "@/lib/supabase/server"
+import { unstable_cache } from "next/cache"
+import { createClient, createClientForCache } from "@/lib/supabase/server"
 import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
+
+/* ── Cache config (revalidate in seconds) ── */
+const CACHE_REVALIDATE_TRENDING = 60
+const CACHE_REVALIDATE_STREAMS = 60
+const CACHE_REVALIDATE_EVENTS = 120
 
 /**
  * Time Window for stream display - DO NOT add .gt/.gte(updated_at) or last_chzzk_update
@@ -94,8 +100,8 @@ export async function fetchTags(): Promise<TagRow[]> {
 /* ── Fetch live streams with game info ── */
 /** @param limit - 개수 (undefined면 전체) */
 /** @param offset - 건너뛸 개수 (기본 0), pagination용 */
-export async function fetchLiveStreams(limit?: number, offset: number = 0) {
-  const supabase = await createClient()
+async function fetchLiveStreamsImpl(limit?: number, offset: number = 0) {
+  const supabase = createClientForCache()
   let query = supabase
     .from("streams")
     .select(`
@@ -136,6 +142,15 @@ export async function fetchLiveStreams(limit?: number, offset: number = 0) {
   }))
 }
 
+export async function fetchLiveStreams(limit?: number, offset: number = 0) {
+  const cacheKey = `live-streams-${limit ?? "all"}-${offset}`
+  return unstable_cache(
+    () => fetchLiveStreamsImpl(limit, offset),
+    [cacheKey],
+    { revalidate: CACHE_REVALIDATE_STREAMS }
+  )()
+}
+
 /* ── Fetch games that are on sale with their top stream ── */
 export async function fetchSaleGames() {
   const supabase = await createClient()
@@ -151,16 +166,35 @@ export async function fetchSaleGames() {
   }
   if (!games || games.length === 0) return []
 
+  const gameIds = games.map((g) => g.id)
+
+  // Batch fetch top stream per game: all live streams for these games, then pick top per game_id
+  const { data: streams, error: streamsError } = await supabase
+    .from("streams")
+    .select("id, game_id, thumbnail_url, streamer_name, viewer_count")
+    .in("game_id", gameIds)
+    .eq("is_live", true)
+    .order("viewer_count", { ascending: false })
+
+  if (streamsError) {
+    console.error("fetchSaleGames streams error:", streamsError.message)
+  }
+
+  // Map game_id -> top stream (first by viewer_count, already ordered)
+  const topStreamByGameId = new Map<number, { thumbnail_url: string | null; streamer_name: string | null; viewer_count: number | null }>()
+  for (const s of streams ?? []) {
+    if (s.game_id && !topStreamByGameId.has(s.game_id)) {
+      topStreamByGameId.set(s.game_id, {
+        thumbnail_url: s.thumbnail_url,
+        streamer_name: s.streamer_name,
+        viewer_count: s.viewer_count,
+      })
+    }
+  }
+
   const results = []
   for (const game of games) {
-    const { data: streams } = await supabase
-      .from("streams")
-      .select("*")
-      .eq("game_id", game.id)
-      .eq("is_live", true)
-      .order("viewer_count", { ascending: false })
-      .limit(1)
-    const topStream = streams?.[0]
+    const topStream = topStreamByGameId.get(game.id)
     const topTags = Array.isArray(game.top_tags) ? game.top_tags : []
     const topTag = topTags.length > 0 ? topTags[0] : undefined
     results.push({
@@ -660,8 +694,8 @@ export interface TrendingGamesViewRow {
   trend_score: number
 }
 
-export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
-  const supabase = await createClient()
+async function fetchTrendingGamesImpl(): Promise<TrendingGameRow[]> {
+  const supabase = createClientForCache()
 
   const { data: rows, error } = await supabase
     .from("trending_games")
@@ -700,7 +734,7 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
     steam_appid: number | null
   }
   const titleToGame = new Map<string, GameWithPrice>()
-  const gamesWithTitle: { id: number; title: string }[] = []
+  const gamesWithTitle: { id: number; title: string; korean_title?: string | null }[] = []
   for (const g of games ?? []) {
     const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
     if (!key) continue
@@ -716,11 +750,11 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
       is_free: gg.is_free ?? null,
       steam_appid: gg.steam_appid ?? null,
     })
-    gamesWithTitle.push({ id: gg.id, title: gg.title })
+    gamesWithTitle.push({ id: gg.id, title: gg.title, korean_title: gg.korean_title ?? null })
   }
 
   // 게임 상세 페이지와 동일한 로직으로 스트림 통계 산출 (game_id + stream_category)
-  const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
+  const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle, supabase)
 
   return (rows as TrendingGamesViewRow[])
     .filter((row) => {
@@ -756,6 +790,14 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
         topTag,
       }
     }) as TrendingGameRow[]
+}
+
+export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
+  return unstable_cache(
+    fetchTrendingGamesImpl,
+    ["trending-games"],
+    { revalidate: CACHE_REVALIDATE_TRENDING }
+  )()
 }
 
 /* ── Fetch games by viewer count (시청자 수 순, trend_score 아님) ── */
@@ -801,13 +843,13 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
     steam_appid: number | null
   }
   const titleToGame = new Map<string, GameWithPrice>()
-  const gamesWithTitle: { id: number; title: string }[] = []
+  const gamesWithTitle: { id: number; title: string; korean_title?: string | null }[] = []
   for (const g of games ?? []) {
     const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
     if (!key) continue
     const gg = g as GameWithPrice
     titleToGame.set(key, gg)
-    gamesWithTitle.push({ id: gg.id, title: gg.title })
+    gamesWithTitle.push({ id: gg.id, title: gg.title, korean_title: gg.korean_title ?? null })
   }
 
   const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
@@ -928,19 +970,85 @@ export async function getStreamStatsForGameIds(
  * 게임 상세 페이지(fetchStreamsByGameId)와 동일한 로직으로 스트림 통계 계산.
  * game_id 매칭 + stream_category(게임 제목) 매칭 모두 포함.
  * 게임 카드에서 게임 상세 페이지와 일치하는 스트리밍 수/시청자 수를 표시하기 위함.
+ * 배치 쿼리로 N+1 제거.
+ * @param supabaseClient - 캐시 컨텍스트(unstable_cache 내부)에서 호출 시 createClientForCache() 전달
  */
 export async function getStreamStatsMatchingGameDetails(
-  games: { id: number; title: string }[]
+  games: { id: number; title: string; korean_title?: string | null }[],
+  supabaseClient?: ReturnType<typeof createClientForCache>
 ): Promise<Map<number, { totalViewers: number; liveStreamCount: number }>> {
   const result = new Map<number, { totalViewers: number; liveStreamCount: number }>()
   for (const g of games) result.set(g.id, { totalViewers: 0, liveStreamCount: 0 })
   if (games.length === 0) return result
 
-  for (const game of games) {
-    const streams = await fetchStreamsByGameId(game.id)
-    const totalViewers = streams.reduce((sum, s) => sum + (s.viewers ?? 0), 0)
-    result.set(game.id, { totalViewers, liveStreamCount: streams.length })
+  const supabase = supabaseClient ?? (await createClient())
+  const gameIds = games.map((g) => g.id)
+
+  // 1) Streams by game_id (single query)
+  const { data: streamsByGameId } = await supabase
+    .from("streams")
+    .select("id, game_id, viewer_count")
+    .in("game_id", gameIds)
+    .eq("is_live", true)
+
+  // 2) Streams by stream_category (match game titles/korean_titles)
+  const matchTerms = [
+    ...new Set(
+      games
+        .flatMap((g) => [(g.korean_title ?? "").trim(), (g.title ?? "").trim()])
+        .filter((t): t is string => !!t)
+    ),
+  ]
+  let streamsByCategory: { id: number; stream_category: string | null; viewer_count: number | null; game_id: number | null }[] = []
+  if (matchTerms.length > 0) {
+    const orClause = matchTerms.map((t) => `stream_category.ilike.${t}`).join(",")
+    const { data } = await supabase
+      .from("streams")
+      .select("id, stream_category, viewer_count, game_id")
+      .eq("is_live", true)
+      .or(orClause)
+    streamsByCategory = (data ?? []) as typeof streamsByCategory
   }
+
+  // Process streamsByGameId: add to each game's stats
+  const streamIdsCounted = new Set<number>()
+  for (const s of streamsByGameId ?? []) {
+    if (!s.game_id) continue
+    streamIdsCounted.add(s.id)
+    const cur = result.get(s.game_id) ?? { totalViewers: 0, liveStreamCount: 0 }
+    result.set(s.game_id, {
+      totalViewers: cur.totalViewers + (s.viewer_count ?? 0),
+      liveStreamCount: cur.liveStreamCount + 1,
+    })
+  }
+
+  // Process streamsByCategory: match by stream_category to game title/korean_title, skip if already counted
+  for (const s of streamsByCategory) {
+    if (streamIdsCounted.has(s.id)) continue
+    const category = (s.stream_category ?? "").trim()
+    if (!category) continue
+
+    for (const game of games) {
+      const terms = [(game.korean_title ?? "").trim(), (game.title ?? "").trim()].filter(Boolean)
+      const matches = terms.some(
+        (t) =>
+          t &&
+          (category.toLowerCase() === t.toLowerCase() ||
+            category.toLowerCase().includes(t.toLowerCase()) ||
+            t.toLowerCase().includes(category.toLowerCase()))
+      )
+      if (matches) {
+        streamIdsCounted.add(s.id)
+        const cur = result.get(game.id) ?? { totalViewers: 0, liveStreamCount: 0 }
+        result.set(game.id, {
+          totalViewers: cur.totalViewers + (s.viewer_count ?? 0),
+          liveStreamCount: cur.liveStreamCount + 1,
+        })
+        break
+      }
+    }
+  }
+
   return result
 }
 
@@ -1277,8 +1385,8 @@ export async function getGamesByTagsAND(tagSlugs: string[]): Promise<GameWithTag
 }
 
 /* ── Fetch upcoming events (start_date >= today, with optional game join) ── */
-export async function fetchUpcomingEvents(): Promise<EventRow[]> {
-  const supabase = await createClient()
+async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
+  const supabase = createClientForCache()
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
   const todayISO = todayStart.toISOString()
@@ -1316,6 +1424,14 @@ export async function fetchUpcomingEvents(): Promise<EventRow[]> {
       g == null ? null : Array.isArray(g) ? (g[0] ?? null) : g
     return { ...row, games } as EventRow
   })
+}
+
+export async function fetchUpcomingEvents(): Promise<EventRow[]> {
+  return unstable_cache(
+    fetchUpcomingEventsImpl,
+    ["upcoming-events"],
+    { revalidate: CACHE_REVALIDATE_EVENTS }
+  )()
 }
 
 /* ── Get streams for specific games ── */

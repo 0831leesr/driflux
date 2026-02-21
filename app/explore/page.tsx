@@ -45,7 +45,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     ? await getGamesByTopTagsAND(selectedTagNames)
     : []
   const streamStats = games.length > 0
-    ? await getStreamStatsMatchingGameDetails(games.map((g) => ({ id: g.id, title: g.title })))
+    ? await getStreamStatsMatchingGameDetails(games.map((g) => ({ id: g.id, title: g.title, korean_title: g.korean_title })))
     : new Map<number, { totalViewers: number; liveStreamCount: number }>()
 
   return (

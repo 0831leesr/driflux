@@ -6,6 +6,7 @@ import { Gamepad2, ExternalLink, Tags } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
+import type { TrendingGameRow } from "@/lib/data"
 import { StreamSection } from "@/components/stream-grid"
 import type { StreamData } from "@/components/stream-card"
 import { CalendarContent } from "@/components/calendar-content"
@@ -26,11 +27,11 @@ import {
 
 interface HomeClientProps {
   liveStreams: StreamData[]
-  saleGames: any[] // Not used anymore but keeping for compatibility
+  trendingGames: TrendingGameRow[]
   upcomingEvents: EventRow[]
 }
 
-export function HomeClient({ liveStreams, saleGames, upcomingEvents }: HomeClientProps) {
+export function HomeClient({ liveStreams, trendingGames, upcomingEvents }: HomeClientProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("main")
   const [streamModalOpen, setStreamModalOpen] = useState(false)
@@ -127,7 +128,7 @@ export function HomeClient({ liveStreams, saleGames, upcomingEvents }: HomeClien
       <main className="flex-1 overflow-y-auto">
         {activeTab === "main" ? (
           <div className="flex flex-col gap-8 p-4 lg:p-6">
-            <TrendingGames />
+            <TrendingGames games={trendingGames} />
             <StreamSection
               title="Live: My Followed Games"
               icon={<Gamepad2 className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}

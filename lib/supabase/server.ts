@@ -1,5 +1,18 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { createServerClient } from "@supabase/ssr"
+import { cookies } from "next/headers"
+
+/**
+ * Supabase client for use inside unstable_cache() - does NOT use cookies.
+ * Use only for public data fetches (trending games, streams, events).
+ * Must not be used for user-specific or auth-dependent data.
+ */
+export function createClientForCache() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 /**
  * Especially important if using Fluid compute: Don't put this client in a

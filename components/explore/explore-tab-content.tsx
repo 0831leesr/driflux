@@ -142,7 +142,7 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
         const filteredGames = await getGamesByTopTagsAND(selectedTags)
         const gameIds = filteredGames.map((g) => g.id)
         const [streamStats, filteredStreams] = await Promise.all([
-          getStreamStatsMatchingGameDetails(filteredGames.map((g) => ({ id: g.id, title: g.title }))),
+          getStreamStatsMatchingGameDetails(filteredGames.map((g) => ({ id: g.id, title: g.title, korean_title: g.korean_title }))),
           getStreamsForGames(gameIds),
         ])
         const gamesWithStats = filteredGames.map((g) => ({
