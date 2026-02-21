@@ -85,6 +85,9 @@ export function formatDiscountRate(rate: number | null | undefined): string {
 export const FALLBACK_IMAGE_URL =
   "https://via.placeholder.com/600x400/1a1a1a/ffffff?text=No+Image"
 
+/** 스트리밍 썸네일 로드 실패 시 기본 이미지 (성인 방송 등) */
+export const DEFAULT_STREAMING_IMAGE = "/defaults/streaming.png"
+
 /**
  * 타입별 기본 이미지 경로 (DB에 이미지가 없을 때 fallback)
  * 1순위: local (로컬 파일) → 2순위: remote (placehold.co) - 컴포넌트에서 처리

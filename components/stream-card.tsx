@@ -1,8 +1,11 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Eye } from "lucide-react"
-import { formatViewerCountShort, getGameImageSrc, isPlaceholderImage } from "@/lib/utils"
+import { formatViewerCountShort, getGameImageSrc, isPlaceholderImage, DEFAULT_STREAMING_IMAGE } from "@/lib/utils"
 
 export interface StreamData {
   id: number
@@ -27,11 +30,19 @@ export interface StreamData {
 }
 
 export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onStreamClick?: (stream: StreamData) => void }) {
-  // Use thumbnail first, fallback to game cover, then placeholder
   const gameCoverSrc = getGameImageSrc(stream.gameCover, "cover")
-  const displayImage = stream.thumbnail || gameCoverSrc
+  const initialThumbnail = stream.thumbnail || gameCoverSrc
+  const [thumbnailSrc, setThumbnailSrc] = useState(initialThumbnail)
   const viewerDisplay = stream.viewersFormatted || formatViewerCountShort(stream.viewers)
   const isLive = stream.isLive !== false // Default to true if not specified
+
+  useEffect(() => {
+    setThumbnailSrc(stream.thumbnail || gameCoverSrc)
+  }, [stream.thumbnail, gameCoverSrc])
+
+  const handleThumbnailError = () => {
+    setThumbnailSrc(DEFAULT_STREAMING_IMAGE)
+  }
 
   const handleStreamClick = (e: React.MouseEvent) => {
     // Check if click was on game-related elements
@@ -54,13 +65,14 @@ export function StreamCard({ stream, onStreamClick }: { stream: StreamData; onSt
       {/* Thumbnail */}
       <div className="relative aspect-video w-full overflow-hidden">
         <Image
-          src={displayImage}
+          src={thumbnailSrc}
           alt={`${stream.streamerName} streaming ${stream.gameTitle}`}
           fill
           placeholder="empty"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(min-width: 872px) 25vw, 200px"
-          unoptimized={isPlaceholderImage(displayImage)}
+          unoptimized={isPlaceholderImage(thumbnailSrc)}
+          onError={handleThumbnailError}
         />
 
         {/* Live indicator with viewer count */}
