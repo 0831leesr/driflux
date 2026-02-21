@@ -23,7 +23,8 @@ const COMMON_WHERE = "category = 0"
 
 export interface IGDBGameResult {
   title: string
-  image_url: string
+  /** cover가 없으면 null (태그·요약 등은 반환) */
+  image_url: string | null
   backdrop_url: string | null
   release_date: number | null
   summary: string | null
@@ -74,12 +75,13 @@ type RawGame = {
   }>
 }
 
-/** Raw IGDB 응답 → IGDBGameResult 변환 */
-function parseGameToResult(game: RawGame, fallbackTitle: string, igdbGameId?: number): IGDBGameResult | null {
-  const coverUrl = game.cover?.url
-  if (!coverUrl) return null
+/** Raw IGDB 응답 → IGDBGameResult 변환 (cover 없어도 태그·요약 등 반환) */
+function parseGameToResult(game: RawGame, fallbackTitle: string, igdbGameId?: number): IGDBGameResult {
+  const coverUrl = game.cover?.url?.trim()
+  const imageUrl = coverUrl
+    ? ensureHttpsUrl(coverUrl.replace(/t_thumb/g, "t_cover_big"))
+    : null
 
-  const highResCover = ensureHttpsUrl(coverUrl.replace(/t_thumb/g, "t_cover_big"))
   let backdropUrl: string | null = null
   const rawBackdrop = game.screenshots?.[0]?.url || game.artworks?.[0]?.url
   if (rawBackdrop) {
@@ -109,7 +111,7 @@ function parseGameToResult(game: RawGame, fallbackTitle: string, igdbGameId?: nu
 
   return {
     title: game.name ?? fallbackTitle,
-    image_url: highResCover,
+    image_url: imageUrl,
     backdrop_url: backdropUrl,
     release_date: game.first_release_date ?? null,
     summary: game.summary?.trim() || null,
@@ -184,12 +186,12 @@ async function igdbFetch<T = unknown>(endpoint: string, body: string): Promise<T
   return Array.isArray(data) ? data : [data]
 }
 
-/** 게임 ID로 상세 정보 조회 (2단계 검색의 최종 단계) */
+/** 게임 ID로 상세 정보 조회 (2단계 검색의 최종 단계). cover 없어도 반환. */
 async function fetchGameDetails(gameId: number): Promise<RawGame | null> {
   const body = `fields ${FIELDS}; where id = ${gameId};`
   const data = await igdbFetch<RawGame>(IGDB_GAMES_URL, body)
   const game = data[0]
-  if (!game?.cover?.url) return null
+  if (!game) return null
   return game
 }
 
@@ -203,7 +205,7 @@ async function fetchGameDetails(gameId: number): Promise<RawGame | null> {
  *
  * @param koreanTitle - 치지직 한글 제목
  * @param englishTitle - 치지직 영문 슬러그/제목
- * @returns { title, image_url, backdrop_url, ... } or null
+ * @returns { title, image_url, backdrop_url, ... } or null. image_url은 cover 없으면 null.
  */
 export async function searchIGDBGame(
   koreanTitle?: string | null,
