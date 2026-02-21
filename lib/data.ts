@@ -774,8 +774,8 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
 
   const titleToGame = new Map<string, GameWithPrice>(titleToGameEntries)
 
-  // 게임 상세 페이지와 동일: 캐시 없이 streams 테이블에서 실시간 스트림 통계 조회
-  const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
+  // 게임 상세 페이지(fetchStreamsByGameId)와 완전 동일한 로직으로 스트림 통계 조회
+  const streamStats = await getStreamStatsFromFetchStreamsByGameId(gamesWithTitle.map((g) => g.id))
 
   return rows
     .filter((row) => {
@@ -865,7 +865,7 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
     gamesWithTitle.push({ id: gg.id, title: gg.title, korean_title: gg.korean_title ?? null })
   }
 
-  const streamStats = await getStreamStatsMatchingGameDetails(gamesWithTitle)
+  const streamStats = await getStreamStatsFromFetchStreamsByGameId(gamesWithTitle.map((g) => g.id))
 
   return (rows as TrendingGamesViewRow[])
     .filter((row) => {
@@ -980,89 +980,34 @@ export async function getStreamStatsForGameIds(
 }
 
 /**
- * 게임 상세 페이지(fetchStreamsByGameId)와 동일한 로직으로 스트림 통계 계산.
- * game_id 매칭 + stream_category(게임 제목) 매칭 모두 포함.
- * 게임 카드에서 게임 상세 페이지와 일치하는 스트리밍 수/시청자 수를 표시하기 위함.
- * 배치 쿼리로 N+1 제거.
- * @param supabaseClient - 캐시 컨텍스트(unstable_cache 내부)에서 호출 시 createClientForCache() 전달
+ * 게임 상세 페이지(fetchStreamsByGameId)와 완전 동일한 로직으로 스트림 통계 계산.
+ * 각 게임별로 fetchStreamsByGameId를 호출하여 game_id + stream_category 매칭 결과를 그대로 사용.
+ * 게임 카드에서 게임 상세 페이지와 정확히 일치하는 스트리밍 수/시청자 수를 표시하기 위함.
  */
-export async function getStreamStatsMatchingGameDetails(
-  games: { id: number; title: string; korean_title?: string | null }[],
-  supabaseClient?: ReturnType<typeof createClientForCache>
+export async function getStreamStatsFromFetchStreamsByGameId(
+  gameIds: number[]
 ): Promise<Map<number, { totalViewers: number; liveStreamCount: number }>> {
   const result = new Map<number, { totalViewers: number; liveStreamCount: number }>()
-  for (const g of games) result.set(g.id, { totalViewers: 0, liveStreamCount: 0 })
-  if (games.length === 0) return result
+  for (const id of gameIds) result.set(id, { totalViewers: 0, liveStreamCount: 0 })
+  if (gameIds.length === 0) return result
 
-  const supabase = supabaseClient ?? (await createClient())
-  const gameIds = games.map((g) => g.id)
-
-  // 1) Streams by game_id (single query)
-  const { data: streamsByGameId } = await supabase
-    .from("streams")
-    .select("id, game_id, viewer_count")
-    .in("game_id", gameIds)
-    .eq("is_live", true)
-
-  // 2) Streams by stream_category (match game titles/korean_titles)
-  const matchTerms = [
-    ...new Set(
-      games
-        .flatMap((g) => [(g.korean_title ?? "").trim(), (g.title ?? "").trim()])
-        .filter((t): t is string => !!t)
-    ),
-  ]
-  let streamsByCategory: { id: number; stream_category: string | null; viewer_count: number | null; game_id: number | null }[] = []
-  if (matchTerms.length > 0) {
-    const orClause = matchTerms.map((t) => `stream_category.ilike.${t}`).join(",")
-    const { data } = await supabase
-      .from("streams")
-      .select("id, stream_category, viewer_count, game_id")
-      .eq("is_live", true)
-      .or(orClause)
-    streamsByCategory = (data ?? []) as typeof streamsByCategory
+  const streamsArrays = await Promise.all(gameIds.map((id) => fetchStreamsByGameId(id)))
+  for (let i = 0; i < gameIds.length; i++) {
+    const streams = streamsArrays[i]
+    const gameId = gameIds[i]
+    const totalViewers = streams.reduce((sum, s) => sum + (s.viewers ?? 0), 0)
+    result.set(gameId, { totalViewers, liveStreamCount: streams.length })
   }
-
-  // Process streamsByGameId: add to each game's stats
-  const streamIdsCounted = new Set<number>()
-  for (const s of streamsByGameId ?? []) {
-    if (!s.game_id) continue
-    streamIdsCounted.add(s.id)
-    const cur = result.get(s.game_id) ?? { totalViewers: 0, liveStreamCount: 0 }
-    result.set(s.game_id, {
-      totalViewers: cur.totalViewers + (s.viewer_count ?? 0),
-      liveStreamCount: cur.liveStreamCount + 1,
-    })
-  }
-
-  // Process streamsByCategory: match by stream_category to game title/korean_title, skip if already counted
-  for (const s of streamsByCategory) {
-    if (streamIdsCounted.has(s.id)) continue
-    const category = (s.stream_category ?? "").trim()
-    if (!category) continue
-
-    for (const game of games) {
-      const terms = [(game.korean_title ?? "").trim(), (game.title ?? "").trim()].filter(Boolean)
-      const matches = terms.some(
-        (t) =>
-          t &&
-          (category.toLowerCase() === t.toLowerCase() ||
-            category.toLowerCase().includes(t.toLowerCase()) ||
-            t.toLowerCase().includes(category.toLowerCase()))
-      )
-      if (matches) {
-        streamIdsCounted.add(s.id)
-        const cur = result.get(game.id) ?? { totalViewers: 0, liveStreamCount: 0 }
-        result.set(game.id, {
-          totalViewers: cur.totalViewers + (s.viewer_count ?? 0),
-          liveStreamCount: cur.liveStreamCount + 1,
-        })
-        break
-      }
-    }
-  }
-
   return result
+}
+
+/**
+ * @deprecated getStreamStatsFromFetchStreamsByGameId 사용 권장. 게임 상세 페이지와 동일한 수치를 보장.
+ */
+export async function getStreamStatsMatchingGameDetails(
+  games: { id: number; title: string; korean_title?: string | null }[]
+): Promise<Map<number, { totalViewers: number; liveStreamCount: number }>> {
+  return getStreamStatsFromFetchStreamsByGameId(games.map((g) => g.id))
 }
 
 /* ── Get all tags (for Explore page filter) ── */
