@@ -57,11 +57,6 @@ export interface GameWithTags extends GameRow {
 }
 
 /* ── Helpers ── */
-/** LIKE/ILIKE 패턴 내 %, _, \\ 이스케이프 (와일드카드 오동작 방지) */
-function escapeForLike(s: string): string {
-  return s.replace(/[%_\\]/g, (c) => (c === "\\" ? "\\\\" : `\\${c}`))
-}
-
 function formatViewers(count: number | null): string {
   if (!count) return "0"
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`
@@ -188,17 +183,12 @@ export async function fetchSaleGames() {
 /* ── Fetch streams for a specific game (by title) ── */
 export async function fetchStreamsByGameTitle(gameTitle: string) {
   const supabase = await createClient()
-  const term = gameTitle?.trim()
-  if (!term) return []
-
-  const pattern = `%${escapeForLike(term)}%`
-  // title 또는 korean_title로 매칭 (한글/영문 둘 다 지원)
-  const { data: byTitle } = await supabase.from("games").select("*").ilike("title", pattern).limit(1)
-  const { data: byKorean } = !byTitle?.length
-    ? await supabase.from("games").select("*").not("korean_title", "is", null).ilike("korean_title", pattern).limit(1)
-    : { data: null }
-  const games = byTitle?.length ? byTitle : byKorean
-  if (!games?.length) return []
+  const { data: games } = await supabase
+    .from("games")
+    .select("*")
+    .ilike("title", gameTitle)
+    .limit(1)
+  if (!games || games.length === 0) return []
   const game = games[0]
 
   const { data: streams, error } = await supabase
@@ -494,7 +484,6 @@ export async function searchGames(query: string): Promise<GameWithTags[]> {
   const trimmed = query?.trim()
   if (!trimmed) return []
 
-  const pattern = `%${escapeForLike(trimmed)}%`
   const supabase = await createClient()
   const gameIds = new Set<number>()
 
@@ -502,28 +491,17 @@ export async function searchGames(query: string): Promise<GameWithTags[]> {
   const { data: gamesByTitle, error: err1 } = await supabase
     .from("games")
     .select("id")
-    .ilike("title", pattern)
+    .ilike("title", `%${trimmed}%`)
 
   if (!err1 && gamesByTitle) {
     gamesByTitle.forEach((g: { id: number }) => gameIds.add(g.id))
-  }
-
-  // 1b) Games where korean_title contains query (한글 검색)
-  const { data: gamesByKoreanTitle, error: err1b } = await supabase
-    .from("games")
-    .select("id")
-    .not("korean_title", "is", null)
-    .ilike("korean_title", pattern)
-
-  if (!err1b && gamesByKoreanTitle) {
-    gamesByKoreanTitle.forEach((g: { id: number }) => gameIds.add(g.id))
   }
 
   // 2) Games linked to tags whose name contains query (tags/game_tags tables)
   const { data: matchingTags, error: err2 } = await supabase
     .from("tags")
     .select("id")
-    .ilike("name", pattern)
+    .ilike("name", `%${trimmed}%`)
 
   if (!err2 && matchingTags && matchingTags.length > 0) {
     const tagIds = matchingTags.map((t: { id: number }) => t.id)
@@ -702,20 +680,37 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
   ]
   const { data: games } = await supabase
     .from("games")
-    .select("id, title, korean_title, top_tags")
+    .select("id, title, korean_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
     .in("korean_title", koreanTitles)
-  const titleToGame = new Map<string, { id: number; title: string; korean_title: string | null; top_tags: string[] | null }>()
+  type GameWithPrice = {
+    id: number
+    title: string
+    korean_title: string | null
+    top_tags: string[] | null
+    price_krw: number | null
+    original_price_krw: number | null
+    discount_rate: number | null
+    is_free: boolean | null
+    steam_appid: number | null
+  }
+  const titleToGame = new Map<string, GameWithPrice>()
   const gamesWithTitle: { id: number; title: string }[] = []
   for (const g of games ?? []) {
     const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
     if (!key) continue
+    const gg = g as GameWithPrice
     titleToGame.set(key, {
-      id: g.id,
-      title: g.title,
-      korean_title: (g as { korean_title?: string | null }).korean_title ?? null,
-      top_tags: g.top_tags ?? null,
+      id: gg.id,
+      title: gg.title,
+      korean_title: gg.korean_title ?? null,
+      top_tags: gg.top_tags ?? null,
+      price_krw: gg.price_krw ?? null,
+      original_price_krw: gg.original_price_krw ?? null,
+      discount_rate: gg.discount_rate ?? null,
+      is_free: gg.is_free ?? null,
+      steam_appid: gg.steam_appid ?? null,
     })
-    gamesWithTitle.push({ id: g.id, title: g.title })
+    gamesWithTitle.push({ id: gg.id, title: gg.title })
   }
 
   // 게임 상세 페이지와 동일한 로직으로 스트림 통계 산출 (game_id + stream_category)
@@ -738,12 +733,12 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
         title: displayTitle,
         cover_image_url: row.cover_image_url,
         header_image_url: row.cover_image_url,
-        steam_appid: null,
-        discount_rate: null,
-        price_krw: null,
-        original_price_krw: null,
+        steam_appid: gameData.steam_appid,
+        discount_rate: gameData.discount_rate,
+        price_krw: gameData.price_krw,
+        original_price_krw: gameData.original_price_krw,
         currency: null,
-        is_free: null,
+        is_free: gameData.is_free,
         top_tags: topTags,
         short_description: null,
         developer: null,
