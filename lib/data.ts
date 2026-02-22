@@ -1342,14 +1342,14 @@ export async function getGamesByTagsAND(tagSlugs: string[]): Promise<GameWithTag
   return gamesWithTags
 }
 
-/* ── Fetch upcoming events (start_date >= today, with optional game join) ── */
+/* ── Fetch upcoming events (start_date >= today, game_category로 games 매칭) ── */
 async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
   const supabase = createClientForCache()
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
   const todayISO = todayStart.toISOString()
 
-  const { data, error } = await supabase
+  const { data: eventsData, error } = await supabase
     .from("events")
     .select(`
       id,
@@ -1358,14 +1358,8 @@ async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
       event_type,
       start_date,
       end_date,
-      game_id,
-      external_url,
-      games (
-        id,
-        title,
-        cover_image_url,
-        header_image_url
-      )
+      game_category,
+      external_url
     `)
     .gte("start_date", todayISO)
     .order("start_date", { ascending: true })
@@ -1375,12 +1369,69 @@ async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
     return []
   }
 
-  const rows = (data ?? []) as Array<Record<string, unknown>>
+  const rows = (eventsData ?? []) as Array<Record<string, unknown>>
+
+  /* EventRow로 명시적 변환 (event_type 등 누락 방지) */
+  function toEventRow(row: Record<string, unknown>, gamesPayload: EventRow["games"]): EventRow {
+    return {
+      id: row.id as number,
+      title: row.title as string,
+      description: (row.description as string | null) ?? null,
+      event_type: (row.event_type as string | null) ?? null,
+      start_date: row.start_date as string,
+      end_date: (row.end_date as string | null) ?? null,
+      game_category: (row.game_category as string | null) ?? null,
+      external_url: (row.external_url as string | null) ?? null,
+      games: gamesPayload,
+    }
+  }
+
+  const categories = [...new Set(rows.map((r) => (r.game_category as string)?.trim()).filter(Boolean))] as string[]
+
+  if (categories.length === 0) {
+    return rows.map((row) => toEventRow(row, null))
+  }
+
+  /* game_category로 games 조회 (korean_title 또는 title 매칭) */
+  const orTerms = categories.flatMap((c) => [
+    `korean_title.ilike.${c}`,
+    `title.ilike.${c}`,
+  ])
+  const { data: gamesData } = await supabase
+    .from("games")
+    .select("id, title, korean_title, cover_image_url, header_image_url")
+    .or(orTerms.join(","))
+
+  const games = (gamesData ?? []) as Array<{
+    id: number
+    title: string
+    korean_title?: string | null
+    cover_image_url: string | null
+    header_image_url: string | null
+  }>
+
+  const categoryToGame = new Map<string, (typeof games)[0]>()
+  for (const cat of categories) {
+    const match = games.find(
+      (g) =>
+        (g.korean_title?.trim().toLowerCase() === cat.trim().toLowerCase()) ||
+        (g.title?.trim().toLowerCase() === cat.trim().toLowerCase())
+    )
+    if (match) categoryToGame.set(cat.trim(), match)
+  }
+
   return rows.map((row) => {
-    const g = row.games
-    const games =
-      g == null ? null : Array.isArray(g) ? (g[0] ?? null) : g
-    return { ...row, games } as EventRow
+    const gc = (row.game_category as string)?.trim()
+    const gamesMatch = gc ? categoryToGame.get(gc) ?? null : null
+    const gamesPayload = gamesMatch
+      ? {
+          id: gamesMatch.id,
+          title: gamesMatch.title,
+          cover_image_url: gamesMatch.cover_image_url,
+          header_image_url: gamesMatch.header_image_url,
+        }
+      : null
+    return toEventRow(row, gamesPayload)
   })
 }
 
@@ -1388,7 +1439,7 @@ export async function fetchUpcomingEvents(): Promise<EventRow[]> {
   return unstable_cache(
     fetchUpcomingEventsImpl,
     ["upcoming-events"],
-    { revalidate: CACHE_REVALIDATE_EVENTS }
+    { revalidate: CACHE_REVALIDATE_EVENTS, tags: ["upcoming-events"] }
   )()
 }
 

@@ -45,7 +45,7 @@ export interface EventRow {
   event_type: string | null
   start_date: string
   end_date: string | null
-  game_id: number | null
+  game_category: string | null
   external_url: string | null
   games?: Pick<GameRow, "id" | "title" | "cover_image_url" | "header_image_url"> | null
 }

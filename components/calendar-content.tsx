@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import {
   Rocket,
   Trophy,
@@ -11,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Tag,
+  Server,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,8 +22,8 @@ import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
 
 /* ── Types ── */
-/* DB event_type: 'Competition' | 'Patch' | 'Discount' */
-type EventCategory = "competition" | "patch" | "discount"
+/* DB event_type: 'Esports' | 'Patch' | 'Discount' | 'Collaboration' */
+type EventCategory = "competition" | "patch" | "discount" | "collaboration"
 
 interface GameEvent {
   id: string
@@ -32,6 +34,8 @@ interface GameEvent {
   category: EventCategory
   image: string
   externalUrl?: string
+  gameId?: number
+  gameCover?: string
 }
 
 const CATEGORY_CONFIG: Record<
@@ -62,14 +66,23 @@ const CATEGORY_CONFIG: Record<
     barColor: "bg-amber-500",
     checkColor: "border-amber-500 data-[state=checked]:bg-amber-500 data-[state=checked]:text-white",
   },
+  collaboration: {
+    label: "Collaboration",
+    icon: Server,
+    color: "text-cyan-400",
+    bgColor: "bg-cyan-500/15",
+    barColor: "bg-cyan-500",
+    checkColor: "border-cyan-500 data-[state=checked]:bg-cyan-500 data-[state=checked]:text-white",
+  },
 }
 
 function normalizeCategory(eventType: string | null): EventCategory {
   const t = (eventType ?? "").trim()
   const lower = t.toLowerCase()
-  if (lower === "competition") return "competition"
+  if (lower === "competition" || lower === "esports") return "competition"
   if (lower === "patch") return "patch"
   if (lower === "discount") return "discount"
+  if (lower === "collaboration") return "collaboration"
   /* fallback for legacy/invalid data */
   return "competition"
 }
@@ -82,6 +95,9 @@ function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
       ev.games?.cover_image_url,
       "header"
     )
+    const gameCover = ev.games
+      ? getBestGameImage(ev.games.cover_image_url, ev.games.header_image_url, "cover")
+      : undefined
     return {
       id: String(ev.id),
       date: startDate,
@@ -91,6 +107,8 @@ function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
       category: normalizeCategory(ev.event_type),
       image,
       externalUrl: ev.external_url ?? undefined,
+      gameId: ev.games?.id,
+      gameCover,
     }
   })
 }
@@ -266,6 +284,24 @@ function EventCard({ event, today, remindedIds, onToggleRemind }: {
         <div className={`mt-1 h-full w-0.5 rounded-full ${config.barColor} ${isPast ? "opacity-30" : ""}`} />
       </div>
 
+      {/* Game Cover (날짜와 이벤트 이름 사이, game_category 매칭 시에만) */}
+      {event.gameCover && event.gameId ? (
+        <Link
+          href={`/game/${event.gameId}`}
+          className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-90"
+          aria-label={`${event.subtitle} 게임 상세 보기`}
+        >
+          <Image
+            src={event.gameCover}
+            alt={event.subtitle || "Game cover"}
+            fill
+            className="object-cover"
+            sizes="44px"
+            unoptimized
+          />
+        </Link>
+      ) : null}
+
       {/* Center: Info */}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <Badge className={`w-fit border-transparent text-[10px] font-semibold ${config.bgColor} ${config.color}`}>
@@ -317,6 +353,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
     competition: true,
     patch: true,
     discount: true,
+    collaboration: true,
   })
   const [showPast, setShowPast] = useState(false)
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set())
@@ -324,8 +361,8 @@ export function CalendarContent({ events }: CalendarContentProps) {
 
   const gameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
 
-  function toggleCategory(cat: EventCategory) {
-    setCategories((prev) => ({ ...prev, [cat]: !prev[cat] }))
+  function setCategoryChecked(cat: EventCategory, checked: boolean) {
+    setCategories((prev) => ({ ...prev, [cat]: checked }))
   }
 
   function toggleRemind(id: string) {
@@ -340,7 +377,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
   /* Build date->categories map for mini calendar dots (선택된 카테고리만) */
   const eventDates = useMemo(() => {
     const map = new Map<string, EventCategory[]>()
-    const filtered = gameEvents.filter((ev) => categories[ev.category])
+    const filtered = gameEvents.filter((ev) => categories[ev.category] === true)
     for (const ev of filtered) {
       const key = `${ev.date.getFullYear()}-${ev.date.getMonth()}-${ev.date.getDate()}`
       const arr = map.get(key) || []
@@ -350,10 +387,10 @@ export function CalendarContent({ events }: CalendarContentProps) {
     return map
   }, [gameEvents, categories])
 
-  /* Filter & sort events */
+  /* Filter & sort events (categories[ev.category] === true로 명시적 체크) */
   const filteredEvents = useMemo(() => {
     return gameEvents
-      .filter((ev) => categories[ev.category])
+      .filter((ev) => categories[ev.category] === true)
       .filter((ev) => {
         if (showPast) return true
         return ev.date >= today || isSameDay(ev.date, today)
@@ -387,7 +424,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
   /* Hero highlights: top 3 upcoming (선택된 카테고리만) */
   const heroEvents = useMemo(() => {
     const upcoming = gameEvents
-      .filter((ev) => categories[ev.category])
+      .filter((ev) => categories[ev.category] === true)
       .filter((ev) => ev.date >= today || isSameDay(ev.date, today))
     return upcoming
       .sort((a, b) => a.date.getTime() - b.date.getTime())
@@ -404,8 +441,50 @@ export function CalendarContent({ events }: CalendarContentProps) {
     }
   }
 
+  /* Category filter UI (재사용) */
+  const categoryFilterUI = (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Categories
+      </h4>
+      <div className="flex flex-col gap-3">
+        {(["competition", "patch", "discount", "collaboration"] as EventCategory[]).map((cat) => {
+          const config = CATEGORY_CONFIG[cat]
+          const Icon = config.icon
+          const isChecked = categories[cat] ?? true
+          return (
+            <label key={cat} className="flex cursor-pointer items-center gap-2.5">
+              <Checkbox
+                checked={isChecked}
+                onCheckedChange={(checked) => setCategoryChecked(cat, checked === true)}
+                className={config.checkColor}
+              />
+              <Icon className={`h-3.5 w-3.5 ${config.color}`} />
+              <span className="text-sm text-foreground">{config.label}</span>
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+
   return (
     <div className="flex flex-col gap-6 p-4 lg:p-6">
+      {/* Mobile: Category filters (lg 미만에서 표시) */}
+      <div className="flex flex-col gap-4 lg:hidden">
+        {categoryFilterUI}
+        <div className="rounded-xl border border-border bg-card p-4">
+          <label className="flex cursor-pointer items-center justify-between">
+            <span className="text-sm text-foreground">Show Past Events</span>
+            <Switch
+              checked={showPast}
+              onCheckedChange={setShowPast}
+              className="data-[state=checked]:bg-[hsl(var(--neon-purple))]"
+            />
+          </label>
+        </div>
+      </div>
+
       {/* Hero Section */}
       {heroEvents.length > 0 && (
         <section>
@@ -431,28 +510,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
             />
 
             {/* Category Filters */}
-            <div className="rounded-xl border border-border bg-card p-4">
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Categories
-              </h4>
-              <div className="flex flex-col gap-3">
-                {(Object.keys(CATEGORY_CONFIG) as EventCategory[]).map((cat) => {
-                  const config = CATEGORY_CONFIG[cat]
-                  const Icon = config.icon
-                  return (
-                    <label key={cat} className="flex cursor-pointer items-center gap-2.5">
-                      <Checkbox
-                        checked={categories[cat]}
-                        onCheckedChange={() => toggleCategory(cat)}
-                        className={config.checkColor}
-                      />
-                      <Icon className={`h-3.5 w-3.5 ${config.color}`} />
-                      <span className="text-sm text-foreground">{config.label}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
+            {categoryFilterUI}
 
             {/* Past Events Toggle */}
             <div className="rounded-xl border border-border bg-card p-4">
