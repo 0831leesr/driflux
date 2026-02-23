@@ -41,6 +41,41 @@ interface ChzzkEsportsResponse {
 
 const CHZZK_ESPORTS_API = "https://api.chzzk.naver.com/service/v1/program-schedules?filterId=esports"
 
+/** Chzzk API fetch with retry (ECONNRESET 등 일시적 네트워크 오류 대응) */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  maxRetries = 3
+): Promise<Response> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15_000)
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          "User-Agent": "Driflux/1.0 (+https://driflux.gg)",
+          ...options.headers,
+        },
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      return res
+    } catch (err) {
+      lastError = err
+      if (attempt < maxRetries) {
+        const delay = 1000 * Math.pow(2, attempt - 1)
+        console.warn(`[update-esports-events] Attempt ${attempt} failed, retrying in ${delay}ms:`, err)
+        await new Promise((r) => setTimeout(r, delay))
+      }
+    }
+  }
+  throw lastError
+}
+
+export const maxDuration = 60
+
 /**
  * Cron Job API: 치지직 이스포츠 스케줄 → Supabase events Upsert
  *
@@ -76,7 +111,7 @@ export async function GET(request: Request) {
   })
 
   try {
-    const res = await fetch(CHZZK_ESPORTS_API)
+    const res = await fetchWithRetry(CHZZK_ESPORTS_API)
     if (!res.ok) {
       throw new Error(`Chzzk API error: ${res.status} ${res.statusText}`)
     }
