@@ -19,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import type { EventRow } from "@/lib/types"
-import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
+import { getBestGameImage, getDisplayGameTitle, getGameImageSrc } from "@/lib/utils"
 
 /* ── Types ── */
 /* DB event_type: 'Esports' | 'Patch' | 'Discount' | 'Collaboration' */
@@ -90,11 +90,10 @@ function normalizeCategory(eventType: string | null): EventCategory {
 function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
   return events.map((ev) => {
     const startDate = new Date(ev.start_date)
-    const image = getBestGameImage(
-      ev.games?.header_image_url,
-      ev.games?.cover_image_url,
-      "header"
-    )
+    /* header_image_url 지정 시 우선, 미지정 시 game 이미지 → 기본 이미지 */
+    const image = ev.header_image_url?.trim()
+      ? getGameImageSrc(ev.header_image_url, "header")
+      : getBestGameImage(ev.games?.header_image_url, ev.games?.cover_image_url, "header")
     const gameCover = ev.games
       ? getBestGameImage(ev.games.cover_image_url, ev.games.header_image_url, "cover")
       : undefined

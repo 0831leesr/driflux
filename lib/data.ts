@@ -1359,6 +1359,7 @@ async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
       start_date,
       end_date,
       game_category,
+      header_image_url,
       external_url
     `)
     .gte("start_date", todayISO)
@@ -1381,6 +1382,7 @@ async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
       start_date: row.start_date as string,
       end_date: (row.end_date as string | null) ?? null,
       game_category: (row.game_category as string | null) ?? null,
+      header_image_url: (row.header_image_url as string | null) ?? null,
       external_url: (row.external_url as string | null) ?? null,
       games: gamesPayload,
     }
