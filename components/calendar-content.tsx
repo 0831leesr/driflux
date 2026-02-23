@@ -22,10 +22,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle, getGameImageSrc } from "@/lib/utils"
+import { useCalendarSettings, type EventCategory } from "@/contexts/calendar-settings-context"
 
 /* ── Types ── */
 /* DB event_type: 'Esports' | 'Patch' | 'Discount' | 'Collaboration' */
-type EventCategory = "competition" | "patch" | "discount" | "collaboration"
 
 interface GameEvent {
   id: string
@@ -358,17 +358,16 @@ export function CalendarContent({ events }: CalendarContentProps) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [categories, setCategories] = useState<Record<EventCategory, boolean>>({
-    competition: true,
-    patch: true,
-    discount: true,
-    collaboration: true,
-  })
-  const [showPast, setShowPast] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
 
-  /* E-sports 채널 필터: null = 전체 선택, Set = 선택된 external_url만 */
-  const [esportsChannelsChecked, setEsportsChannelsChecked] = useState<Set<string> | null>(null)
+  const {
+    categories,
+    showPast,
+    esportsChannelsChecked,
+    setCategoryChecked,
+    setShowPast,
+    setEsportsChannelsChecked,
+  } = useCalendarSettings()
 
   const gameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
 
@@ -388,19 +387,12 @@ export function CalendarContent({ events }: CalendarContentProps) {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [events])
 
-  function setCategoryChecked(cat: EventCategory, checked: boolean) {
-    setCategories((prev) => ({ ...prev, [cat]: checked }))
-    if (cat === "competition") {
-      setEsportsChannelsChecked(checked ? null : new Set())
-    }
-  }
-
-  /** E-sports 이벤트가 채널 필터를 통과하는지 */
+  /** E-sports 이벤트가 채널 필터를 통과하는지 (esportsChannelsChecked: null=전체, []=없음, string[]=선택) */
   function passesEsportsChannelFilter(ev: GameEvent): boolean {
     if (ev.category !== "competition") return true
     if (esportsChannelsChecked === null) return true
-    if (esportsChannelsChecked.size === 0) return false
-    return ev.externalUrl == null || esportsChannelsChecked.has(ev.externalUrl)
+    if (esportsChannelsChecked.length === 0) return false
+    return ev.externalUrl == null || esportsChannelsChecked.includes(ev.externalUrl)
   }
 
   /* Build date->categories map for mini calendar dots (선택된 카테고리만, end_date 있으면 시작·종료일 모두) */
@@ -480,20 +472,21 @@ export function CalendarContent({ events }: CalendarContentProps) {
     }
   }
 
-  /* E-sports 채널 체크 상태 (null = 전체, Set = 선택된 URL) */
+  /* E-sports 채널 체크 상태 (null = 전체, string[] = 선택된 URL) */
   const isChannelChecked = (url: string) =>
-    esportsChannelsChecked === null || esportsChannelsChecked.has(url)
+    esportsChannelsChecked === null || esportsChannelsChecked.includes(url)
 
   const setChannelChecked = (url: string, checked: boolean) => {
-    setEsportsChannelsChecked((prev) => {
-      const base = prev === null ? new Set(esportsChannels.map((c) => c.url)) : new Set(prev)
-      if (checked) {
-        base.add(url)
-      } else {
-        base.delete(url)
-      }
-      return base.size === esportsChannels.length ? null : base
-    })
+    const base =
+      esportsChannelsChecked === null
+        ? new Set(esportsChannels.map((c) => c.url))
+        : new Set(esportsChannelsChecked)
+    if (checked) {
+      base.add(url)
+    } else {
+      base.delete(url)
+    }
+    setEsportsChannelsChecked(base.size === esportsChannels.length ? null : base)
   }
 
   const setAllChannelsChecked = (checked: boolean) => {

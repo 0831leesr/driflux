@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { FavoritesProvider } from "@/contexts/favorites-context";
+import { CalendarSettingsProvider } from "@/contexts/calendar-settings-context";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
@@ -50,7 +51,9 @@ export default function RootLayout({
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <FavoritesProvider>
-            <AppShell>{children}</AppShell>
+            <CalendarSettingsProvider>
+              <AppShell>{children}</AppShell>
+            </CalendarSettingsProvider>
           </FavoritesProvider>
         </ThemeProvider>
       </body>
