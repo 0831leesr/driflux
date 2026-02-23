@@ -6,15 +6,19 @@ on:
   workflow_dispatch:      # 수동 실행 가능
 
 jobs:
-  update-metadata:
+  update-steam:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Update Steam Metadata
         run: |
-          curl -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam" \
+          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam?limit=50" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
-      - name: Update Esports Events (새로 추가할 작업!)
+  update-esports-events:
+    runs-on: ubuntu-latest
+    needs: []  # update-steam과 독립 실행 (한쪽 실패해도 다른 쪽 실행)
+    steps:
+      - name: Update Esports Events
         run: |
-          curl -X GET "${{ secrets.DOMAIN }}/api/cron/update-esports-events" \
+          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-esports-events" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

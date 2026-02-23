@@ -7,6 +7,12 @@ import { delay } from "@/lib/utils"
 import { searchIGDBGame, fetchSteamAppIdFromIGDB } from "@/lib/igdb"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
 
+/** Steam API에서 "not found" 반환하는 알려진 잘못된 app ID (스킵하여 API 호출 절약) */
+const STEAM_SKIP_APP_IDS = new Set([238960, 212200, 495910, 1599340])
+
+/** Vercel serverless timeout: 300초 (cron 제한) */
+export const maxDuration = 300
+
 /**
  * Cron Job API: Update Steam Game Data
  * 
@@ -16,7 +22,7 @@ import { TAG_TRANSLATIONS } from "@/lib/constants"
  * Should be called periodically (e.g., daily via Vercel Cron or manual trigger).
  * 
  * Optional Query Parameters:
- * - limit: Number of games to update (default: all)
+ * - limit: Number of games to update (default: 50, cron용)
  * - appid: Update specific app only
  * 
  * Example:
@@ -88,12 +94,10 @@ export async function GET(request: Request) {
       query = query.eq("steam_appid", appId)
     }
 
-    // Limit results if specified
-    if (limitParam) {
-      const limit = parseInt(limitParam, 10)
-      if (!isNaN(limit) && limit > 0) {
-        query = query.limit(limit)
-      }
+    // Limit results (default 50 for cron to avoid Vercel timeout)
+    const limit = limitParam ? parseInt(limitParam, 10) : 50
+    if (!isNaN(limit) && limit > 0) {
+      query = query.limit(limit)
     }
 
     const { data: games, error: fetchError } = await query
@@ -173,6 +177,7 @@ export async function GET(request: Request) {
         // 2-1. steam_appid 우선: mapping/game에 있으면 해당 ID로 직접 조회
         // 2-2. steam_appid가 NULL이면 steam_title로 이름 기반 검색
         let searchPriceFallback: { price_krw: number | null; original_price_krw: number | null; discount_rate: number; currency: string } | null = null
+        let clearedBadSteamAppId = false
         if (!mapping?.skip_steam) {
           if (!steamAppId) {
             // 2a. steam_title로 이름 기반 Steam 검색 (steam_appid가 NULL일 때)
@@ -207,9 +212,15 @@ export async function GET(request: Request) {
             await delay(500)
           }
           if (steamAppId) {
-            const raw = await getSteamGameDetails(steamAppId, "kr")
-            if (raw) steamData = processSteamData(raw)
-            await delay(1500)
+            if (STEAM_SKIP_APP_IDS.has(steamAppId)) {
+              console.log(`[Steam Update] ⊗ Skipping known invalid app: ${steamAppId} (will clear from DB)`)
+              clearedBadSteamAppId = true
+              steamAppId = null
+            } else {
+              const raw = await getSteamGameDetails(steamAppId, "kr")
+              if (raw) steamData = processSteamData(raw)
+              await delay(1500)
+            }
           }
         }
 
@@ -218,7 +229,7 @@ export async function GET(request: Request) {
           mapping.override_price != null || mapping.override_is_free != null ||
           mapping.skip_steam // skip_steam: Steam 필드 초기화를 위해 업데이트 수행
         )
-        if (!igdbData && !steamData && !hasMappingOverrides) {
+        if (!igdbData && !steamData && !hasMappingOverrides && !clearedBadSteamAppId) {
           console.log(`[Discovery] Failed to find data for: ${game.title}`)
           results.skipped++
           results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "skipped", message: "No Steam/IGDB data" })
@@ -237,7 +248,7 @@ export async function GET(request: Request) {
           short_description: ig?.summary ?? st?.short_description ?? null,
           developer: ig?.developer ?? null,
           publisher: ig?.publisher ?? null,
-          steam_appid: steamAppId ?? (st ? st.steam_appid : game.steam_appid),
+          steam_appid: clearedBadSteamAppId ? null : (steamAppId ?? (st ? st.steam_appid : game.steam_appid)),
           price_krw: priceFromSteam ?? priceFallback?.price_krw ?? null,
           original_price_krw: (st ? st.original_price_krw : null) ?? priceFallback?.original_price_krw ?? null,
           discount_rate: (st ? st.discount_rate : null) ?? priceFallback?.discount_rate ?? null,
@@ -248,6 +259,9 @@ export async function GET(request: Request) {
         if (st) {
           updatePayload.title = st.title
           updatePayload.last_steam_update = new Date().toISOString()
+        }
+        if (clearedBadSteamAppId) {
+          updatePayload.last_steam_update = null
         }
 
         // [오버라이드] 매핑 테이블 값이 있으면 최우선 덮어쓰기
