@@ -12,11 +12,14 @@ import {
   ChevronRight,
   Tag,
   Server,
+  Info,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle, getGameImageSrc } from "@/lib/utils"
 
@@ -364,16 +367,48 @@ export function CalendarContent({ events }: CalendarContentProps) {
   const [showPast, setShowPast] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
 
+  /* E-sports 채널 필터: null = 전체 선택, Set = 선택된 external_url만 */
+  const [esportsChannelsChecked, setEsportsChannelsChecked] = useState<Set<string> | null>(null)
+
   const gameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
+
+  /* Esports 이벤트에서 채널 목록 추출 (event_type=Esports, external_url + title에서 [채널명] 파싱) */
+  const esportsChannels = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const ev of events) {
+      if ((ev.event_type?.trim() ?? "").toLowerCase() !== "esports") continue
+      const url = ev.external_url?.trim()
+      if (!url) continue
+      const match = ev.title?.match(/^\[([^\]]+)\]/)
+      const name = match ? match[1].trim() : url
+      if (!seen.has(url)) seen.set(url, name)
+    }
+    return Array.from(seen.entries())
+      .map(([url, name]) => ({ url, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [events])
 
   function setCategoryChecked(cat: EventCategory, checked: boolean) {
     setCategories((prev) => ({ ...prev, [cat]: checked }))
+    if (cat === "competition") {
+      setEsportsChannelsChecked(checked ? null : new Set())
+    }
+  }
+
+  /** E-sports 이벤트가 채널 필터를 통과하는지 */
+  function passesEsportsChannelFilter(ev: GameEvent): boolean {
+    if (ev.category !== "competition") return true
+    if (esportsChannelsChecked === null) return true
+    if (esportsChannelsChecked.size === 0) return false
+    return ev.externalUrl == null || esportsChannelsChecked.has(ev.externalUrl)
   }
 
   /* Build date->categories map for mini calendar dots (선택된 카테고리만, end_date 있으면 시작·종료일 모두) */
   const eventDates = useMemo(() => {
     const map = new Map<string, EventCategory[]>()
-    const filtered = gameEvents.filter((ev) => categories[ev.category] === true)
+    const filtered = gameEvents.filter(
+      (ev) => categories[ev.category] === true && passesEsportsChannelFilter(ev)
+    )
     for (const ev of filtered) {
       const addKey = (d: Date) => {
         const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
@@ -385,19 +420,19 @@ export function CalendarContent({ events }: CalendarContentProps) {
       if (ev.endDate) addKey(ev.endDate)
     }
     return map
-  }, [gameEvents, categories])
+  }, [gameEvents, categories, esportsChannelsChecked])
 
-  /* Filter & sort events (카테고리 필터 + end_date 기준 활성화 + Past Events 토글) */
+  /* Filter & sort events (카테고리 필터 + E-sports 채널 필터 + end_date 기준 활성화 + Past Events 토글) */
   const filteredEvents = useMemo(() => {
     return gameEvents
-      .filter((ev) => categories[ev.category] === true)
+      .filter((ev) => categories[ev.category] === true && passesEsportsChannelFilter(ev))
       .filter((ev) => {
         if (showPast) return true
         const effectiveEnd = getEffectiveEndDate(ev)
         return effectiveEnd >= today || isSameDay(effectiveEnd, today)
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime())
-  }, [gameEvents, categories, showPast, today])
+  }, [gameEvents, categories, esportsChannelsChecked, showPast, today])
 
   /* Group by month+week */
   const grouped = useMemo(() => {
@@ -425,7 +460,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
   /* Hero highlights: top 3 upcoming (선택된 카테고리만, end_date 있으면 종료일 기준) */
   const heroEvents = useMemo(() => {
     const upcoming = gameEvents
-      .filter((ev) => categories[ev.category] === true)
+      .filter((ev) => categories[ev.category] === true && passesEsportsChannelFilter(ev))
       .filter((ev) => {
         const effectiveEnd = getEffectiveEndDate(ev)
         return effectiveEnd >= today || isSameDay(effectiveEnd, today)
@@ -433,7 +468,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
     return upcoming
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .slice(0, 3)
-  }, [gameEvents, categories, today])
+  }, [gameEvents, categories, esportsChannelsChecked, today])
 
   function handleDateSelect(date: Date) {
     setSelectedDate(date)
@@ -443,6 +478,26 @@ export function CalendarContent({ events }: CalendarContentProps) {
       const el = timelineRef.current.querySelector(`[data-date-key="${dateKey}"]`)
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" })
     }
+  }
+
+  /* E-sports 채널 체크 상태 (null = 전체, Set = 선택된 URL) */
+  const isChannelChecked = (url: string) =>
+    esportsChannelsChecked === null || esportsChannelsChecked.has(url)
+
+  const setChannelChecked = (url: string, checked: boolean) => {
+    setEsportsChannelsChecked((prev) => {
+      const base = prev === null ? new Set(esportsChannels.map((c) => c.url)) : new Set(prev)
+      if (checked) {
+        base.add(url)
+      } else {
+        base.delete(url)
+      }
+      return base.size === esportsChannels.length ? null : base
+    })
+  }
+
+  const setAllChannelsChecked = (checked: boolean) => {
+    setEsportsChannelsChecked(checked ? null : new Set())
   }
 
   /* Category filter UI */
@@ -456,16 +511,82 @@ export function CalendarContent({ events }: CalendarContentProps) {
           const config = CATEGORY_CONFIG[cat]
           const Icon = config.icon
           const isChecked = categories[cat] ?? true
+          const isCompetition = cat === "competition"
           return (
-            <label key={cat} className="flex cursor-pointer items-center gap-2.5">
-              <Checkbox
-                checked={isChecked}
-                onCheckedChange={(checked) => setCategoryChecked(cat, checked === true)}
-                className={config.checkColor}
-              />
-              <Icon className={`h-3.5 w-3.5 ${config.color}`} />
-              <span className="text-sm text-foreground">{config.label}</span>
-            </label>
+            <div key={cat} className="flex items-center gap-2.5">
+              <label className="flex flex-1 cursor-pointer items-center gap-2.5">
+                <Checkbox
+                  checked={isChecked}
+                  onCheckedChange={(checked) => setCategoryChecked(cat, checked === true)}
+                  className={config.checkColor}
+                />
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${config.color}`} />
+                <span className="text-sm text-foreground">{config.label}</span>
+              </label>
+              {isCompetition && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0 gap-1.5 border-border px-2.5 text-xs font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Info className="h-3 w-3" />
+                      Details
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 p-0">
+                    <div className="border-b border-border p-3">
+                      <p className="text-xs font-medium text-muted-foreground">채널별 필터</p>
+                      {esportsChannels.length > 0 && (
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={() => setAllChannelsChecked(true)}
+                          >
+                            전체 선택
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={() => setAllChannelsChecked(false)}
+                          >
+                            전체 해제
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <ScrollArea className="max-h-56">
+                      <div className="flex flex-col gap-1 p-2">
+                        {esportsChannels.length === 0 ? (
+                          <p className="py-4 text-center text-xs text-muted-foreground">
+                            Esports 채널이 없습니다.
+                          </p>
+                        ) : (
+                          esportsChannels.map(({ url, name }) => (
+                            <label
+                              key={url}
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50"
+                            >
+                              <Checkbox
+                                checked={isChannelChecked(url)}
+                                onCheckedChange={(c) => setChannelChecked(url, c === true)}
+                                className={CATEGORY_CONFIG.competition.checkColor}
+                              />
+                              <span className="truncate text-foreground">{name}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
           )
         })}
       </div>
