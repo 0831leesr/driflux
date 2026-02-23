@@ -14,6 +14,7 @@ import {
   Server,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import type { EventRow } from "@/lib/types"
@@ -42,7 +43,7 @@ const CATEGORY_CONFIG: Record<
   { label: string; icon: typeof Trophy; color: string; bgColor: string; barColor: string; checkColor: string }
 > = {
   competition: {
-    label: "E-Sports",
+    label: "E-sports",
     icon: Trophy,
     color: "text-indigo-400",
     bgColor: "bg-indigo-500/15",
@@ -354,15 +355,26 @@ export function CalendarContent({ events }: CalendarContentProps) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [categories, setCategories] = useState<Record<EventCategory, boolean>>({
+    competition: true,
+    patch: true,
+    discount: true,
+    collaboration: true,
+  })
   const [showPast, setShowPast] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
 
   const gameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
 
-  /* Build date->categories map for mini calendar dots (end_date 있으면 시작·종료일 모두 표시) */
+  function setCategoryChecked(cat: EventCategory, checked: boolean) {
+    setCategories((prev) => ({ ...prev, [cat]: checked }))
+  }
+
+  /* Build date->categories map for mini calendar dots (선택된 카테고리만, end_date 있으면 시작·종료일 모두) */
   const eventDates = useMemo(() => {
     const map = new Map<string, EventCategory[]>()
-    for (const ev of gameEvents) {
+    const filtered = gameEvents.filter((ev) => categories[ev.category] === true)
+    for (const ev of filtered) {
       const addKey = (d: Date) => {
         const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
         const arr = map.get(key) || []
@@ -373,18 +385,19 @@ export function CalendarContent({ events }: CalendarContentProps) {
       if (ev.endDate) addKey(ev.endDate)
     }
     return map
-  }, [gameEvents])
+  }, [gameEvents, categories])
 
-  /* Filter & sort events (end_date 있으면 종료일 기준 활성화, Past Events 토글) */
+  /* Filter & sort events (카테고리 필터 + end_date 기준 활성화 + Past Events 토글) */
   const filteredEvents = useMemo(() => {
     return gameEvents
+      .filter((ev) => categories[ev.category] === true)
       .filter((ev) => {
         if (showPast) return true
         const effectiveEnd = getEffectiveEndDate(ev)
         return effectiveEnd >= today || isSameDay(effectiveEnd, today)
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime())
-  }, [gameEvents, showPast, today])
+  }, [gameEvents, categories, showPast, today])
 
   /* Group by month+week */
   const grouped = useMemo(() => {
@@ -409,16 +422,18 @@ export function CalendarContent({ events }: CalendarContentProps) {
     return groups
   }, [filteredEvents])
 
-  /* Hero highlights: top 3 upcoming (end_date 있으면 종료일 기준) */
+  /* Hero highlights: top 3 upcoming (선택된 카테고리만, end_date 있으면 종료일 기준) */
   const heroEvents = useMemo(() => {
-    const upcoming = gameEvents.filter((ev) => {
-      const effectiveEnd = getEffectiveEndDate(ev)
-      return effectiveEnd >= today || isSameDay(effectiveEnd, today)
-    })
+    const upcoming = gameEvents
+      .filter((ev) => categories[ev.category] === true)
+      .filter((ev) => {
+        const effectiveEnd = getEffectiveEndDate(ev)
+        return effectiveEnd >= today || isSameDay(effectiveEnd, today)
+      })
     return upcoming
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .slice(0, 3)
-  }, [gameEvents, today])
+  }, [gameEvents, categories, today])
 
   function handleDateSelect(date: Date) {
     setSelectedDate(date)
@@ -430,10 +445,38 @@ export function CalendarContent({ events }: CalendarContentProps) {
     }
   }
 
+  /* Category filter UI */
+  const categoryFilterUI = (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Categories
+      </h4>
+      <div className="flex flex-col gap-3">
+        {(["competition", "patch", "discount", "collaboration"] as EventCategory[]).map((cat) => {
+          const config = CATEGORY_CONFIG[cat]
+          const Icon = config.icon
+          const isChecked = categories[cat] ?? true
+          return (
+            <label key={cat} className="flex cursor-pointer items-center gap-2.5">
+              <Checkbox
+                checked={isChecked}
+                onCheckedChange={(checked) => setCategoryChecked(cat, checked === true)}
+                className={config.checkColor}
+              />
+              <Icon className={`h-3.5 w-3.5 ${config.color}`} />
+              <span className="text-sm text-foreground">{config.label}</span>
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+
   return (
     <div className="flex flex-col gap-6 p-4 lg:p-6">
-      {/* Mobile: Show Past Events (lg 미만에서 표시) */}
-      <div className="lg:hidden">
+      {/* Mobile: Category filters + Show Past Events (lg 미만에서 표시) */}
+      <div className="flex flex-col gap-4 lg:hidden">
+        {categoryFilterUI}
         <div className="rounded-xl border border-border bg-card p-4">
           <label className="flex cursor-pointer items-center justify-between">
             <span className="text-sm text-foreground">Show Past Events</span>
@@ -470,6 +513,9 @@ export function CalendarContent({ events }: CalendarContentProps) {
               today={today}
             />
 
+            {/* Category Filters */}
+            {categoryFilterUI}
+
             {/* Past Events Toggle */}
             <div className="rounded-xl border border-border bg-card p-4">
               <label className="flex cursor-pointer items-center justify-between">
@@ -492,7 +538,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
               <p className="text-sm text-muted-foreground">
                 {gameEvents.length === 0
                   ? "예정된 이벤트가 없습니다."
-                  : "No upcoming events."}
+                  : "No upcoming events match your filters."}
               </p>
             </div>
           ) : (
