@@ -13,3 +13,8 @@ jobs:
         run: |
           curl -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: Update Esports Events (새로 추가할 작업!)
+        run: |
+          curl -X GET "${{ secrets.DOMAIN }}/api/cron/update-esports-events" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
