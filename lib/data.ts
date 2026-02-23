@@ -1342,12 +1342,9 @@ export async function getGamesByTagsAND(tagSlugs: string[]): Promise<GameWithTag
   return gamesWithTags
 }
 
-/* ── Fetch upcoming events (start_date >= today, game_category로 games 매칭) ── */
+/* ── Fetch all events (game_category로 games 매칭, 날짜 필터는 프론트엔드에서) ── */
 async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
   const supabase = createClientForCache()
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
-  const todayISO = todayStart.toISOString()
 
   const { data: eventsData, error } = await supabase
     .from("events")
@@ -1362,7 +1359,6 @@ async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
       header_image_url,
       external_url
     `)
-    .gte("start_date", todayISO)
     .order("start_date", { ascending: true })
 
   if (error) {

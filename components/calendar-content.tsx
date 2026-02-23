@@ -7,7 +7,6 @@ import {
   Rocket,
   Trophy,
   RefreshCw,
-  Bell,
   ExternalLink,
   ChevronLeft,
   ChevronRight,
@@ -15,7 +14,6 @@ import {
   Server,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import type { EventRow } from "@/lib/types"
@@ -28,6 +26,7 @@ type EventCategory = "competition" | "patch" | "discount" | "collaboration"
 interface GameEvent {
   id: string
   date: Date
+  endDate: Date | null
   title: string
   subtitle: string
   description: string
@@ -43,7 +42,7 @@ const CATEGORY_CONFIG: Record<
   { label: string; icon: typeof Trophy; color: string; bgColor: string; barColor: string; checkColor: string }
 > = {
   competition: {
-    label: "Competition",
+    label: "E-Sports",
     icon: Trophy,
     color: "text-indigo-400",
     bgColor: "bg-indigo-500/15",
@@ -90,6 +89,7 @@ function normalizeCategory(eventType: string | null): EventCategory {
 function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
   return events.map((ev) => {
     const startDate = new Date(ev.start_date)
+    const endDate = ev.end_date ? new Date(ev.end_date) : null
     /* header_image_url 지정 시 우선, 미지정 시 game 이미지 → 기본 이미지 */
     const image = ev.header_image_url?.trim()
       ? getGameImageSrc(ev.header_image_url, "header")
@@ -100,6 +100,7 @@ function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
     return {
       id: String(ev.id),
       date: startDate,
+      endDate,
       title: ev.title,
       subtitle: ev.games ? getDisplayGameTitle(ev.games) : "",
       description: ev.description ?? "",
@@ -140,6 +141,17 @@ function getWeekLabel(date: Date) {
   const weekNum = Math.ceil(date.getDate() / 7)
   const suffixes = ["st", "nd", "rd", "th", "th"]
   return `${weekNum}${suffixes[weekNum - 1]} Week`
+}
+
+/** end_date가 있으면 종료일 기준, 없으면 시작일 기준 */
+function getEffectiveEndDate(ev: GameEvent): Date {
+  return ev.endDate ?? ev.date
+}
+
+function formatDateRange(start: Date, end: Date): string {
+  const s = `${MONTHS_SHORT[start.getMonth()]} ${start.getDate()}`
+  const e = `${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}`
+  return s === e ? s : `${s} – ${e}`
 }
 
 /* ── Mini Calendar Component ── */
@@ -227,8 +239,9 @@ function MiniCalendar({
 /* ── Hero Highlight Card ── */
 function HeroCard({ event, today }: { event: GameEvent; today: Date }) {
   const config = CATEGORY_CONFIG[event.category]
-  const dday = getDDayText(event.date, today)
-  const isPast = event.date < today
+  const effectiveEnd = getEffectiveEndDate(event)
+  const dday = getDDayText(effectiveEnd, today)
+  const isPast = effectiveEnd < today && !isSameDay(effectiveEnd, today)
   return (
     <div className={`group relative flex-1 overflow-hidden rounded-xl border border-border ${isPast ? "opacity-50 grayscale" : ""}`}>
       <div className="relative aspect-[16/7]">
@@ -242,7 +255,9 @@ function HeroCard({ event, today }: { event: GameEvent; today: Date }) {
           </span>
           <h3 className="text-sm font-bold text-foreground lg:text-base">{event.title}</h3>
           <Badge className={`mt-1.5 w-fit border-transparent text-[10px] ${config.bgColor} ${config.color}`}>
-            {MONTHS_SHORT[event.date.getMonth()]} {event.date.getDate()}
+            {event.endDate
+              ? formatDateRange(event.date, event.endDate)
+              : `${MONTHS_SHORT[event.date.getMonth()]} ${event.date.getDate()}`}
           </Badge>
         </div>
       </div>
@@ -251,17 +266,15 @@ function HeroCard({ event, today }: { event: GameEvent; today: Date }) {
 }
 
 /* ── Event Card (Timeline Item) ── */
-function EventCard({ event, today, remindedIds, onToggleRemind }: {
+function EventCard({ event, today }: {
   event: GameEvent
   today: Date
-  remindedIds: Set<string>
-  onToggleRemind: (id: string) => void
 }) {
   const config = CATEGORY_CONFIG[event.category]
   const Icon = config.icon
-  const isPast = event.date < today && !isSameDay(event.date, today)
-  const isToday = isSameDay(event.date, today)
-  const reminded = remindedIds.has(event.id)
+  const effectiveEnd = getEffectiveEndDate(event)
+  const isPast = effectiveEnd < today && !isSameDay(effectiveEnd, today)
+  const isToday = isSameDay(effectiveEnd, today)
 
   function handleExternalClick() {
     if (event.externalUrl) {
@@ -277,29 +290,13 @@ function EventCard({ event, today, remindedIds, onToggleRemind }: {
         <span className={`text-2xl font-black ${isToday ? "text-[hsl(var(--neon-purple))]" : "text-foreground"}`}>
           {event.date.getDate()}
         </span>
-        <span className="text-[10px] font-medium uppercase text-muted-foreground">
-          {MONTHS_SHORT[event.date.getMonth()]} / {DAYS[event.date.getDay()]}
+        <span className="text-[10px] font-medium uppercase text-muted-foreground text-center">
+          {event.endDate
+            ? formatDateRange(event.date, event.endDate)
+            : `${MONTHS_SHORT[event.date.getMonth()]} / ${DAYS[event.date.getDay()]}`}
         </span>
         <div className={`mt-1 h-full w-0.5 rounded-full ${config.barColor} ${isPast ? "opacity-30" : ""}`} />
       </div>
-
-      {/* Game Cover (날짜와 이벤트 이름 사이, game_category 매칭 시에만) */}
-      {event.gameCover && event.gameId ? (
-        <Link
-          href={`/game/${event.gameId}`}
-          className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-90"
-          aria-label={`${event.subtitle} 게임 상세 보기`}
-        >
-          <Image
-            src={event.gameCover}
-            alt={event.subtitle || "Game cover"}
-            fill
-            className="object-cover"
-            sizes="44px"
-            unoptimized
-          />
-        </Link>
-      ) : null}
 
       {/* Center: Info */}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -312,29 +309,38 @@ function EventCard({ event, today, remindedIds, onToggleRemind }: {
         <p className="text-xs text-muted-foreground/70">{event.description}</p>
       </div>
 
-      {/* Right: Actions */}
-      <div className="flex shrink-0 flex-col items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          className={`h-8 w-8 ${reminded ? "text-[hsl(var(--neon-purple))]" : "text-muted-foreground hover:text-foreground"}`}
-          onClick={() => onToggleRemind(event.id)}
-          aria-label={reminded ? "Remove reminder" : "Remind me"}
-        >
-          <Bell className={`h-4 w-4 ${reminded ? "fill-current" : ""}`} />
-        </Button>
-        {event.externalUrl && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            aria-label="View details"
-            onClick={handleExternalClick}
-          >
-            <ExternalLink className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
+      {/* Right: Actions + Game Cover (가장 오른쪽) */}
+      {(event.externalUrl || (event.gameCover && event.gameId)) && (
+        <div className="flex shrink-0 flex-col items-center gap-2">
+          {event.externalUrl && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              aria-label="View details"
+              onClick={handleExternalClick}
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          )}
+          {event.gameCover && event.gameId && (
+            <Link
+              href={`/game/${event.gameId}`}
+              className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-90"
+              aria-label={`${event.subtitle} 게임 상세 보기`}
+            >
+              <Image
+                src={event.gameCover}
+                alt={event.subtitle || "Game cover"}
+                fill
+                className="object-cover"
+                sizes="44px"
+                unoptimized
+              />
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -348,54 +354,37 @@ export function CalendarContent({ events }: CalendarContentProps) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [categories, setCategories] = useState<Record<EventCategory, boolean>>({
-    competition: true,
-    patch: true,
-    discount: true,
-    collaboration: true,
-  })
   const [showPast, setShowPast] = useState(false)
-  const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set())
   const timelineRef = useRef<HTMLDivElement>(null)
 
   const gameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
 
-  function setCategoryChecked(cat: EventCategory, checked: boolean) {
-    setCategories((prev) => ({ ...prev, [cat]: checked }))
-  }
-
-  function toggleRemind(id: string) {
-    setRemindedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  /* Build date->categories map for mini calendar dots (선택된 카테고리만) */
+  /* Build date->categories map for mini calendar dots (end_date 있으면 시작·종료일 모두 표시) */
   const eventDates = useMemo(() => {
     const map = new Map<string, EventCategory[]>()
-    const filtered = gameEvents.filter((ev) => categories[ev.category] === true)
-    for (const ev of filtered) {
-      const key = `${ev.date.getFullYear()}-${ev.date.getMonth()}-${ev.date.getDate()}`
-      const arr = map.get(key) || []
-      arr.push(ev.category)
-      map.set(key, arr)
+    for (const ev of gameEvents) {
+      const addKey = (d: Date) => {
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+        const arr = map.get(key) || []
+        if (!arr.includes(ev.category)) arr.push(ev.category)
+        map.set(key, arr)
+      }
+      addKey(ev.date)
+      if (ev.endDate) addKey(ev.endDate)
     }
     return map
-  }, [gameEvents, categories])
+  }, [gameEvents])
 
-  /* Filter & sort events (categories[ev.category] === true로 명시적 체크) */
+  /* Filter & sort events (end_date 있으면 종료일 기준 활성화, Past Events 토글) */
   const filteredEvents = useMemo(() => {
     return gameEvents
-      .filter((ev) => categories[ev.category] === true)
       .filter((ev) => {
         if (showPast) return true
-        return ev.date >= today || isSameDay(ev.date, today)
+        const effectiveEnd = getEffectiveEndDate(ev)
+        return effectiveEnd >= today || isSameDay(effectiveEnd, today)
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime())
-  }, [gameEvents, categories, showPast, today])
+  }, [gameEvents, showPast, today])
 
   /* Group by month+week */
   const grouped = useMemo(() => {
@@ -420,15 +409,16 @@ export function CalendarContent({ events }: CalendarContentProps) {
     return groups
   }, [filteredEvents])
 
-  /* Hero highlights: top 3 upcoming (선택된 카테고리만) */
+  /* Hero highlights: top 3 upcoming (end_date 있으면 종료일 기준) */
   const heroEvents = useMemo(() => {
-    const upcoming = gameEvents
-      .filter((ev) => categories[ev.category] === true)
-      .filter((ev) => ev.date >= today || isSameDay(ev.date, today))
+    const upcoming = gameEvents.filter((ev) => {
+      const effectiveEnd = getEffectiveEndDate(ev)
+      return effectiveEnd >= today || isSameDay(effectiveEnd, today)
+    })
     return upcoming
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .slice(0, 3)
-  }, [gameEvents, categories, today])
+  }, [gameEvents, today])
 
   function handleDateSelect(date: Date) {
     setSelectedDate(date)
@@ -440,38 +430,10 @@ export function CalendarContent({ events }: CalendarContentProps) {
     }
   }
 
-  /* Category filter UI (재사용) */
-  const categoryFilterUI = (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Categories
-      </h4>
-      <div className="flex flex-col gap-3">
-        {(["competition", "patch", "discount", "collaboration"] as EventCategory[]).map((cat) => {
-          const config = CATEGORY_CONFIG[cat]
-          const Icon = config.icon
-          const isChecked = categories[cat] ?? true
-          return (
-            <label key={cat} className="flex cursor-pointer items-center gap-2.5">
-              <Checkbox
-                checked={isChecked}
-                onCheckedChange={(checked) => setCategoryChecked(cat, checked === true)}
-                className={config.checkColor}
-              />
-              <Icon className={`h-3.5 w-3.5 ${config.color}`} />
-              <span className="text-sm text-foreground">{config.label}</span>
-            </label>
-          )
-        })}
-      </div>
-    </div>
-  )
-
   return (
     <div className="flex flex-col gap-6 p-4 lg:p-6">
-      {/* Mobile: Category filters (lg 미만에서 표시) */}
-      <div className="flex flex-col gap-4 lg:hidden">
-        {categoryFilterUI}
+      {/* Mobile: Show Past Events (lg 미만에서 표시) */}
+      <div className="lg:hidden">
         <div className="rounded-xl border border-border bg-card p-4">
           <label className="flex cursor-pointer items-center justify-between">
             <span className="text-sm text-foreground">Show Past Events</span>
@@ -508,9 +470,6 @@ export function CalendarContent({ events }: CalendarContentProps) {
               today={today}
             />
 
-            {/* Category Filters */}
-            {categoryFilterUI}
-
             {/* Past Events Toggle */}
             <div className="rounded-xl border border-border bg-card p-4">
               <label className="flex cursor-pointer items-center justify-between">
@@ -533,7 +492,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
               <p className="text-sm text-muted-foreground">
                 {gameEvents.length === 0
                   ? "예정된 이벤트가 없습니다."
-                  : "No upcoming events match your filters."}
+                  : "No upcoming events."}
               </p>
             </div>
           ) : (
@@ -563,12 +522,7 @@ export function CalendarContent({ events }: CalendarContentProps) {
                     >
                       {/* Timeline Dot */}
                       <div className={`absolute -left-3 top-5 h-2.5 w-2.5 rounded-full border-2 border-background ${CATEGORY_CONFIG[ev.category].barColor}`} />
-                      <EventCard
-                        event={ev}
-                        today={today}
-                        remindedIds={remindedIds}
-                        onToggleRemind={toggleRemind}
-                      />
+                      <EventCard event={ev} today={today} />
                     </div>
                   ))}
                 </div>
