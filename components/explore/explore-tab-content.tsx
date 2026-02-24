@@ -40,7 +40,7 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
   const [isStreamsLoadingMore, setIsStreamsLoadingMore] = useState(false)
   const [hasReachedEndGames, setHasReachedEndGames] = useState(false)
   const [hasReachedEndStreams, setHasReachedEndStreams] = useState(false)
-  const BATCH_SIZE = 8
+  const BATCH_SIZE = 16
 
   // Reset display count and end flags when data source changes (tags selected/cleared)
   useEffect(() => {
