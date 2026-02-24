@@ -22,3 +22,12 @@ jobs:
         run: |
           curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-esports-events" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  update-videos:
+    runs-on: ubuntu-latest
+    needs: []  # 다른 job과 독립 실행
+    steps:
+      - name: Update Chzzk VOD Cache
+        run: |
+          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-videos?limit=30" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

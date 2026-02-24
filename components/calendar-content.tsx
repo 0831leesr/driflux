@@ -352,9 +352,10 @@ function EventCard({ event, today }: {
 /* ── Main Export ── */
 interface CalendarContentProps {
   events: EventRow[]
+  esportsChannels?: Array<{ url: string; name: string }>
 }
 
-export function CalendarContent({ events }: CalendarContentProps) {
+export function CalendarContent({ events, esportsChannels = [] }: CalendarContentProps) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -370,22 +371,6 @@ export function CalendarContent({ events }: CalendarContentProps) {
   } = useCalendarSettings()
 
   const gameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
-
-  /* Esports 이벤트에서 채널 목록 추출 (event_type=Esports, external_url + title에서 [채널명] 파싱) */
-  const esportsChannels = useMemo(() => {
-    const seen = new Map<string, string>()
-    for (const ev of events) {
-      if ((ev.event_type?.trim() ?? "").toLowerCase() !== "esports") continue
-      const url = ev.external_url?.trim()
-      if (!url) continue
-      const match = ev.title?.match(/^\[([^\]]+)\]/)
-      const name = match ? match[1].trim() : url
-      if (!seen.has(url)) seen.set(url, name)
-    }
-    return Array.from(seen.entries())
-      .map(([url, name]) => ({ url, name }))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [events])
 
   /** E-sports 이벤트가 채널 필터를 통과하는지 (esportsChannelsChecked: null=전체, []=없음, string[]=선택) */
   function passesEsportsChannelFilter(ev: GameEvent): boolean {

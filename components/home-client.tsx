@@ -6,7 +6,7 @@ import { Gamepad2, ExternalLink, Tags } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
-import type { TrendingGameRow } from "@/lib/data"
+import type { TrendingGameRow, EsportsChannel } from "@/lib/data"
 import { StreamSection } from "@/components/stream-grid"
 import type { StreamData } from "@/components/stream-card"
 import { CalendarContent } from "@/components/calendar-content"
@@ -29,9 +29,10 @@ interface HomeClientProps {
   liveStreams: StreamData[]
   trendingGames: TrendingGameRow[]
   upcomingEvents: EventRow[]
+  esportsChannels: EsportsChannel[]
 }
 
-export function HomeClient({ liveStreams, trendingGames, upcomingEvents }: HomeClientProps) {
+export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esportsChannels }: HomeClientProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("main")
   const [streamModalOpen, setStreamModalOpen] = useState(false)
@@ -147,7 +148,7 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents }: HomeC
         ) : activeTab === "explore" ? (
           <ExploreTabContent onStreamClick={handleStreamClick} />
         ) : activeTab === "calendar" ? (
-          <CalendarContent events={upcomingEvents} />
+          <CalendarContent events={upcomingEvents} esportsChannels={esportsChannels} />
         ) : null}
       </main>
 

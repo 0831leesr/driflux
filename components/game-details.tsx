@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -9,12 +9,14 @@ import {
   Radio,
   Tag,
   Users,
+  Video,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StreamCard, type StreamData } from "@/components/stream-card"
+import { VideoCard, type VideoData } from "@/components/video-card"
 import type { GameRow } from "@/lib/data"
-import { getDisplayGameTitle } from "@/lib/utils"
+import { getDisplayGameTitle, getBestGameImage } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import {
@@ -29,22 +31,59 @@ import {
 } from "@/components/ui/alert-dialog"
 
 /* ── Main Game Details Component ── */
+type TabType = "live" | "video"
+
 export function GameDetailsClient({
   game,
   streams,
   onBack,
   onStreamClick,
+  onVideoClick,
 }: {
   game: GameRow
   streams: StreamData[]
   onBack: () => void
   onStreamClick?: (stream: StreamData) => void
+  onVideoClick?: (video: VideoData) => void
 }) {
   const { isFavorite, toggleFavorite } = useFavoriteGames()
   const isFollowing = isFavorite(game.id)
   const [steamModalOpen, setSteamModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabType>("live")
+  const [videos, setVideos] = useState<VideoData[]>([])
+  const [videosLoading, setVideosLoading] = useState(false)
+  const [videosFetched, setVideosFetched] = useState(false)
 
   const liveStreams = streams
+  const categoryId = game.english_title?.trim()
+  const gameCover = getBestGameImage(game.header_image_url, game.cover_image_url)
+  const gameTitle = getDisplayGameTitle(game)
+
+  useEffect(() => {
+    if (activeTab !== "video" || !categoryId || videosFetched) return
+    setVideosLoading(true)
+    fetch(`/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=20`)
+      .then((res) => res.json())
+      .then((data) => {
+        const items = data.videos ?? []
+        setVideos(
+          items.map((v: any) => ({
+            videoId: v.videoId ?? "",
+            videoTitle: v.videoTitle ?? "No Title",
+            thumbnailImageUrl: v.thumbnailImageUrl ?? "",
+            readCount: Number(v.readCount ?? 0),
+            channelName: v.channel?.channelName ?? "Unknown",
+            channelId: v.channel?.channelId ?? "",
+            gameCover,
+            gameTitle,
+            gameId: game.id,
+          }))
+        )
+        setVideosFetched(true)
+      })
+      .catch(() => setVideos([]))
+      .finally(() => setVideosLoading(false))
+  }, [activeTab, categoryId, videosFetched, gameCover, gameTitle, game.id])
   
   // Calculate total viewers
   const totalViewers = liveStreams.reduce((sum, stream) => sum + (stream.viewers || 0), 0)
@@ -222,19 +261,79 @@ export function GameDetailsClient({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Live Streams */}
+      {/* Live / Video Tabs */}
       <div className="flex flex-col gap-6 p-4 lg:p-6">
-        <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
-          <div className="card-grid-4">
-          {liveStreams.map((stream, i) => (
-            <StreamCard
-              key={`${stream.streamerName}-${i}`}
-              stream={stream}
-              onStreamClick={onStreamClick}
-            />
-          ))}
-          </div>
+        <div className="flex gap-2 border-b border-border pb-2">
+          <Button
+            variant={activeTab === "live" ? "default" : "ghost"}
+            size="sm"
+            className={
+              activeTab === "live"
+                ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+                : "text-muted-foreground hover:text-foreground"
+            }
+            onClick={() => setActiveTab("live")}
+          >
+            <Radio className="mr-1.5 h-4 w-4" />
+            Live
+          </Button>
+          <Button
+            variant={activeTab === "video" ? "default" : "ghost"}
+            size="sm"
+            className={
+              activeTab === "video"
+                ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+                : "text-muted-foreground hover:text-foreground"
+            }
+            onClick={() => setActiveTab("video")}
+          >
+            <Video className="mr-1.5 h-4 w-4" />
+            Video
+          </Button>
         </div>
+
+        {activeTab === "live" && (
+          <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
+            <div className="card-grid-4">
+              {liveStreams.map((stream, i) => (
+                <StreamCard
+                  key={`${stream.streamerName}-${i}`}
+                  stream={stream}
+                  onStreamClick={onStreamClick}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "video" && (
+          <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
+            {!categoryId ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                이 게임의 다시보기 영상 정보를 불러올 수 없습니다.
+              </p>
+            ) : videosLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                영상 목록을 불러오는 중...
+              </p>
+            ) : videos.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                아직 등록된 다시보기 영상이 없습니다.
+              </p>
+            ) : (
+              <div className="card-grid-4">
+                {videos.map((video, i) => (
+                  <VideoCard
+                    key={`${video.videoId}-${i}`}
+                    video={video}
+                    onVideoClick={onVideoClick}
+                    priority={i < 4}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

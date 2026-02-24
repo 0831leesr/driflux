@@ -90,6 +90,25 @@ export interface SearchedStreamData {
   category?: string | null
 }
 
+/** 다시보기 영상 API 응답 아이템 */
+export interface ChzzkVideoItem {
+  videoNo: number
+  videoId: string
+  videoTitle: string
+  videoType: string
+  publishDate: string
+  thumbnailImageUrl: string
+  duration: number
+  readCount: number
+  videoCategory: string
+  videoCategoryValue: string
+  channel: {
+    channelId: string
+    channelName: string
+    channelImageUrl: string
+  }
+}
+
 /** 라이브 카테고리 API 응답 아이템 (getPopularCategories) */
 export interface ChzzkPopularCategory {
   title: string
@@ -105,6 +124,8 @@ const CHZZK_SERVICE_V2 = `${CHZZK_API_BASE}/service/v2`
 export const CHZZK_SEARCH_LIVES_URL = `${CHZZK_SERVICE_V1}/search/lives`
 export const CHZZK_CATEGORY_LIVES_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V2}/categories/GAME/${encodeURIComponent(categoryId)}/lives`
+export const CHZZK_CATEGORY_VIDEOS_URL = (categoryId: string) =>
+  `${CHZZK_SERVICE_V2}/categories/GAME/${encodeURIComponent(categoryId)}/videos`
 const RATE_LIMIT_DELAY = 1000 // 1초 (치지직 API Rate Limit 고려)
 const DEFAULT_THUMBNAIL_SIZE = "720" // 썸네일 해상도 (480, 720, 1080 등)
 const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/1280x720/1a1a1a/ffffff?text=No+Thumbnail" // Fallback thumbnail
@@ -460,6 +481,89 @@ export async function getChzzkStreamsByCategory(
     return results
   } catch (error) {
     console.error(`[Chzzk Category] ✗ Exception:`, error instanceof Error ? error.message : String(error))
+    return []
+  }
+}
+
+/**
+ * Get VOD/video list by category ID (game's english_title = Chzzk category)
+ *
+ * API: GET https://api.chzzk.naver.com/service/v2/categories/GAME/{categoryId}/videos
+ *
+ * @param categoryId - Chzzk category ID (e.g., "OMORI", "Rimworld")
+ * @param size - Number of videos to fetch (default: 20)
+ * @param offset - Pagination offset (default: 0)
+ * @returns Array of video data
+ */
+export async function getChzzkVideosByCategory(
+  categoryId: string,
+  size: number = 20,
+  offset: number = 0
+): Promise<ChzzkVideoItem[]> {
+  if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+    console.warn("[Chzzk Videos] Skipping invalid categoryId:", JSON.stringify(categoryId))
+    return []
+  }
+
+  const trimmedId = categoryId.trim()
+  const url = `${CHZZK_CATEGORY_VIDEOS_URL(trimmedId)}?size=${size}&offset=${offset}`
+  console.log("[Chzzk Request] Fetching category videos:", url)
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": BROWSER_USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://chzzk.naver.com/",
+      },
+      cache: "no-store",
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`[Chzzk Videos] 404 Not Found: ${url}`)
+      } else {
+        console.error(`[Chzzk Videos] ✗ HTTP Error: ${response.status}`)
+        const errorText = await response.text()
+        console.error(`[Chzzk Videos] Error Body:`, errorText.substring(0, 500))
+      }
+      return []
+    }
+
+    const data = await response.json()
+    if (!data || data.code !== 200) {
+      console.error(`[Chzzk Videos] ✗ API Error: code=${data?.code}`)
+      return []
+    }
+
+    const items = data.content?.data ?? []
+    console.log(`[Chzzk] Fetched ${items.length} videos for category "${trimmedId}".`)
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return []
+    }
+
+    return items.map((item: any) => ({
+      videoNo: item.videoNo ?? 0,
+      videoId: item.videoId ?? "",
+      videoTitle: item.videoTitle ?? "No Title",
+      videoType: item.videoType ?? "UPLOAD",
+      publishDate: item.publishDate ?? "",
+      thumbnailImageUrl: item.thumbnailImageUrl ?? "",
+      duration: Number(item.duration ?? 0),
+      readCount: Number(item.readCount ?? 0),
+      videoCategory: item.videoCategory ?? trimmedId,
+      videoCategoryValue: item.videoCategoryValue ?? "",
+      channel: {
+        channelId: item.channel?.channelId ?? "",
+        channelName: item.channel?.channelName ?? "Unknown",
+        channelImageUrl: item.channel?.channelImageUrl ?? "",
+      },
+    }))
+  } catch (error) {
+    console.error(`[Chzzk Videos] ✗ Exception:`, error instanceof Error ? error.message : String(error))
     return []
   }
 }

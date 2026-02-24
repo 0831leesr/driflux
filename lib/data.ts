@@ -22,6 +22,7 @@ export interface GameRow {
   id: number
   title: string
   korean_title?: string | null
+  english_title?: string | null
   steam_appid: number | null
   cover_image_url: string | null
   header_image_url?: string | null
@@ -1437,6 +1438,58 @@ export async function fetchUpcomingEvents(): Promise<EventRow[]> {
   return unstable_cache(
     fetchUpcomingEventsImpl,
     ["upcoming-events"],
+    { revalidate: CACHE_REVALIDATE_EVENTS, tags: ["upcoming-events"] }
+  )()
+}
+
+/** Esports 채널 목록 (1개 이상 이벤트 중계하는 모든 채널, events limit 영향 없음) */
+export interface EsportsChannel {
+  url: string
+  name: string
+}
+
+async function fetchEsportsChannelsImpl(): Promise<EsportsChannel[]> {
+  const supabase = createClientForCache()
+  const seen = new Map<string, string>()
+  let offset = 0
+  const pageSize = 1000
+
+  while (true) {
+    const { data: rows, error } = await supabase
+      .from("events")
+      .select("external_url, title")
+      .eq("event_type", "Esports")
+      .not("external_url", "is", null)
+      .order("start_date", { ascending: true })
+      .range(offset, offset + pageSize - 1)
+
+    if (error) {
+      console.error("fetchEsportsChannels error:", error.message)
+      break
+    }
+    if (!rows?.length) break
+
+    for (const row of rows as Array<{ external_url: string; title: string | null }>) {
+      const url = row.external_url?.trim()
+      if (!url) continue
+      if (seen.has(url)) continue
+      const match = (row.title ?? "").match(/^\[([^\]]+)\]/)
+      seen.set(url, match ? match[1].trim() : url)
+    }
+
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
+
+  return Array.from(seen.entries())
+    .map(([url, name]) => ({ url, name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function fetchEsportsChannels(): Promise<EsportsChannel[]> {
+  return unstable_cache(
+    fetchEsportsChannelsImpl,
+    ["esports-channels"],
     { revalidate: CACHE_REVALIDATE_EVENTS, tags: ["upcoming-events"] }
   )()
 }
