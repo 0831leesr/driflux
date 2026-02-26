@@ -16,7 +16,7 @@ const IGDB_GAME_LOCALIZATIONS_URL = `${IGDB_BASE}/game_localizations`
 const IGDB_EXTERNAL_GAMES_URL = `${IGDB_BASE}/external_games`
 
 const FIELDS =
-  "name, cover.url, first_release_date, screenshots.url, artworks.url, category, total_rating_count, summary, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
+  "name, cover.url, first_release_date, screenshots.url, artworks.url, category, total_rating_count, summary, aggregated_rating, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
 
 /** 메인 게임만 (공통 쿼리 조건) */
 const COMMON_WHERE = "category = 0"
@@ -33,6 +33,8 @@ export interface IGDBGameResult {
   publisher: string | null
   /** IGDB game ID (for Steam App ID lookup via external_games) */
   igdb_game_id?: number
+  /** 전문 평론가 점수 (aggregated_rating, 100점 만점, 소수점 반올림 정수) */
+  critic_score: number | null
 }
 
 /**
@@ -64,6 +66,7 @@ type RawGame = {
   category?: number
   total_rating_count?: number
   summary?: string
+  aggregated_rating?: number
   screenshots?: Array<{ url?: string }>
   artworks?: Array<{ url?: string }>
   genres?: Array<{ name?: string }>
@@ -109,6 +112,13 @@ function parseGameToResult(game: RawGame, fallbackTitle: string, igdbGameId?: nu
     developer = companies[0].company.name.trim() || null
   }
 
+  // aggregated_rating: 100점 만점 Float → 소수점 첫째 자리 반올림 정수, 없으면 null
+  const rawRating = game.aggregated_rating
+  const critic_score =
+    rawRating != null && !Number.isNaN(rawRating)
+      ? Math.round(rawRating)
+      : null
+
   return {
     title: game.name ?? fallbackTitle,
     image_url: imageUrl,
@@ -118,6 +128,7 @@ function parseGameToResult(game: RawGame, fallbackTitle: string, igdbGameId?: nu
     tags,
     developer,
     publisher,
+    critic_score,
     ...(igdbGameId != null && { igdb_game_id: igdbGameId }),
   }
 }

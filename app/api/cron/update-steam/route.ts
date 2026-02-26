@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence } from "@/lib/steam"
+import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence, getSteamReviewSummary } from "@/lib/steam"
 import { getGameMappings, resolveMapping, type GameMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
 import { searchIGDBGame, fetchSteamAppIdFromIGDB } from "@/lib/igdb"
@@ -224,6 +224,13 @@ export async function GET(request: Request) {
           }
         }
 
+        // --- 2.5. 스팀 리뷰 요약 (steamAppId 존재 시) ---
+        let steamReviewSummary: Awaited<ReturnType<typeof getSteamReviewSummary>> = null
+        if (steamAppId && !STEAM_SKIP_APP_IDS.has(steamAppId)) {
+          steamReviewSummary = await getSteamReviewSummary(steamAppId)
+          await delay(500)
+        }
+
         const hasMappingOverrides = mapping && (
           mapping.override_cover_image || mapping.override_header_image || mapping.override_background_image ||
           mapping.override_price != null || mapping.override_is_free != null ||
@@ -255,6 +262,10 @@ export async function GET(request: Request) {
           is_free: st ? st.is_free : false,
           currency: (st ? st.currency : null) ?? priceFallback?.currency ?? null,
           platform: mapping?.skip_steam ? "non-steam" : (steamAppId != null ? "steam" : "unknown"),
+          critic_score: ig?.critic_score ?? null,
+          steam_review_desc: steamReviewSummary?.review_score_desc ?? null,
+          steam_positive_ratio: steamReviewSummary?.steam_positive_ratio ?? null,
+          steam_total_reviews: steamReviewSummary?.steam_total_reviews ?? null,
         }
         if (st) {
           updatePayload.title = st.title
@@ -288,6 +299,9 @@ export async function GET(request: Request) {
             updatePayload.discount_rate = mapping.override_price != null ? 0 : null
             updatePayload.currency = null
             updatePayload.is_free = mapping.override_is_free ?? null
+            updatePayload.steam_review_desc = null
+            updatePayload.steam_positive_ratio = null
+            updatePayload.steam_total_reviews = null
           }
         }
 

@@ -489,6 +489,70 @@ export function getSteamStoreUrl(appId: number): string {
   return `https://store.steampowered.com/app/${appId}`
 }
 
+/** 스팀 리뷰 요약 API 응답 */
+export interface SteamReviewSummary {
+  review_score_desc: string | null
+  steam_positive_ratio: number | null
+  steam_total_reviews: number | null
+}
+
+/**
+ * Fetch Steam review summary for a game (한국어 평가 요약, 긍정 비율, 총 리뷰 수)
+ *
+ * @param appId - Steam App ID
+ * @returns Review summary or null on failure
+ */
+export async function getSteamReviewSummary(
+  appId: number
+): Promise<SteamReviewSummary | null> {
+  try {
+    const url = `https://store.steampowered.com/appreviews/${appId}?json=1&language=korean&num_per_page=0`
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": "Driflux/1.0",
+      },
+    })
+
+    if (!response.ok) {
+      console.error(`[Steam Reviews] HTTP Error: ${response.status} for app ${appId}`)
+      return null
+    }
+
+    const data = (await response.json()) as {
+      success?: number
+      query_summary?: {
+        review_score_desc?: string
+        total_positive?: number
+        total_reviews?: number
+      }
+    }
+
+    if (!data.success || !data.query_summary) {
+      return null
+    }
+
+    const qs = data.query_summary
+    const totalPositive = qs.total_positive ?? 0
+    const totalReviews = qs.total_reviews ?? 0
+
+    const steam_positive_ratio =
+      totalReviews > 0
+        ? Math.round((totalPositive / totalReviews) * 100)
+        : null
+
+    return {
+      review_score_desc: qs.review_score_desc?.trim() || null,
+      steam_positive_ratio,
+      steam_total_reviews: totalReviews > 0 ? totalReviews : null,
+    }
+  } catch (error) {
+    console.error(`[Steam Reviews] Error fetching app ${appId}:`, error)
+    return null
+  }
+}
+
 /* ── Popular Game IDs for Testing ── */
 export const POPULAR_STEAM_GAMES = {
   ELDEN_RING: 1245620,
