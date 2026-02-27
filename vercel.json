@@ -1,1 +1,1 @@
-{"crons":[{"path":"/api/cron/discover-top-games","schedule":"0 0 * * *"},{"path":"/api/cron/update-streams","schedule":"0 0 * * *"},{"path":"/api/cron/update-steam","schedule":"0 0 * * *"}]}
+{"crons":[{"path":"/api/cron/discover-top-games","schedule":"0 0 * * *"},{"path":"/api/cron/update-streams","schedule":"0 0 * * *"},{"path":"/api/cron/update-steam","schedule":"0 0 * * *"},{"path":"/api/cron/update-evaluations","schedule":"0 1 * * *"}]}
