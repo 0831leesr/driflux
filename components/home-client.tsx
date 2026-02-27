@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Gamepad2, ExternalLink, Tags } from "lucide-react"
+import { Gamepad2, ExternalLink, Tags, Video, Bookmark } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
 import type { TrendingGameRow, EsportsChannel } from "@/lib/data"
-import { StreamSection } from "@/components/stream-grid"
+import { FollowStreamGrid } from "@/components/follow-stream-grid"
 import type { StreamData } from "@/components/stream-card"
 import { CalendarContent } from "@/components/calendar-content"
 import type { EventRow } from "@/lib/types"
@@ -35,6 +35,7 @@ interface HomeClientProps {
 export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esportsChannels }: HomeClientProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("main")
+  const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved">("games")
   const [streamModalOpen, setStreamModalOpen] = useState(false)
   const [selectedStream, setSelectedStream] = useState<StreamData | null>(null)
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
@@ -107,19 +108,25 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
               value="main"
               className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-[hsl(var(--neon-purple))] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
-              Main
+              메인
+            </TabsTrigger>
+            <TabsTrigger
+              value="follow"
+              className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-[hsl(var(--neon-purple))] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            >
+              팔로우
             </TabsTrigger>
             <TabsTrigger
               value="explore"
               className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-[hsl(var(--neon-purple))] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
-              Game Explore
+              탐색
             </TabsTrigger>
             <TabsTrigger
               value="calendar"
               className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-[hsl(var(--neon-purple))] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
-              Calendar
+              캘린더
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -130,20 +137,59 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
         {activeTab === "main" ? (
           <div className="flex flex-col gap-8 p-4 lg:p-6">
             <TrendingGames games={trendingGames} />
-            <StreamSection
-              title="Live: My Followed Games"
-              icon={<Gamepad2 className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
-              streams={followingGamesStreams}
-              onStreamClick={handleStreamClick}
-              emptyMessage="No favorite games yet. Follow games to see their live streams here!"
-            />
-            <StreamSection
-              title="Live: My Followed Tags"
-              icon={<Tags className="h-5 w-5 text-[hsl(var(--neon-green))]" />}
-              streams={followingTagsStreams}
-              onStreamClick={handleStreamClick}
-              emptyMessage="No favorite tags yet. Follow tags to see their live streams here!"
-            />
+          </div>
+        ) : activeTab === "follow" ? (
+          <div className="flex flex-col p-4 lg:p-6">
+            <Tabs value={followSubTab} onValueChange={(v) => setFollowSubTab(v as "games" | "tags" | "replay" | "saved")} className="w-full">
+              <TabsList className="mb-4 h-10 bg-muted/50 p-1">
+                <TabsTrigger value="games" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Gamepad2 className="h-4 w-4" />
+                  게임
+                </TabsTrigger>
+                <TabsTrigger value="tags" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Tags className="h-4 w-4" />
+                  태그
+                </TabsTrigger>
+                <TabsTrigger value="replay" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Video className="h-4 w-4" />
+                  다시보기
+                </TabsTrigger>
+                <TabsTrigger value="saved" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Bookmark className="h-4 w-4" />
+                  저장
+                </TabsTrigger>
+              </TabsList>
+              <div className="flex-1">
+                {followSubTab === "games" && (
+                  <FollowStreamGrid
+                    title="팔로우 중인 게임"
+                    icon={<Gamepad2 className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
+                    streams={followingGamesStreams}
+                    onStreamClick={handleStreamClick}
+                    emptyMessage="팔로우 중인 게임이 없습니다. 게임을 팔로우하면 여기서 라이브 스트림을 확인할 수 있습니다!"
+                  />
+                )}
+                {followSubTab === "tags" && (
+                  <FollowStreamGrid
+                    title="팔로우 중인 태그"
+                    icon={<Tags className="h-5 w-5 text-[hsl(var(--neon-green))]" />}
+                    streams={followingTagsStreams}
+                    onStreamClick={handleStreamClick}
+                    emptyMessage="팔로우 중인 태그가 없습니다. 태그를 팔로우하면 여기서 라이브 스트림을 확인할 수 있습니다!"
+                  />
+                )}
+                {followSubTab === "replay" && (
+                  <div className="flex flex-1 items-center justify-center rounded-xl border border-border bg-card/50 p-12 text-center">
+                    <p className="text-sm text-muted-foreground">추후 업데이트 예정입니다.</p>
+                  </div>
+                )}
+                {followSubTab === "saved" && (
+                  <div className="flex flex-1 items-center justify-center rounded-xl border border-border bg-card/50 p-12 text-center">
+                    <p className="text-sm text-muted-foreground">추후 업데이트 예정입니다.</p>
+                  </div>
+                )}
+              </div>
+            </Tabs>
           </div>
         ) : activeTab === "explore" ? (
           <ExploreTabContent onStreamClick={handleStreamClick} />

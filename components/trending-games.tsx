@@ -27,7 +27,7 @@ export function TrendingGames({ games }: { games: TrendingGameRow[] }) {
     <section>
       <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-foreground">
         <Flame className="h-5 w-5 text-orange-400" />
-        Now Trending (Don{"'"}t Miss Out)
+        Now Trending
       </h2>
       <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="card-grid-4">

@@ -215,26 +215,13 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
 
   return (
     <div className="flex flex-col gap-8 p-4 lg:p-6">
-      {/* Header */}
-      <div>
-        <h1 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">
-          Explore Games
-        </h1>
-        <p className="text-sm text-muted-foreground sm:text-base">
-          Find your next favorite game by vibe
-        </p>
-      </div>
-
       {/* Filter Section */}
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              Filter by Vibe
+              게임 태그로 검색
             </h2>
-            <p className="text-sm text-muted-foreground">
-              Select tags to find games that match your mood
-            </p>
           </div>
           <TagSearchInput
             onAddTag={addTag}
@@ -325,9 +312,6 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
         </TabsList>
 
         <div className={exploreSubTab === "games" ? "" : "hidden"}>
-          <div className="mb-3 text-sm text-muted-foreground">
-            시청자 수 순으로 정렬됨
-          </div>
           {isDataLoading ? (
             <CardGridSkeleton />
           ) : games.length > 0 ? (
@@ -384,9 +368,6 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
         </div>
 
         <div className={exploreSubTab === "live" ? "" : "hidden"}>
-          <div className="mb-3 text-sm text-muted-foreground">
-            시청자 수 순으로 정렬됨
-          </div>
           {isDataLoading ? (
             <CardGridSkeleton />
           ) : streams.length > 0 ? (
