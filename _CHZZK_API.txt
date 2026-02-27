@@ -1,4 +1,4 @@
-CHZZK에서 사용중인 비공식 API를 정리합니다.
+CHZZK에서 사용중인 비공식 API 중 일부부를 정리합니다.
 
 
 [현재 시청자 수 최고 게임]
@@ -52,6 +52,7 @@ CHZZK에서 사용중인 비공식 API를 정리합니다.
 "tvAppViewingPolicyType": "ALLOWED",
 "party": null
 
+
 [특정 카테고리 특정 라이브 목록] (!!확실한 정보 아님, 사용하지 말 것!!)
 * https://api.chzzk.naver.com/service/v2/categories/GAME/"AAA"/lives?concurrentUserCount="NN"&liveId="MMM"
 - "AAA" = 게임 슬러그
@@ -68,10 +69,7 @@ CHZZK에서 사용중인 비공식 API를 정리합니다.
 "accumulateCount": 0,
 "openDate": "2026-02-27 11:42:54",
 "adult": false,
-"tags": [
-    "이터널리턴",
-    "버튜버"
-                ],
+"tags": ["이터널리턴", "버튜버"],
 "categoryType": "GAME",
 "liveCategory": "Black_Survival_Eternal_Return",
 "liveCategoryValue": "이터널 리턴",
@@ -87,9 +85,7 @@ CHZZK에서 사용중인 비공식 API를 정리합니다.
     "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNTEyMTFfMjc3/MDAxNzY1NDA5MzQwNDI2.24RhX537D8drj6XPr3NLDELzWbTV5qSTxiCJyb5F1zog.EiEMPpJyNPsLCUpKDPoLar35hK-mQ2PFQ13-1IqmILog.JPEG/image.jpg",
     "verifiedMark": false,
     "activatedChannelBadgeIds": [],
-    "personalData": {
-        "privateUserBlock": false
-                    }
+    "personalData": {"privateUserBlock": false}
                 },
 "blindType": null,
 "tvAppViewingPolicyType": "ALLOWED",
@@ -133,8 +129,11 @@ CHZZK에서 사용중인 비공식 API를 정리합니다.
 "tvAppViewingPolicyType": "ALLOWED",
 "chapterActive": false
 
-https://api.chzzk.naver.com/service/v1/lives?size=20&sortType=POPULAR : 전체 라이브 목록 (시청자순)
-{
+
+[전체 라이브 목록 (시청자순)]
+* https://api.chzzk.naver.com/service/v1/lives?size="NN"&sortType=POPULAR : 
+- NN = 라이브 개수 (최대 50)
+* data 및 예시
 "liveId": 17527246,
 "liveTitle": "[픽크타2] 어제 하루 통으로 쉬었는데 저 개10도태녀인가요?",
 "liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/27313842/live/17527246/record/50936786/thumbnail/image_{type}.jpg",
@@ -144,12 +143,7 @@ https://api.chzzk.naver.com/service/v1/lives?size=20&sortType=POPULAR : 전체 �
 "accumulateCount": 0,
 "openDate": "2026-02-27 13:29:44",
 "adult": false,
-"tags": [
-    "스텔라이브",
-    "타비",
-    "버튜버",
-    "픽크타2"
-                ],
+"tags": ["스텔라이브", "타비", "버튜버", "픽크타2"],
 "categoryType": "GAME",
 "liveCategory": "Minecraft",
 "liveCategoryValue": "마인크래프트",
@@ -169,11 +163,12 @@ https://api.chzzk.naver.com/service/v1/lives?size=20&sortType=POPULAR : 전체 �
 "blindType": null,
 "tvAppViewingPolicyType": "ALLOWED",
 "party": null
-            },
 
 
-https://api.chzzk.naver.com/service/v1/home/videos?size=30&sortType=POPULAR : 전체 다시보기 목록 (시청자순)
-{
+[전체 다시보기 목록 (시청자순)]
+* https://api.chzzk.naver.com/service/v1/home/videos?size="NN"&sortType=POPULAR : 전체 다시보기 목록 (시청자순)
+- NN = 다시보기 개수 (최대 100)
+* data 및 예시
 "videoNo": 11965222,
 "videoId": "7F0C8B017D3DB03A25ADE719E6ACCD6AAF2F",
 "videoTitle": "반갑습니다",
@@ -198,23 +193,22 @@ https://api.chzzk.naver.com/service/v1/home/videos?size=30&sortType=POPULAR : �
     "channelName": "랄로",
     "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNDAyMTVfMTg5/MDAxNzA4MDAxOTkzNTM3.eFfaNqILr5WMC1imgLS-sUG85KB8dQpRGE7RuxRU8Jkg.TQ1EdEPnPVS256zEqmpPg-0IAcVBCP62gn0uiUMDu2sg.PNG/%ED%94%84%EC%82%AC_%EC%B4%88%EB%A1%9D.png",
     "verifiedMark": true,
-    "activatedChannelBadgeIds": [
-        "2025chzzkcup_3"
-                    ],
-    "personalData": {
-        "privateUserBlock": false
-                    }
+    "activatedChannelBadgeIds": ["2025chzzkcup_3"],
+    "personalData": {"privateUserBlock": false}
                 },
 "blindType": null,
 "watchTimeline": null,
 "paidProductId": null,
 "tvAppViewingPolicyType": "ALLOWED",
 "chapterActive": false
-            },
 
 
-https://api.chzzk.naver.com/service/v1/categories/GAME/Minecraft/clips?filterType=WITHIN_THIRTY_DAYS&orderType=POPULAR&size=10 : 특정 게임 카테고리 클립 목록 (최대 50개) (시청자순)
-{
+[특정 게임 카테고리 클립 목록] (시청자순)
+* https://api.chzzk.naver.com/service/v1/categories/GAME/"AAA"/clips?filterType=WITHIN_THIRTY_DAYS&orderType=POPULAR&size="NN"
+- "AAA" = 게임 슬러그
+- "NN" = 클립 개수 (최대 50개)
+- ex. https://api.chzzk.naver.com/service/v1/categories/GAME/Minecraft/clips?filterType=WITHIN_THIRTY_DAYS&orderType=POPULAR&size=10 : 특정 게임 카테고리 클립 목록 (최대 50개) (시청자순)
+* data 및 예시
 "clipUID": "L1AKEHL3p7",
 "videoId": "E6F0A0D13ADFA1C4867208201DA813466943",
 "clipTitle": "최신기술 터미널 ㅋㅋ",
@@ -235,29 +229,93 @@ https://api.chzzk.naver.com/service/v1/categories/GAME/Minecraft/clips?filterTyp
 "readCount": 46580,
 "blindType": null,
 "privateUserBlock": false
-            },
 
-https://api.chzzk.naver.com/service/v1/categories/GAME/BIOHAZARD_requiem/info : 특정 게임 정보
-{
-        "categoryType": "GAME",
-        "categoryId": "BIOHAZARD_requiem",
-        "categoryValue": "바이오하자드 레퀴엠",
-        "posterImageUrl": "https://nng-phinf.pstatic.net/MjAyNTEyMThfMTQ2/MDAxNzY2MDI1NTIyNDY1.F7quw7bm2Ni_7pR0HqXaav05hRvl50KQNmmfp0Bu4HEg.Dj6MnI_Oc1Zy0gB8KSkVlob7CWPXxvNEkhthoLWvlfQg.PNG/%EB%B0%94%EC%9D%B4%EC%98%A4%ED%95%98%EC%9E%90%EB%93%9C%EB%A0%88%ED%80%B4%EC%97%A0_%ED%8F%AC%EC%8A%A4%ED%84%B0.png",
-        "openLiveCount": 180,
-        "concurrentUserCount": 10213,
-        "tags": [
-            "바이오하자드 레퀴엠",
-            "서바이벌",
-            "호러",
-            "PC",
-            "캡콤"
+
+[특정 게임 정보]
+* https://api.chzzk.naver.com/service/v1/categories/GAME/"AAA"/info
+- AAA = 게임 슬러그
+- ex. https://api.chzzk.naver.com/service/v1/categories/GAME/BIOHAZARD_requiem/info
+* data 및 예시
+"categoryType": "GAME",
+"categoryId": "BIOHAZARD_requiem",
+"categoryValue": "바이오하자드 레퀴엠",
+"posterImageUrl": "https://nng-phinf.pstatic.net/MjAyNTEyMThfMTQ2/MDAxNzY2MDI1NTIyNDY1.F7quw7bm2Ni_7pR0HqXaav05hRvl50KQNmmfp0Bu4HEg.Dj6MnI_Oc1Zy0gB8KSkVlob7CWPXxvNEkhthoLWvlfQg.PNG/%EB%B0%94%EC%9D%B4%EC%98%A4%ED%95%98%EC%9E%90%EB%93%9C%EB%A0%88%ED%80%B4%EC%97%A0_%ED%8F%AC%EC%8A%A4%ED%84%B0.png",
+"openLiveCount": 180,
+"concurrentUserCount": 10213,
+"tags": ["바이오하자드 레퀴엠", "서바이벌", "호러", "PC", "캡콤"],
+"existLounge": true,
+"following": false,
+"newCategory": true,
+"dropsCampaignList": []
+
+
+[특정 라이브 정보]
+* https://api.chzzk.naver.com/service/v3.3/channels/"AAA"/live-detail?cu=false&dt="BBB"&tm=true
+- AAA = 채널 ID (https://chzzk.naver.com/live/"AAA")
+- BBB = (확인 못함)
+- ex. https://api.chzzk.naver.com/service/v3.3/channels/9351fb8417f73405c84e0846409e3263/live-detail?cu=false&dt=6998e&tm=true
+* data 및 예시
+"code": 200,
+"message": null,
+"content": {
+"liveId": 17536498,
+"liveTitle": "뭣 도네이션을 읽으면서 링 피트를 한다고? ⛅",
+"status": "OPEN",
+"liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/42153367/live/17536498/record/50951912/thumbnail/image_{type}.jpg",
+"defaultThumbnailImageUrl": null,
+"concurrentUserCount": 141,
+"cvExposure": true,
+"accumulateCount": 0,
+"openDate": "2026-02-27 21:00:39",
+"closeDate": null,
+"adult": true,
+"krOnlyViewing": false,
+"clipActive": true,
+"tags": ["리액트kr", "리액트", "버튜버", "버츄얼"],
+"chatChannelId": "N2KFnk",
+"categoryType": "GAME",
+"liveCategory": "RingFit_Adventure",
+"liveCategoryValue": "링 피트 어드벤처",
+"chatActive": true,
+"chatAvailableGroup": "ALL",
+"paidPromotion": false,
+"chatAvailableCondition": "NONE",
+"minFollowerMinute": 0,
+"allowSubscriberInFollowerMode": true,
+"livePlaybackJson": "{\"meta\":{\"videoId\":\"C9416DE698FED854074308BA95D58F5A04AF\",\"streamSeq\":42153367,\"liveId\":\"17536498\",\"paidLive\":false,\"cdnInfo\":{\"cdnType\":\"GCDN\"},\"p2p\":true,\"cmcdEnabled\":false,\"playbackAuthType\":\"NONE\"},\"serviceMeta\":{\"contentType\":\"VIDEO\"},\"live\":{\"start\":\"2026-02-27T21:00:39\",\"open\":\"2026-02-27T21:00:39\",\"timeMachine\":false,\"status\":\"STARTED\"},\"api\":[{\"name\":\"p2p-config\",\"path\":\"https://apis.naver.com/livecloud/livecloud/xray/p2p/v1/config/chzzk\"},{\"name\":\"qoeConfig\",\"path\":\"https://apis.naver.com/policy/policy/policy\"}],\"media\":[{\"mediaId\":\"HLS\",\"protocol\":\"HLS\",\"path\":\"https://ex-nlive-streaming.navercdn.com/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_hls_playlist.m3u8?hdnts=st=1772207667~exp=1772268877~acl=*/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/*~hmac=7d236757342fe334302e00f538b1ce5be69b51bce6a7c67abc51879a10492b21\",\"encodingTrack\":[{\"encodingTrackId\":\"720p\",\"videoProfile\":\"high\",\"audioProfile\":\"LC\",\"p2pPath\":\"/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie_hls_720p_playlist.m3u8?channel_id=17536498_hls_h264_720p_50951912&cdn_url=aHR0cHM6Ly9leC1ubGl2ZS1zdHJlYW1pbmcubmF2ZXJjZG4uY29tL2NoenprL2xpcDJfa3IyL2FubXNzOTA3Ni96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllX2hsc183MjBwX3BsYXlsaXN0Lm0zdTg/aGRudHM9c3Q9MTc3MjIwNzY2N35leHA9MTc3MjI2ODg3N35hY2w9Ki96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvKn5obWFjPTdkMjM2NzU3MzQyZmUzMzQzMDJlMDBmNTM4YjFjZTViZTY5YjUxYmNlNmE3YzY3YWJjNTE4NzlhMTA0OTJiMjE=&timemachine=false&service_code=chzzk&playback_auth_type=NONE\",\"p2pPathUrlEncoding\":\"/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie_hls_720p_playlist.m3u8?channel_id%3D17536498_hls_h264_720p_50951912%26cdn_url%3DaHR0cHM6Ly9leC1ubGl2ZS1zdHJlYW1pbmcubmF2ZXJjZG4uY29tL2NoenprL2xpcDJfa3IyL2FubXNzOTA3Ni96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllX2hsc183MjBwX3BsYXlsaXN0Lm0zdTg%2FaGRudHM9c3Q9MTc3MjIwNzY2N35leHA9MTc3MjI2ODg3N35hY2w9Ki96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvKn5obWFjPTdkMjM2NzU3MzQyZmUzMzQzMDJlMDBmNTM4YjFjZTViZTY5YjUxYmNlNmE3YzY3YWJjNTE4NzlhMTA0OTJiMjE%3D%26timemachine%3Dfalse%26service_code%3Dchzzk%26playback_auth_type%3DNONE\",\"videoCodec\":\"H264\",\"videoBitRate\":3000000,\"audioBitRate\":192000,\"videoFrameRate\":\"30.0\",\"videoWidth\":1280,\"videoHeight\":720,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false},{\"encodingTrackId\":\"480p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":1500000,\"audioBitRate\":192000,\"videoFrameRate\":\"30.0\",\"videoWidth\":852,\"videoHeight\":480,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"360p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":600000,\"audioBitRate\":96000,\"videoFrameRate\":\"30.0\",\"videoWidth\":640,\"videoHeight\":360,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"144p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":128000,\"audioBitRate\":64000,\"videoFrameRate\":\"30.0\",\"videoWidth\":256,\"videoHeight\":144,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"1080p\",\"videoProfile\":\"high\",\"audioProfile\":\"LC\",\"p2pPath\":\"/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie_hls_1080p_playlist.m3u8?channel_id=17536498_hls_h264_1080p_50951912&cdn_url=aHR0cHM6Ly9leC1ubGl2ZS1zdHJlYW1pbmcubmF2ZXJjZG4uY29tL2NoenprL2xpcDJfa3IyL2FubXNzOTA3Ni96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllX2hsc18xMDgwcF9wbGF5bGlzdC5tM3U4P2hkbnRzPXN0PTE3NzIyMDc2Njd+ZXhwPTE3NzIyNjg4Nzd+YWNsPSovemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLyp+aG1hYz03ZDIzNjc1NzM0MmZlMzM0MzAyZTAwZjUzOGIxY2U1YmU2OWI1MWJjZTZhN2M2N2FiYzUxODc5YTEwNDkyYjIx&timemachine=false&service_code=chzzk&playback_auth_type=NONE\",\"p2pPathUrlEncoding\":\"/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie_hls_1080p_playlist.m3u8?channel_id%3D17536498_hls_h264_1080p_50951912%26cdn_url%3DaHR0cHM6Ly9leC1ubGl2ZS1zdHJlYW1pbmcubmF2ZXJjZG4uY29tL2NoenprL2xpcDJfa3IyL2FubXNzOTA3Ni96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllX2hsc18xMDgwcF9wbGF5bGlzdC5tM3U4P2hkbnRzPXN0PTE3NzIyMDc2Njd%2BZXhwPTE3NzIyNjg4Nzd%2BYWNsPSovemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLyp%2BaG1hYz03ZDIzNjc1NzM0MmZlMzM0MzAyZTAwZjUzOGIxY2U1YmU2OWI1MWJjZTZhN2M2N2FiYzUxODc5YTEwNDkyYjIx%26timemachine%3Dfalse%26service_code%3Dchzzk%26playback_auth_type%3DNONE\",\"videoCodec\":\"H264\",\"videoBitRate\":8192000,\"audioBitRate\":192000,\"videoFrameRate\":\"60.0\",\"videoWidth\":1920,\"videoHeight\":1080,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":true,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"audioOnly\",\"path\":\"https://ex-nlive-streaming.navercdn.com/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_hls_audioOnly_playlist.m3u8?hdnts=st=1772207667~exp=1772268877~acl=*/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/*~hmac=7d236757342fe334302e00f538b1ce5be69b51bce6a7c67abc51879a10492b21\",\"audioCodec\":\"AAC\",\"audioBitRate\":96000,\"audioOnly\":true,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false}]},{\"mediaId\":\"LLHLS\",\"protocol\":\"HLS\",\"path\":\"https://ex-nlive-streaming.navercdn.com/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_playlist.m3u8?hdnts=st=1772207667~exp=1772268877~acl=*/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/*~hmac=7d236757342fe334302e00f538b1ce5be69b51bce6a7c67abc51879a10492b21\",\"latency\":\"lowLatency\",\"encodingTrack\":[{\"encodingTrackId\":\"720p\",\"videoProfile\":\"high\",\"audioProfile\":\"LC\",\"p2pPath\":\"/chzzk/lip2_kr/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_720p_playlist.m3u8?channel_id=17536498_hls_h264_720p_50951912&cdn_url=aHR0cHM6Ly9saXZlY2xvdWQucHN0YXRpYy5uZXQvY2h6emsvbGlwMl9rci9hbm1zczkwNzYvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLzdha296ZzRmNzR6bG52NzB3YThlbnZzNGlxN25obTE3MmJfNzIwcF9wbGF5bGlzdC5tM3U4P2hkbnRzPXN0PTE3NzIyMDc2Njd+ZXhwPTE3NzIyNjcwNzd+YWNsPSovemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLyp+aG1hYz1kZTQ1MzgxNjU3OGJlNWNhOGRjOTRhZTJjNDVmNGQ2NThmN2RhZmQxMTczM2MzNTkzODdkZjI5YjFiMTM4ZDI0&timemachine=false&service_code=chzzk&playback_auth_type=NONE\",\"p2pPathUrlEncoding\":\"/chzzk/lip2_kr/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_720p_playlist.m3u8?channel_id%3D17536498_hls_h264_720p_50951912%26cdn_url%3DaHR0cHM6Ly9saXZlY2xvdWQucHN0YXRpYy5uZXQvY2h6emsvbGlwMl9rci9hbm1zczkwNzYvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLzdha296ZzRmNzR6bG52NzB3YThlbnZzNGlxN25obTE3MmJfNzIwcF9wbGF5bGlzdC5tM3U4P2hkbnRzPXN0PTE3NzIyMDc2Njd%2BZXhwPTE3NzIyNjcwNzd%2BYWNsPSovemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLyp%2BaG1hYz1kZTQ1MzgxNjU3OGJlNWNhOGRjOTRhZTJjNDVmNGQ2NThmN2RhZmQxMTczM2MzNTkzODdkZjI5YjFiMTM4ZDI0%26timemachine%3Dfalse%26service_code%3Dchzzk%26playback_auth_type%3DNONE\",\"videoCodec\":\"H264\",\"videoBitRate\":3000000,\"audioBitRate\":192000,\"videoFrameRate\":\"30.0\",\"videoWidth\":1280,\"videoHeight\":720,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false},{\"encodingTrackId\":\"480p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":1500000,\"audioBitRate\":192000,\"videoFrameRate\":\"30.0\",\"videoWidth\":852,\"videoHeight\":480,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"360p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":600000,\"audioBitRate\":96000,\"videoFrameRate\":\"30.0\",\"videoWidth\":640,\"videoHeight\":360,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"144p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":128000,\"audioBitRate\":64000,\"videoFrameRate\":\"30.0\",\"videoWidth\":256,\"videoHeight\":144,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"1080p\",\"videoProfile\":\"high\",\"audioProfile\":\"LC\",\"p2pPath\":\"/chzzk/lip2_kr/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_1080p_playlist.m3u8?channel_id=17536498_hls_h264_1080p_50951912&cdn_url=aHR0cHM6Ly9saXZlY2xvdWQucHN0YXRpYy5uZXQvY2h6emsvbGlwMl9rci9hbm1zczkwNzYvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLzdha296ZzRmNzR6bG52NzB3YThlbnZzNGlxN25obTE3MmJfMTA4MHBfcGxheWxpc3QubTN1OD9oZG50cz1zdD0xNzcyMjA3NjY3fmV4cD0xNzcyMjY3MDc3fmFjbD0qL3poYjZ0NGtucGpkNG1rZ3k3Nnh3dGxoYmQ0aXE3bmhtMWFpZS8qfmhtYWM9ZGU0NTM4MTY1NzhiZTVjYThkYzk0YWUyYzQ1ZjRkNjU4ZjdkYWZkMTE3MzNjMzU5Mzg3ZGYyOWIxYjEzOGQyNA==&timemachine=false&service_code=chzzk&playback_auth_type=NONE\",\"p2pPathUrlEncoding\":\"/chzzk/lip2_kr/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_1080p_playlist.m3u8?channel_id%3D17536498_hls_h264_1080p_50951912%26cdn_url%3DaHR0cHM6Ly9saXZlY2xvdWQucHN0YXRpYy5uZXQvY2h6emsvbGlwMl9rci9hbm1zczkwNzYvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLzdha296ZzRmNzR6bG52NzB3YThlbnZzNGlxN25obTE3MmJfMTA4MHBfcGxheWxpc3QubTN1OD9oZG50cz1zdD0xNzcyMjA3NjY3fmV4cD0xNzcyMjY3MDc3fmFjbD0qL3poYjZ0NGtucGpkNG1rZ3k3Nnh3dGxoYmQ0aXE3bmhtMWFpZS8qfmhtYWM9ZGU0NTM4MTY1NzhiZTVjYThkYzk0YWUyYzQ1ZjRkNjU4ZjdkYWZkMTE3MzNjMzU5Mzg3ZGYyOWIxYjEzOGQyNA%3D%3D%26timemachine%3Dfalse%26service_code%3Dchzzk%26playback_auth_type%3DNONE\",\"videoCodec\":\"H264\",\"videoBitRate\":8192000,\"audioBitRate\":192000,\"videoFrameRate\":\"60.0\",\"videoWidth\":1920,\"videoHeight\":1080,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":true,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"audioOnly\",\"path\":\"https://ex-nlive-streaming.navercdn.com/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_audioOnly_playlist.m3u8?hdnts=st=1772207667~exp=1772268877~acl=*/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/*~hmac=7d236757342fe334302e00f538b1ce5be69b51bce6a7c67abc51879a10492b21\",\"audioCodec\":\"AAC\",\"audioBitRate\":96000,\"audioOnly\":true,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false}]}],\"thumbnail\":{\"snapshotThumbnailTemplate\":\"https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/42153367/live/17536498/record/50951912/thumbnail/image_{type}.jpg\",\"spriteSeekingThumbnail\":{\"spriteFormat\":{\"rowCount\":3,\"columnCount\":4,\"intervalType\":\"millisecond\",\"interval\":20000,\"thumbnailWidth\":160,\"thumbnailHeight\":90},\"urlTemplate\":\"https://livecloud-thumb.akamaized.net/chzzk/kr/live-image/live/record/50951912/seeking/thumbnail/image_4x3x20000_17536498_{spriteIndex}.jpg\",\"processingSeconds\":120},\"types\":[\"720\",\"480\",\"360\",\"270\",\"144\"]},\"multiview\":[]}",
+"p2pQuality": [
+    "720p",
+    "1080p"
         ],
-        "existLounge": true,
-        "following": false,
-        "newCategory": true,
-        "dropsCampaignList": []
+"timeMachineActive": false,
+"timeMachinePlayback": false,
+"channel": {
+    "channelId": "3001c37f75cbf22525da511c05172c5e",
+    "channelName": "아사미야 나오",
+    "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNTA4MjFfMTAz/MDAxNzU1Nzg2NjYyMzM2.leNX0UAXFlJkRE5inQN3B6QKuD1PL_iRPxRS-PU1SNYg.pkc1-gFWk03COlgSPT1ioxsx7bQh-O7gpn0OY4DLlFAg.PNG/%ED%94%84%EB%A1%9C%ED%95%84.png",
+    "verifiedMark": false,
+    "activatedChannelBadgeIds": []
+        },
+"livePollingStatusJson": "{\"status\": \"STARTED\", \"isPublishing\": true, \"playableStatus\": \"PLAYABLE\", \"trafficThrottling\": -1, \"callPeriodMilliSecond\": 10000}",
+"userAdultStatus": "ADULT",
+"blindType": null,
+"chatDonationRankingExposure": false,
+"logPower": {
+    "active": true,
+    "exposureWeeklyRanking": false,
+    "exposureMonthlyRanking": false
+        },
+"adParameter": {
+    "tag": "none"
+        },
+"dropsCampaignNo": null,
+"watchPartyNo": null,
+"watchPartyTag": null,
+"watchPartyPaidProductId": null,
+"watchPartyType": null,
+"dab": true,
+"earthquake": false,
+"paidProduct": null,
+"tvAppViewingPolicyType": "ALLOWED",
+"party": null
     }
-
-
-https://api.chzzk.naver.com/polling/v3.1/channels/affa78deac0b23d2046b8ed4856c1e62/live-status?includePlayerRecommendContent=true : 특정 라이브 정보
-https://api.chzzk.naver.com/service/v3.3/channels/9351fb8417f73405c84e0846409e3263/live-detail?cu=false&dt=6998e&tm=true
