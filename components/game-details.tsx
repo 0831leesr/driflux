@@ -29,6 +29,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { DonutChart } from "@/components/ui/donut-chart"
+
+/* ── Helpers ── */
+/** 스팀 평가 표시 가능 여부: Overwhelmingly Positive ~ Overwhelmingly Negative만. NULL, "No user reviews", "N user reviews" 제외 */
+function isValidSteamReview(game: { steam_review_desc?: string | null }): boolean {
+  const desc = game.steam_review_desc?.trim()
+  if (!desc) return false
+  if (/^no user reviews$/i.test(desc)) return false
+  if (/^\d+ user reviews?$/i.test(desc)) return false
+  return true
+}
 
 /* ── Main Game Details Component ── */
 type TabType = "live" | "video"
@@ -159,7 +170,7 @@ export function GameDetailsClient({
           </div>
 
           {/* Game Info */}
-          <div className="flex flex-1 flex-col gap-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
             <h1 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               {getDisplayGameTitle(game)}
             </h1>
@@ -230,6 +241,48 @@ export function GameDetailsClient({
               )}
             </div>
           </div>
+
+          {/* Game Ratings - 우측 영역 (크리틱 스코어 너비 기준 중앙 정렬) */}
+          {(isValidSteamReview(game) && game.steam_positive_ratio != null) || game.critic_score != null ? (
+            <div className="flex shrink-0 flex-col items-center gap-6 sm:items-end">
+              {isValidSteamReview(game) && game.steam_positive_ratio != null && (
+                <div className="flex w-[7.5rem] flex-col items-center gap-2">
+                  <span className="w-full rounded-md bg-muted/80 px-2.5 py-1 text-center text-xs font-medium text-muted-foreground">
+                    스팀 점수
+                  </span>
+                  <DonutChart
+                    value={game.steam_positive_ratio}
+                    centerLabel={`${game.steam_positive_ratio}%`}
+                    size={72}
+                    strokeWidth={8}
+                  />
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-center text-sm font-medium text-foreground">
+                      {game.steam_review_desc}
+                    </span>
+                    {game.steam_total_reviews != null && (
+                      <span className="text-center text-xs text-muted-foreground">
+                        {game.steam_total_reviews.toLocaleString()}개 평가
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {game.critic_score != null && (
+                <div className="flex w-[7.5rem] flex-col items-center gap-2">
+                  <span className="w-full rounded-md bg-muted/80 px-2.5 py-1 text-center text-xs font-medium text-muted-foreground">
+                    크리틱 스코어
+                  </span>
+                  <DonutChart
+                    value={game.critic_score}
+                    centerLabel={`${game.critic_score}`}
+                    size={72}
+                    strokeWidth={8}
+                  />
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 

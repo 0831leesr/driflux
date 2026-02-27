@@ -260,3 +260,4 @@ https://api.chzzk.naver.com/service/v1/categories/GAME/BIOHAZARD_requiem/info : 
 
 
 https://api.chzzk.naver.com/polling/v3.1/channels/affa78deac0b23d2046b8ed4856c1e62/live-status?includePlayerRecommendContent=true : 특정 라이브 정보
+https://api.chzzk.naver.com/service/v3.3/channels/9351fb8417f73405c84e0846409e3263/live-detail?cu=false&dt=6998e&tm=true

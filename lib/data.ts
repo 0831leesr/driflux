@@ -37,6 +37,10 @@ export interface GameRow {
   short_description?: string | null
   developer?: string | null
   publisher?: string | null
+  critic_score?: number | null
+  steam_review_desc?: string | null
+  steam_positive_ratio?: number | null
+  steam_total_reviews?: number | null
 }
 
 export interface StreamRow {
