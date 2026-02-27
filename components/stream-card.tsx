@@ -18,6 +18,7 @@ export interface StreamData {
   viewersFormatted?: string // Pre-formatted (optional)
   isLive?: boolean
   saleDiscount?: string
+  hasDrops?: boolean
   gameId?: number
   /** Chzzk channel ID for external link: https://chzzk.naver.com/live/{channelId} */
   channelId?: string | null
@@ -155,12 +156,19 @@ export function StreamCard({ stream, onStreamClick, priority }: { stream: Stream
           {stream.streamTitle}
         </p>
 
-        {/* Data Badges */}
-        {stream.saleDiscount && (
+        {/* Data Badges: 드롭스 먼저, 할인율 다음 */}
+        {(stream.hasDrops || stream.saleDiscount) && (
           <div className="flex flex-wrap gap-1">
-            <Badge className="border-transparent bg-amber-500/15 px-1.5 py-0 text-[10px] font-medium text-amber-400">
-              {stream.saleDiscount}
-            </Badge>
+            {stream.hasDrops && (
+              <Badge className="border-transparent bg-emerald-500/15 px-1.5 py-0 text-[10px] font-medium text-emerald-400">
+                드롭스
+              </Badge>
+            )}
+            {stream.saleDiscount && (
+              <Badge className="border-transparent bg-amber-500/15 px-1.5 py-0 text-[10px] font-medium text-amber-400">
+                {stream.saleDiscount}
+              </Badge>
+            )}
           </div>
         )}
       </div>

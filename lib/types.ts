@@ -29,6 +29,7 @@ export interface StreamRow {
   stream_category: string | null
   chzzk_channel_id: string | null
   last_chzzk_update: string | null
+  has_drops?: boolean
   // joined
   games?: GameRow
 }

@@ -137,6 +137,7 @@ async function fetchLiveStreamsImpl(limit?: number, offset: number = 0) {
     saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0
       ? `-${s.games.discount_rate}%`
       : undefined,
+    hasDrops: s.has_drops ?? false,
     gameId: s.game_id ?? undefined,
     channelId: s.chzzk_channel_id ?? undefined,
     // Original data for reference
@@ -255,6 +256,7 @@ export async function fetchStreamsByGameTitle(gameTitle: string) {
     saleDiscount: game.discount_rate && game.discount_rate > 0
       ? `-${game.discount_rate}%`
       : undefined,
+    hasDrops: s.has_drops ?? false,
     channelId: s.chzzk_channel_id ?? undefined,
   }))
 }
@@ -362,6 +364,7 @@ export async function fetchStreamsByGameId(gameId: number) {
     saleDiscount: gameData.discount_rate && gameData.discount_rate > 0
       ? `-${gameData.discount_rate}%`
       : undefined,
+    hasDrops: s.has_drops ?? false,
     gameId: gameId,
     channelId: s.chzzk_channel_id ?? undefined,
   }))
@@ -407,6 +410,8 @@ export async function fetchStreamsByTagId(tagId: number) {
     viewers: s.viewer_count ?? 0,
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
+    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0 ? `-${s.games.discount_rate}%` : undefined,
+    hasDrops: s.has_drops ?? false,
     gameId: s.game_id ?? undefined,
     channelId: s.chzzk_channel_id ?? undefined,
   }))
@@ -444,6 +449,8 @@ export async function fetchStreamsByTopTag(tagName: string) {
     viewers: s.viewer_count ?? 0,
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
+    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0 ? `-${s.games.discount_rate}%` : undefined,
+    hasDrops: s.has_drops ?? false,
     gameId: s.game_id ?? undefined,
     channelId: s.chzzk_channel_id ?? undefined,
   }))
@@ -487,6 +494,8 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
     viewers: s.viewer_count ?? 0,
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
+    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0 ? `-${s.games.discount_rate}%` : undefined,
+    hasDrops: s.has_drops ?? false,
     gameId: s.game_id ?? undefined,
     channelId: s.chzzk_channel_id ?? undefined,
   }))
@@ -678,6 +687,7 @@ function formatStreamForDisplay(s: any) {
       s.games?.discount_rate && s.games.discount_rate > 0
         ? `-${s.games.discount_rate}%`
         : undefined,
+    hasDrops: s.has_drops ?? false,
     gameId: s.game_id ?? undefined,
   }
 }
@@ -952,6 +962,7 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
     saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0
       ? `-${s.games.discount_rate}%`
       : undefined,
+    hasDrops: s.has_drops ?? false,
     gameId: s.game_id,
     channelId: s.chzzk_channel_id ?? undefined,
   }))
@@ -1528,6 +1539,7 @@ export async function getStreamsForGames(gameIds: number[]) {
     saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0
       ? `-${s.games.discount_rate}%`
       : undefined,
+    hasDrops: s.has_drops ?? false,
     gameId: s.game_id,
     channelId: s.chzzk_channel_id ?? undefined,
     rawData: { streamCategory: s.stream_category, gameData: s.games },

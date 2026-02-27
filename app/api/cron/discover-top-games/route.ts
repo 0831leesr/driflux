@@ -151,6 +151,8 @@ export async function GET(request: Request) {
         // Use Korean as primary display name, fallback to English
         const displayCategory = koreanCategory || englishCategory
 
+        const hasDrops = !!(liveData.dropsCampaignNo ?? liveData.dropsCampaignNos?.length)
+
         return {
           channelId: liveData.channelId || channelData.channelId,
           channelName: channelData.channelName || liveData.channelName,
@@ -161,6 +163,7 @@ export async function GET(request: Request) {
           categoryEnglish: englishCategory, // For Steam search
           categoryKorean: koreanCategory, // For display
           openDate: liveData.openDate || new Date().toISOString(),
+          hasDrops,
         }
       })
       .filter((stream: any) => stream.channelId)
@@ -312,6 +315,7 @@ export async function GET(request: Request) {
           viewer_count: Number(stream.viewerCount),
           stream_category: stream.category || null,
           game_id: gameId,
+          has_drops: !!stream.hasDrops,
           last_chzzk_update: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }

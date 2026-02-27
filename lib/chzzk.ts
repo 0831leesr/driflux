@@ -88,6 +88,8 @@ export interface SearchedStreamData {
   concurrentUserCount: number
   openDate: string
   category?: string | null
+  /** 드롭스 활성화 여부 (dropsCampaignNo가 있으면 true) */
+  hasDrops?: boolean
 }
 
 /** 다시보기 영상 API 응답 아이템 */
@@ -465,6 +467,7 @@ export async function getChzzkStreamsByCategory(
         if (thumbnailUrl && thumbnailUrl.includes("{type}")) {
           thumbnailUrl = thumbnailUrl.replace(/{type}/g, "1080")
         }
+        const hasDrops = !!(item.dropsCampaignNo ?? item.dropsCampaignNos?.length)
         return {
           channelId,
           channelName,
@@ -473,6 +476,7 @@ export async function getChzzkStreamsByCategory(
           concurrentUserCount: Number(item.concurrentUserCount ?? 0),
           openDate: item.openDate ?? new Date().toISOString(),
           category: item.liveCategoryValue ?? item.liveCategory ?? trimmedId,
+          hasDrops,
         }
       })
       .filter((s) => s.channelId)
@@ -696,6 +700,8 @@ export async function searchChzzkLives(
                              liveData.channelName || 
                              "Unknown"
 
+          const hasDrops = !!(liveData.dropsCampaignNo ?? liveData.dropsCampaignNos?.length)
+
           const result = {
             channelId,
             channelName,
@@ -704,6 +710,7 @@ export async function searchChzzkLives(
             concurrentUserCount: viewerCount,
             openDate: openDate,
             category: category,
+            hasDrops,
           }
 
           return result

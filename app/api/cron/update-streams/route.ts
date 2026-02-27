@@ -266,6 +266,7 @@ export async function GET(request: Request) {
               viewer_count: stream.concurrentUserCount,
               stream_category: stream.category || null,
               game_id: game.id > 0 ? game.id : null,
+              has_drops: !!stream.hasDrops,
               last_chzzk_update: now,
               updated_at: now,
             }
@@ -282,6 +283,7 @@ export async function GET(request: Request) {
                   viewer_count: Number(stream.concurrentUserCount),
                   stream_category: stream.category || null,
                   game_id: game.id > 0 ? game.id : null,
+                  has_drops: !!stream.hasDrops,
                   last_chzzk_update: now,
                   updated_at: now,
                 })
