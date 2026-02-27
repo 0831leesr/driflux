@@ -95,7 +95,9 @@ export async function GET(request: Request) {
 
         await adminSupabase.from("game_videos").delete().eq("category_id", categoryId)
 
-        const rows = videos.map((v) => ({
+        const rows = videos
+          .filter((v) => v.videoId?.trim())
+          .map((v) => ({
           category_id: categoryId,
           game_id: game.id,
           video_id: v.videoId,
