@@ -20,8 +20,11 @@ jobs:
     steps:
       - name: Trigger Update Evaluations (Steam + Critic)
         run: |
-          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          HTTP=$(curl -s -o /tmp/evals_resp.txt -w "%{http_code}" -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP $HTTP"
+          cat /tmp/evals_resp.txt
+          if [ "$HTTP" -ge 400 ]; then exit 1; fi
 
   update-esports-events:
     runs-on: ubuntu-latest

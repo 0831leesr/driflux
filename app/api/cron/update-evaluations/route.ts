@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
-import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@/lib/supabase/server"
 import { getSteamReviewSummary } from "@/lib/steam"
 import { getGameMappings, resolveMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
@@ -47,19 +46,7 @@ export async function GET(request: Request) {
   console.log("[Evaluations] Starting evaluation-only update...")
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: "Missing Supabase credentials" },
-        { status: 500 }
-      )
-    }
-
-    const adminSupabase = createSupabaseClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const mappings = await getGameMappings()
 
     const results = { steamUpdated: 0, criticUpdated: 0, failed: 0 }
@@ -91,7 +78,7 @@ export async function GET(request: Request) {
           await delay(500)
 
           if (summary) {
-            const { error: updErr } = await adminSupabase
+            const { error: updErr } = await supabase
               .from("games")
               .update({
                 steam_review_desc: summary.review_score_desc,
@@ -144,7 +131,7 @@ export async function GET(request: Request) {
           await delay(600)
 
           if (igdbData?.critic_score != null) {
-            const { error: updErr } = await adminSupabase
+            const { error: updErr } = await supabase
               .from("games")
               .update({ critic_score: igdbData.critic_score })
               .eq("id", game.id)
