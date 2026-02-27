@@ -8,7 +8,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
 import type { TrendingGameRow, EsportsChannel } from "@/lib/data"
 import { FollowStreamGrid } from "@/components/follow-stream-grid"
+import { FollowReplayGrid } from "@/components/follow-replay-grid"
 import type { StreamData } from "@/components/stream-card"
+import type { VideoData } from "@/components/video-card"
 import { CalendarContent } from "@/components/calendar-content"
 import type { EventRow } from "@/lib/types"
 import { ExploreTabContent } from "@/components/explore/explore-tab-content"
@@ -37,7 +39,9 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
   const [activeTab, setActiveTab] = useState("main")
   const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved">("games")
   const [streamModalOpen, setStreamModalOpen] = useState(false)
+  const [videoModalOpen, setVideoModalOpen] = useState(false)
   const [selectedStream, setSelectedStream] = useState<StreamData | null>(null)
+  const [selectedVideo, setSelectedVideo] = useState<VideoData | null>(null)
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
   const [followedStreams, setFollowedStreams] = useState<StreamData[]>([])
@@ -84,6 +88,7 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
   }, [favoriteTags, tagsInitialized])
 
   const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
+  const CHZZK_VIDEO_URL = "https://chzzk.naver.com/video"
   function handleStreamClick(stream: StreamData) {
     setSelectedStream(stream)
     setStreamModalOpen(true)
@@ -92,6 +97,15 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
     const url = selectedStream?.url ?? (selectedStream?.channelId ? `${CHZZK_LIVE_URL}/${selectedStream.channelId}` : null)
     if (url) window.open(url, "_blank")
     setStreamModalOpen(false)
+  }
+  function handleVideoClick(video: VideoData) {
+    setSelectedVideo(video)
+    setVideoModalOpen(true)
+  }
+  function handleContinueToVideo() {
+    const url = selectedVideo?.videoId ? `${CHZZK_VIDEO_URL}/${selectedVideo.videoId}` : null
+    if (url) window.open(url, "_blank")
+    setVideoModalOpen(false)
   }
 
   /* Use followed streams, show empty if no favorites */
@@ -179,9 +193,13 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
                   />
                 )}
                 {followSubTab === "replay" && (
-                  <div className="flex flex-1 items-center justify-center rounded-xl border border-border bg-card/50 p-12 text-center">
-                    <p className="text-sm text-muted-foreground">추후 업데이트 예정입니다.</p>
-                  </div>
+                  <FollowReplayGrid
+                    title="팔로우 중인 게임의 다시보기"
+                    icon={<Video className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
+                    gameIds={favoriteGameIds}
+                    onVideoClick={handleVideoClick}
+                    emptyMessage="팔로우 중인 게임이 없습니다. 게임을 팔로우하면 여기서 다시보기 영상을 확인할 수 있습니다!"
+                  />
                 )}
                 {followSubTab === "saved" && (
                   <div className="flex flex-1 items-center justify-center rounded-xl border border-border bg-card/50 p-12 text-center">
@@ -219,6 +237,34 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
             <AlertDialogAction
               className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
               onClick={handleContinueToExternal}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Video Modal */}
+      <AlertDialog open={videoModalOpen} onOpenChange={setVideoModalOpen}>
+        <AlertDialogContent className="border-border bg-card text-foreground">
+          <AlertDialogHeader>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--neon-purple))]/15">
+              <ExternalLink className="h-6 w-6 text-[hsl(var(--neon-purple))]" />
+            </div>
+            <AlertDialogTitle className="text-foreground">
+              Watch on External Site?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              You are being redirected to the streaming site (Chzzk) to watch this video. Do you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+              onClick={handleContinueToVideo}
             >
               Continue
             </AlertDialogAction>
