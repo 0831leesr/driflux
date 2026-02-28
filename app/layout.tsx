@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { FavoritesProvider } from "@/contexts/favorites-context";
 import { CalendarSettingsProvider } from "@/contexts/calendar-settings-context";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,6 +57,7 @@ export default function RootLayout({
             </CalendarSettingsProvider>
           </FavoritesProvider>
         </ThemeProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
