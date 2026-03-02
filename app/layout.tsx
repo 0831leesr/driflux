@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { FavoritesProvider } from "@/contexts/favorites-context";
 import { CalendarSettingsProvider } from "@/contexts/calendar-settings-context";
+import { CustomEventsProvider } from "@/contexts/custom-events-context";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
@@ -52,7 +53,9 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <FavoritesProvider>
             <CalendarSettingsProvider>
-              <AppShell>{children}</AppShell>
+              <CustomEventsProvider>
+                <AppShell>{children}</AppShell>
+              </CustomEventsProvider>
             </CalendarSettingsProvider>
           </FavoritesProvider>
         </ThemeProvider>

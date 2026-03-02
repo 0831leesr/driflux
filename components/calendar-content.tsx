@@ -13,6 +13,10 @@ import {
   Tag,
   Server,
   Info,
+  CalendarPlus,
+  Trash2,
+  Pencil,
+  Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,9 +24,21 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import type { EventRow } from "@/lib/types"
-import { getBestGameImage, getDisplayGameTitle, getGameImageSrc } from "@/lib/utils"
+import { getBestGameImage, getDisplayGameTitle, getGameImageSrc, DEFAULT_IMAGES } from "@/lib/utils"
 import { useCalendarSettings, type EventCategory } from "@/contexts/calendar-settings-context"
+import { useCustomEvents } from "@/contexts/custom-events-context"
+import { AddCustomEventDialog } from "@/components/add-custom-event-dialog"
 
 /* ── Types ── */
 /* DB event_type: 'Esports' | 'Patch' | 'Discount' | 'Collaboration' */
@@ -39,6 +55,7 @@ interface GameEvent {
   externalUrl?: string
   gameId?: number
   gameCover?: string
+  isCustom?: boolean
 }
 
 const CATEGORY_CONFIG: Record<
@@ -77,6 +94,14 @@ const CATEGORY_CONFIG: Record<
     barColor: "bg-cyan-500",
     checkColor: "border-cyan-500 data-[state=checked]:bg-cyan-500 data-[state=checked]:text-white",
   },
+  custom: {
+    label: "Custom",
+    icon: CalendarPlus,
+    color: "text-violet-400",
+    bgColor: "bg-violet-500/15",
+    barColor: "bg-violet-500",
+    checkColor: "border-violet-500 data-[state=checked]:bg-violet-500 data-[state=checked]:text-white",
+  },
 }
 
 function normalizeCategory(eventType: string | null): EventCategory {
@@ -86,6 +111,7 @@ function normalizeCategory(eventType: string | null): EventCategory {
   if (lower === "patch") return "patch"
   if (lower === "discount") return "discount"
   if (lower === "collaboration") return "collaboration"
+  if (lower === "custom") return "custom"
   /* fallback for legacy/invalid data */
   return "competition"
 }
@@ -113,6 +139,36 @@ function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
       externalUrl: ev.external_url ?? undefined,
       gameId: ev.games?.id,
       gameCover,
+      isCustom: false,
+    }
+  })
+}
+
+function mapCustomEventsToGameEvents(customEvents: import("@/contexts/custom-events-context").CustomEventItem[]): GameEvent[] {
+  return customEvents.map((ev) => {
+    const startDate = new Date(ev.start_date)
+    const image = ev.game_header_url?.trim()
+      ? getGameImageSrc(ev.game_header_url, "header")
+      : ev.game_cover_url?.trim()
+        ? getGameImageSrc(ev.game_cover_url, "header")
+        : DEFAULT_IMAGES.header.local
+    const gameCover = ev.game_cover_url?.trim()
+      ? getGameImageSrc(ev.game_cover_url, "cover")
+      : ev.game_header_url?.trim()
+        ? getGameImageSrc(ev.game_header_url, "cover")
+        : undefined
+    return {
+      id: ev.id,
+      date: startDate,
+      endDate: null,
+      title: ev.title,
+      subtitle: ev.game_title ?? "",
+      description: ev.description ?? "",
+      category: "custom",
+      image,
+      gameId: ev.game_id ?? undefined,
+      gameCover,
+      isCustom: true,
     }
   })
 }
@@ -270,15 +326,24 @@ function HeroCard({ event, today }: { event: GameEvent; today: Date }) {
 }
 
 /* ── Event Card (Timeline Item) ── */
-function EventCard({ event, today }: {
+function EventCard({
+  event,
+  today,
+  onDelete,
+  onEdit,
+}: {
   event: GameEvent
   today: Date
+  onDelete?: (id: string) => void
+  onEdit?: (id: string) => void
 }) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const config = CATEGORY_CONFIG[event.category]
   const Icon = config.icon
   const effectiveEnd = getEffectiveEndDate(event)
   const isPast = effectiveEnd < today && !isSameDay(effectiveEnd, today)
   const isToday = isSameDay(effectiveEnd, today)
+  const isCustom = event.isCustom === true
 
   function handleExternalClick() {
     if (event.externalUrl) {
@@ -287,6 +352,7 @@ function EventCard({ event, today }: {
   }
 
   return (
+    <>
     <div className={`group flex gap-4 rounded-xl border border-border bg-card p-4 transition-all hover:border-[hsl(var(--neon-purple))]/30 ${isPast ? "opacity-50 grayscale" : ""}`}>
       {/* Left: Date */}
       <div className="flex shrink-0 flex-col items-center gap-1">
@@ -313,39 +379,85 @@ function EventCard({ event, today }: {
         <p className="text-xs text-muted-foreground/70">{event.description}</p>
       </div>
 
-      {/* Right: Actions + Game Cover (가장 오른쪽) */}
-      {(event.externalUrl || (event.gameCover && event.gameId)) && (
-        <div className="flex shrink-0 flex-col items-center gap-2">
-          {event.externalUrl && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              aria-label="View details"
-              onClick={handleExternalClick}
-            >
-              <ExternalLink className="h-4 w-4" />
-            </Button>
-          )}
-          {event.gameCover && event.gameId && (
-            <Link
-              href={`/game/${event.gameId}`}
-              className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-90"
-              aria-label={`${event.subtitle} 게임 상세 보기`}
-            >
-              <Image
-                src={event.gameCover}
-                alt={event.subtitle || "Game cover"}
-                fill
-                className="object-cover"
-                sizes="44px"
-                unoptimized
-              />
-            </Link>
-          )}
-        </div>
+      {/* Right: Actions + Game Cover + Edit/Delete (Custom만) */}
+      {(event.externalUrl || (event.gameCover && event.gameId) || (isCustom && (onDelete || onEdit))) && (
+      <div className="flex shrink-0 flex-col items-center gap-2">
+        {event.externalUrl && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            aria-label="View details"
+            onClick={handleExternalClick}
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+        )}
+        {event.gameCover && event.gameId && (
+          <Link
+            href={`/game/${event.gameId}`}
+            className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-90"
+            aria-label={`${event.subtitle} 게임 상세 보기`}
+          >
+            <Image
+              src={event.gameCover}
+              alt={event.subtitle || "Game cover"}
+              fill
+              className="object-cover"
+              sizes="44px"
+              unoptimized
+            />
+          </Link>
+        )}
+        {isCustom && onEdit && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            aria-label="일정 수정"
+            onClick={() => onEdit(event.id)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+        {isCustom && onDelete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            aria-label="일정 삭제"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
       )}
     </div>
+
+    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialogContent className="border-border bg-card text-foreground">
+        <AlertDialogHeader>
+          <AlertDialogTitle>일정 삭제</AlertDialogTitle>
+          <AlertDialogDescription>
+            &quot;{event.title}&quot; 일정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="border-border">취소</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => {
+              onDelete?.(event.id)
+              setDeleteDialogOpen(false)
+            }}
+          >
+            삭제
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
 
@@ -370,7 +482,18 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
     setEsportsChannelsChecked,
   } = useCalendarSettings()
 
-  const gameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
+  const { events: customEvents, addEvent, updateEvent, removeEvent } = useCustomEvents()
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [editEventId, setEditEventId] = useState<string | null>(null)
+  const editEvent = customEvents.find((e) => e.id === editEventId) ?? null
+
+  const serverGameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
+  const customGameEvents = useMemo(() => mapCustomEventsToGameEvents(customEvents), [customEvents])
+  const gameEvents = useMemo(
+    () =>
+      [...serverGameEvents, ...customGameEvents].sort((a, b) => a.date.getTime() - b.date.getTime()),
+    [serverGameEvents, customGameEvents]
+  )
 
   /** E-sports 이벤트가 채널 필터를 통과하는지 (esportsChannelsChecked: null=전체, []=없음, string[]=선택) */
   function passesEsportsChannelFilter(ev: GameEvent): boolean {
@@ -434,9 +557,10 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
     return groups
   }, [filteredEvents])
 
-  /* Hero highlights: top 3 upcoming (선택된 카테고리만, end_date 있으면 종료일 기준) */
+  /* Hero highlights: top 3 upcoming (Custom 제외, 선택된 카테고리만) */
   const heroEvents = useMemo(() => {
     const upcoming = gameEvents
+      .filter((ev) => ev.category !== "custom")
       .filter((ev) => categories[ev.category] === true && passesEsportsChannelFilter(ev))
       .filter((ev) => {
         const effectiveEnd = getEffectiveEndDate(ev)
@@ -485,7 +609,7 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
         Categories
       </h4>
       <div className="flex flex-col gap-3">
-        {(["competition", "patch", "discount", "collaboration"] as EventCategory[]).map((cat) => {
+        {(["competition", "patch", "discount", "collaboration", "custom"] as EventCategory[]).map((cat) => {
           const config = CATEGORY_CONFIG[cat]
           const Icon = config.icon
           const isChecked = categories[cat] ?? true
@@ -573,6 +697,37 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
 
   return (
     <div className="flex flex-col gap-6 p-4 lg:p-6">
+      {/* This Month's Highlights + 일정 추가 (같은 줄) */}
+      <div className="flex items-center justify-between gap-4">
+        {heroEvents.length > 0 ? (
+          <h2 className="text-lg font-bold text-foreground">This Month{"'"}s Highlights</h2>
+        ) : (
+          <div className="flex-1" />
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-1.5"
+          onClick={() => setAddDialogOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+          일정 추가
+        </Button>
+      </div>
+
+      <AddCustomEventDialog
+        open={addDialogOpen || !!editEventId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditEventId(null)
+            setAddDialogOpen(false)
+          }
+        }}
+        onAdd={addEvent}
+        onUpdate={updateEvent}
+        initialEvent={editEvent}
+      />
+
       {/* Mobile: Category filters + Show Past Events (lg 미만에서 표시) */}
       <div className="flex flex-col gap-4 lg:hidden">
         {categoryFilterUI}
@@ -591,7 +746,6 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
       {/* Hero Section */}
       {heroEvents.length > 0 && (
         <section>
-          <h2 className="mb-4 text-lg font-bold text-foreground">This Month{"'"}s Highlights</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {heroEvents.map((ev) => (
               <HeroCard key={ev.id} event={ev} today={today} />
@@ -667,7 +821,12 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
                     >
                       {/* Timeline Dot */}
                       <div className={`absolute -left-3 top-5 h-2.5 w-2.5 rounded-full border-2 border-background ${CATEGORY_CONFIG[ev.category].barColor}`} />
-                      <EventCard event={ev} today={today} />
+                      <EventCard
+                      event={ev}
+                      today={today}
+                      onDelete={ev.isCustom ? removeEvent : undefined}
+                      onEdit={ev.isCustom ? (id) => setEditEventId(id) : undefined}
+                    />
                     </div>
                   ))}
                 </div>

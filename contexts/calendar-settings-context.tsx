@@ -13,7 +13,7 @@ const STORAGE_KEY = "driflux_calendar_settings"
    Types
    ═══════════════════════════════════════════════════════════════ */
 
-export type EventCategory = "competition" | "patch" | "discount" | "collaboration"
+export type EventCategory = "competition" | "patch" | "discount" | "collaboration" | "custom"
 
 export interface CalendarSettings {
   categories: Record<EventCategory, boolean>
@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS: CalendarSettings = {
     patch: true,
     discount: true,
     collaboration: true,
+    custom: true,
   },
   showPast: false,
   esportsChannelsChecked: null,
