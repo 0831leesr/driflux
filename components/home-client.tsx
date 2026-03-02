@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Gamepad2, ExternalLink, Tags, Video, Bookmark } from "lucide-react"
+import { Gamepad2, Tags, Video, Bookmark } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
@@ -17,17 +17,6 @@ import type { EventRow } from "@/lib/types"
 import { ExploreTabContent } from "@/components/explore/explore-tab-content"
 import { useFavoriteGames, useFavoriteTags } from "@/contexts/favorites-context"
 import { fetchStreamsForFollowedGames, fetchStreamsForFollowedTags } from "@/lib/data"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-
 interface HomeClientProps {
   liveStreams: StreamData[]
   trendingGames: TrendingGameRow[]
@@ -39,10 +28,6 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("main")
   const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved">("games")
-  const [streamModalOpen, setStreamModalOpen] = useState(false)
-  const [videoModalOpen, setVideoModalOpen] = useState(false)
-  const [selectedStream, setSelectedStream] = useState<StreamData | null>(null)
-  const [selectedVideo, setSelectedVideo] = useState<VideoData | null>(null)
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
   const [followedStreams, setFollowedStreams] = useState<StreamData[]>([])
@@ -91,22 +76,12 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
   const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
   const CHZZK_VIDEO_URL = "https://chzzk.naver.com/video"
   function handleStreamClick(stream: StreamData) {
-    setSelectedStream(stream)
-    setStreamModalOpen(true)
-  }
-  function handleContinueToExternal() {
-    const url = selectedStream?.url ?? (selectedStream?.channelId ? `${CHZZK_LIVE_URL}/${selectedStream.channelId}` : null)
+    const url = stream?.url ?? (stream?.channelId ? `${CHZZK_LIVE_URL}/${stream.channelId}` : null)
     if (url) window.open(url, "_blank")
-    setStreamModalOpen(false)
   }
   function handleVideoClick(video: VideoData) {
-    setSelectedVideo(video)
-    setVideoModalOpen(true)
-  }
-  function handleContinueToVideo() {
-    const url = selectedVideo?.videoId ? `${CHZZK_VIDEO_URL}/${selectedVideo.videoId}` : null
+    const url = video?.videoId ? `${CHZZK_VIDEO_URL}/${video.videoId}` : null
     if (url) window.open(url, "_blank")
-    setVideoModalOpen(false)
   }
 
   /* Use followed streams, show empty if no favorites */
@@ -219,62 +194,6 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
           <CalendarContent events={upcomingEvents} esportsChannels={esportsChannels} />
         ) : null}
       </main>
-
-      {/* Stream Modal */}
-      <AlertDialog open={streamModalOpen} onOpenChange={setStreamModalOpen}>
-        <AlertDialogContent className="border-border bg-card text-foreground">
-          <AlertDialogHeader>
-            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--neon-purple))]/15">
-              <ExternalLink className="h-6 w-6 text-[hsl(var(--neon-purple))]" />
-            </div>
-            <AlertDialogTitle className="text-foreground">
-              Watch on External Site?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              You are being redirected to the streaming site (Chzzk). Do you want to continue?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
-              onClick={handleContinueToExternal}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Video Modal */}
-      <AlertDialog open={videoModalOpen} onOpenChange={setVideoModalOpen}>
-        <AlertDialogContent className="border-border bg-card text-foreground">
-          <AlertDialogHeader>
-            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--neon-purple))]/15">
-              <ExternalLink className="h-6 w-6 text-[hsl(var(--neon-purple))]" />
-            </div>
-            <AlertDialogTitle className="text-foreground">
-              Watch on External Site?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              You are being redirected to the streaming site (Chzzk) to watch this video. Do you want to continue?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
-              onClick={handleContinueToVideo}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }

@@ -2,22 +2,12 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Radio, ExternalLink, Heart, Users } from "lucide-react"
+import { ArrowLeft, Radio, Heart, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StreamCard, type StreamData } from "@/components/stream-card"
 import { useFavoriteTags } from "@/contexts/favorites-context"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 
 interface TagDetailsPageProps {
   tagName: string
@@ -26,8 +16,6 @@ interface TagDetailsPageProps {
 
 export function TagDetailsPage({ tagName, streams }: TagDetailsPageProps) {
   const [contentTab, setContentTab] = useState("live")
-  const [streamModalOpen, setStreamModalOpen] = useState(false)
-  const [selectedStream, setSelectedStream] = useState<StreamData | null>(null)
   const { isFavorite, toggleFavorite } = useFavoriteTags()
   const isFollowing = isFavorite(tagName)
 
@@ -39,13 +27,8 @@ export function TagDetailsPage({ tagName, streams }: TagDetailsPageProps) {
 
   const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
   function handleStreamClick(stream: StreamData) {
-    setSelectedStream(stream)
-    setStreamModalOpen(true)
-  }
-  function handleContinueToExternal() {
-    const url = selectedStream?.url ?? (selectedStream?.channelId ? `${CHZZK_LIVE_URL}/${selectedStream.channelId}` : null)
+    const url = stream?.url ?? (stream?.channelId ? `${CHZZK_LIVE_URL}/${stream.channelId}` : null)
     if (url) window.open(url, "_blank")
-    setStreamModalOpen(false)
   }
 
   function handleFollowClick() {
@@ -151,34 +134,6 @@ export function TagDetailsPage({ tagName, streams }: TagDetailsPageProps) {
           )}
         </div>
       </div>
-
-      {/* Stream Modal */}
-      <AlertDialog open={streamModalOpen} onOpenChange={setStreamModalOpen}>
-        <AlertDialogContent className="border-border bg-card text-foreground">
-          <AlertDialogHeader>
-            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--neon-purple))]/15">
-              <ExternalLink className="h-6 w-6 text-[hsl(var(--neon-purple))]" />
-            </div>
-            <AlertDialogTitle className="text-foreground">
-              Watch on External Site?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              You are being redirected to the streaming site (Chzzk). Do you want to continue?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
-              onClick={handleContinueToExternal}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }
