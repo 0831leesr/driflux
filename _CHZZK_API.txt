@@ -1,321 +1,528 @@
-CHZZK에서 사용중인 비공식 API 중 일부부를 정리합니다.
+# 치지직(Chzzk) 비공식 API 정리
 
+CHZZK에서 사용 중인 비공식 API 중 일부를 정리합니다.
 
-[현재 시청자 수 최고 게임]
-* https://api.chzzk.naver.com/service/v1/categories/live?categoryType=GAME&size="NN"
-- "NN" = 게임 개수 (최대 50)
-- ex. https://api.chzzk.naver.com/service/v1/categories/live?categoryType=GAME&size=50
-* data 및 예시
-"categoryType": "GAME",
-"categoryId": "Minecraft",
-"categoryValue": "마인크래프트",
-"posterImageUrl": "https://nng-phinf.pstatic.net/MjAyMzEyMTFfMTM3/MDAxNzAyMjgyNjI1MDgw.Ozu1fi3gdfyooyBjO_SGXJBDqRWgDFLlmWAFZg6qYIUg.rlnppQX9tMgn2nvgjhXwqsJhfktN23Gdjj09CgJ--BYg.JPEG/104.%EB%A7%88%EC%9D%B8%ED%81%AC%EB%9E%98%ED%94%84%ED%8A%B8_%EC%99%84%EC%84%B1%EB%B3%B8_%EC%9D%B4%EB%8B%AC%EB%8B%98.jpg",
-"openLiveCount": 110,
-"concurrentUserCount": 43013,
-"newCategory": false,
-"dropsCampaignNos": []
+---
 
+## 1. 현재 시청자 수 최고 게임 (인기 카테고리 목록)
 
-[특정 카테고리 라이브 목록] (20개 근처까지만 불러와지는 것으로 추정됨)
-* https://api.chzzk.naver.com/service/v2/categories/"AAA"/"BBB"/lives?
-- "AAA" = 카테고리 종류 (우리는 "GAME"만 사용)
-- "BBB" = 슬러그
-- ex. https://api.chzzk.naver.com/service/v2/categories/GAME/Minecraft/lives?\
-* data 및 예시
-"liveId": 17527246,
-"liveTitle": "[픽크타2] 어제 하루 통으로 쉬었는데 저 개10도태녀인가요?",
-"liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/27313842/live/17527246/record/50936786/thumbnail/image_{type}.jpg",
-"defaultThumbnailImageUrl": null,
-"concurrentUserCount": 4717,
-"cvExposure": true,
-"accumulateCount": 0,
-"openDate": "2026-02-27 13:29:44",
-"adult": false,
-"tags": ["스텔라이브", "타비", "버튜버", "픽크타2"],
-"categoryType": "GAME",
-"liveCategory": "Minecraft",
-"liveCategoryValue": "마인크래프트",
-"dropsCampaignNo": null,
-"watchPartyNo": null,
-"watchPartyTag": null,
-"watchPartyPaidProductId": null,
-"watchPartyType": null,
-"paidProductId": null,
-"channel": {
+### 개요
+시청자 수 기준으로 정렬된 게임 카테고리 목록을 반환합니다.
+
+### 요청 정보
+
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v1/categories/live` |
+
+### 쿼리 파라미터
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| categoryType | string | O | `GAME` (고정) |
+| size | number | O | 반환할 게임 개수 (최대 50) |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v1/categories/live?categoryType=GAME&size=50
+```
+
+### 응답 데이터 (아이템별)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| categoryType | string | `"GAME"` |
+| categoryId | string | 카테고리 ID (영문 슬러그, 예: `Minecraft`) |
+| categoryValue | string | 카테고리 한글명 (예: `마인크래프트`) |
+| posterImageUrl | string | 포스터 이미지 URL |
+| openLiveCount | number | 현재 진행 중인 라이브 개수 |
+| concurrentUserCount | number | 총 시청자 수 |
+| newCategory | boolean | 신규 카테고리 여부 |
+| dropsCampaignNos | array | 드롭스 캠페인 ID 목록 |
+
+### 응답 예시
+```json
+{
+  "categoryType": "GAME",
+  "categoryId": "Minecraft",
+  "categoryValue": "마인크래프트",
+  "posterImageUrl": "https://nng-phinf.pstatic.net/...",
+  "openLiveCount": 110,
+  "concurrentUserCount": 43013,
+  "newCategory": false,
+  "dropsCampaignNos": []
+}
+```
+
+---
+
+## 2. 특정 카테고리 라이브 목록
+
+### 개요
+특정 게임 카테고리의 실시간 방송 목록을 반환합니다. (약 20개까지)
+
+### 요청 정보
+
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v2/categories/{categoryType}/{slug}/lives` |
+
+### 경로 파라미터
+
+| 파라미터 | 설명 |
+|----------|------|
+| categoryType | 카테고리 종류 (우리는 `GAME`만 사용) |
+| slug | 게임 슬러그 (예: `Minecraft`, `League_of_Legends`) |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v2/categories/GAME/Minecraft/lives
+```
+
+### 응답 데이터 (아이템별)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| liveId | number | 라이브 고유 ID |
+| liveTitle | string | 방송 제목 |
+| liveImageUrl | string | 썸네일 URL (`{type}` → 480, 720, 1080 등으로 치환) |
+| defaultThumbnailImageUrl | string \| null | 기본 썸네일 URL |
+| concurrentUserCount | number | 시청자 수 |
+| cvExposure | boolean | 시청자 수 노출 여부 |
+| accumulateCount | number | 누적 시청자 수 |
+| openDate | string | 방송 시작일시 |
+| adult | boolean | 성인 콘텐츠 여부 |
+| tags | string[] | 태그 목록 |
+| categoryType | string | `"GAME"` |
+| liveCategory | string | 게임 영문 슬러그 |
+| liveCategoryValue | string | 게임 한글명 |
+| channel | object | 채널 정보 |
+
+### channel 객체
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| channelId | string | 채널 ID |
+| channelName | string | 채널명 |
+| channelImageUrl | string | 채널 프로필 이미지 URL |
+| verifiedMark | boolean | 인증 마크 여부 |
+| activatedChannelBadgeIds | string[] | 활성화된 배지 ID 목록 |
+
+### 응답 예시
+```json
+{
+  "liveId": 17527246,
+  "liveTitle": "[픽크타2] 어제 하루 통으로 쉬었는데 저 개10도태녀인가요?",
+  "liveImageUrl": "https://livecloud-thumb.akamaized.net/.../image_{type}.jpg",
+  "defaultThumbnailImageUrl": null,
+  "concurrentUserCount": 4717,
+  "cvExposure": true,
+  "accumulateCount": 0,
+  "openDate": "2026-02-27 13:29:44",
+  "adult": false,
+  "tags": ["스텔라이브", "타비", "버튜버", "픽크타2"],
+  "categoryType": "GAME",
+  "liveCategory": "Minecraft",
+  "liveCategoryValue": "마인크래프트",
+  "channel": {
     "channelId": "a6c4ddb09cdb160478996007bff35296",
     "channelName": "아라하시 타비",
-    "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNjAyMDlfNSAg/MDAxNzcwNjE3MDU5MzIy.96eyJLGCwwVwtUjB-rdaKuquMasaRYVBgn8CtHJmS1kg.epLzeb-55lpzcpNwtGyrfaIfSetw_EEvV1svkbTtqBAg.PNG/image.png",
+    "channelImageUrl": "https://nng-phinf.pstatic.net/...",
     "verifiedMark": true,
-    "activatedChannelBadgeIds": [],
-    "personalData": {"privateUserBlock": false} },
-"blindType": null,
-"tvAppViewingPolicyType": "ALLOWED",
-"party": null
+    "activatedChannelBadgeIds": []
+  }
+}
+```
 
+---
 
-[특정 카테고리 특정 라이브 목록] (!!확실한 정보 아님, 사용하지 말 것!!)
-* https://api.chzzk.naver.com/service/v2/categories/GAME/"AAA"/lives?concurrentUserCount="NN"&liveId="MMM"
-- "AAA" = 게임 슬러그
-- "NN" = 특정 시청자 수 이상인 라이브만 표시
-- "MMM" = 특정 라이브 ID, 웹사이트에서 해당 라이브 ID 이후에 이어서 표시됨
-- ex.https://api.chzzk.naver.com/service/v2/categories/GAME/Black_Survival_Eternal_Return/lives?concurrentUserCount=14&liveId=17529398
-* data 및 예시
-"liveId": 17526072,
-"liveTitle": "치마 + 크롭 후드티입고 일겜시참 1등하면 빼빼로",
-"liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/32518991/live/17526072/record/50934958/thumbnail/image_{type}.jpg",
-"defaultThumbnailImageUrl": null,
-"concurrentUserCount": 12,
-"cvExposure": true,
-"accumulateCount": 0,
-"openDate": "2026-02-27 11:42:54",
-"adult": false,
-"tags": ["이터널리턴", "버튜버"],
-"categoryType": "GAME",
-"liveCategory": "Black_Survival_Eternal_Return",
-"liveCategoryValue": "이터널 리턴",
-"dropsCampaignNo": null,
-"watchPartyNo": null,
-"watchPartyTag": null,
-"watchPartyPaidProductId": null,
-"watchPartyType": null,
-"paidProductId": null,
-"channel": {
-    "channelId": "91e71161df0d3dbb367f7c7e0a4c8621",
-    "channelName": "키나사1",
-    "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNTEyMTFfMjc3/MDAxNzY1NDA5MzQwNDI2.24RhX537D8drj6XPr3NLDELzWbTV5qSTxiCJyb5F1zog.EiEMPpJyNPsLCUpKDPoLar35hK-mQ2PFQ13-1IqmILog.JPEG/image.jpg",
-    "verifiedMark": false,
-    "activatedChannelBadgeIds": [],
-    "personalData": {"privateUserBlock": false}
-                },
-"blindType": null,
-"tvAppViewingPolicyType": "ALLOWED",
-"party": null
+## 3. 특정 카테고리 라이브 목록 (페이지네이션) ⚠️ 사용 비권장
 
+### 개요
+특정 시청자 수 이상의 라이브만 필터링하거나, 특정 liveId 이후 목록을 이어서 가져오는 API로 추정됩니다. **확실한 정보가 아니므로 사용하지 말 것.**
 
-[특정 카테고리 다시보기 목록]
-* https://api.chzzk.naver.com/service/v2/categories/GAME/"AAA"/videos?
-- AAA = 게임 슬러그
-- ex. https://api.chzzk.naver.com/service/v2/categories/GAME/Minecraft/videos?
-* data 및 예시
-"videoNo": 11973379,
-"videoId": "D510EC207B7BB8AC84E5CCDFE7FCE1C0AA00",
-"videoTitle": "진짜 진짜 서버 열엇음 진짜 마크 방송!!! ",
-"videoType": "REPLAY",
-"publishDate": "2026-02-27 15:07:16",
-"thumbnailImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/kr/live-rewind-image/record/50939016/represent/thumbnail/image_17528614_720_0.jpg",
-"trailerUrl": null,
-"duration": 323,
-"readCount": 0,
-"publishDateAt": 1772172436256,
-"categoryType": "GAME",
-"videoCategory": "Minecraft",
-"videoCategoryValue": "마인크래프트",
-"exposure": false,
-"adult": false,
-"clipActive": true,
-"livePv": 9,
-"tags": ["vtuber", "유입환영", "버츄얼", "버튜버", "퓨어워터"],
-"commentActive": true,
-"channel": {
+### 요청 정보
+
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v2/categories/GAME/{slug}/lives` |
+
+### 쿼리 파라미터
+
+| 파라미터 | 설명 |
+|----------|------|
+| concurrentUserCount | 특정 시청자 수 이상인 라이브만 표시 |
+| liveId | 해당 라이브 ID 이후 목록을 이어서 표시 |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v2/categories/GAME/Black_Survival_Eternal_Return/lives?concurrentUserCount=14&liveId=17529398
+```
+
+### 응답 데이터
+→ [2. 특정 카테고리 라이브 목록]과 동일한 구조
+
+---
+
+## 4. 특정 카테고리 다시보기 목록 (VOD)
+
+### 개요
+특정 게임 카테고리의 다시보기(VOD) 목록을 반환합니다.
+
+### 요청 정보
+
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v2/categories/GAME/{slug}/videos` |
+
+### 경로 파라미터
+
+| 파라미터 | 설명 |
+|----------|------|
+| slug | 게임 슬러그 |
+
+### 쿼리 파라미터 (추정)
+
+| 파라미터 | 설명 |
+|----------|------|
+| size | 반환 개수 |
+| offset | 페이지네이션 오프셋 |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v2/categories/GAME/Minecraft/videos
+```
+
+### 응답 데이터 (아이템별)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| videoNo | number | 영상 번호 |
+| videoId | string | 영상 고유 ID (URL에 사용) |
+| videoTitle | string | 영상 제목 |
+| videoType | string | `REPLAY` 등 |
+| publishDate | string | 공개일시 |
+| publishDateAt | number | 공개일시 (Unix ms) |
+| thumbnailImageUrl | string | 썸네일 URL |
+| trailerUrl | string \| null | 예고편 URL |
+| duration | number | 재생 시간 (초) |
+| readCount | number | 조회수 |
+| videoCategory | string | 게임 영문 슬러그 |
+| videoCategoryValue | string | 게임 한글명 |
+| livePv | number | 라이브 시청자 수 |
+| tags | string[] | 태그 목록 |
+| channel | object | 채널 정보 |
+
+### 응답 예시
+```json
+{
+  "videoNo": 11973379,
+  "videoId": "D510EC207B7BB8AC84E5CCDFE7FCE1C0AA00",
+  "videoTitle": "진짜 진짜 서버 열엇음 진짜 마크 방송!!!",
+  "videoType": "REPLAY",
+  "publishDate": "2026-02-27 15:07:16",
+  "thumbnailImageUrl": "https://livecloud-thumb.akamaized.net/...",
+  "trailerUrl": null,
+  "duration": 323,
+  "readCount": 0,
+  "videoCategory": "Minecraft",
+  "videoCategoryValue": "마인크래프트",
+  "livePv": 9,
+  "tags": ["vtuber", "유입환영", "버튜버", "퓨어워터"],
+  "channel": {
     "channelId": "375c23aef993b26218562a2a38e91312",
     "channelName": "퓨어워터",
-    "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNDEwMThfMTAg/MDAxNzI5MTc5NTQ5Mzkz.e1LZzyRmhMm3jDutAWg6u2weze5hEiVF04Pwwi1Thuog.w7-ghUc9teav7WhBkDUVMQhV6e_cswPzK5Z_tbc8YB8g.PNG/%ED%99%94%EB%A9%B4_%EC%BA%A1%EC%B2%98_2024-10-18_003850.png",
-    "verifiedMark": false,
-    "activatedChannelBadgeIds": [],
-    "personalData": {"privateUserBlock": false} },
-"blindType": null,
-"watchTimeline": null,
-"paidProductId": null,
-"tvAppViewingPolicyType": "ALLOWED",
-"chapterActive": false
+    "channelImageUrl": "https://nng-phinf.pstatic.net/..."
+  }
+}
+```
 
+---
 
-[전체 라이브 목록 (시청자순)]
-* https://api.chzzk.naver.com/service/v1/lives?size="NN"&sortType=POPULAR : 
-- NN = 라이브 개수 (최대 50)
-* data 및 예시
-"liveId": 17527246,
-"liveTitle": "[픽크타2] 어제 하루 통으로 쉬었는데 저 개10도태녀인가요?",
-"liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/27313842/live/17527246/record/50936786/thumbnail/image_{type}.jpg",
-"defaultThumbnailImageUrl": null,
-"concurrentUserCount": 4677,
-"cvExposure": true,
-"accumulateCount": 0,
-"openDate": "2026-02-27 13:29:44",
-"adult": false,
-"tags": ["스텔라이브", "타비", "버튜버", "픽크타2"],
-"categoryType": "GAME",
-"liveCategory": "Minecraft",
-"liveCategoryValue": "마인크래프트",
-"dropsCampaignNo": null,
-"watchPartyNo": null,
-"watchPartyTag": null,
-"watchPartyPaidProductId": null,
-"watchPartyType": null,
-"paidProductId": null,
-"channel": {
-    "channelId": "a6c4ddb09cdb160478996007bff35296",
-    "channelName": "아라하시 타비",
-    "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNjAyMDlfNSAg/MDAxNzcwNjE3MDU5MzIy.96eyJLGCwwVwtUjB-rdaKuquMasaRYVBgn8CtHJmS1kg.epLzeb-55lpzcpNwtGyrfaIfSetw_EEvV1svkbTtqBAg.PNG/image.png",
-    "verifiedMark": true,
-    "activatedChannelBadgeIds": []
-                },
-"blindType": null,
-"tvAppViewingPolicyType": "ALLOWED",
-"party": null
+## 5. 전체 라이브 목록 (시청자순)
 
+### 개요
+전체 플랫폼에서 시청자 수 기준으로 정렬된 라이브 목록을 반환합니다.
 
-[전체 다시보기 목록 (시청자순)]
-* https://api.chzzk.naver.com/service/v1/home/videos?size="NN"&sortType=POPULAR : 전체 다시보기 목록 (시청자순)
-- NN = 다시보기 개수 (최대 100)
-* data 및 예시
-"videoNo": 11965222,
-"videoId": "7F0C8B017D3DB03A25ADE719E6ACCD6AAF2F",
-"videoTitle": "반갑습니다",
-"videoType": "REPLAY",
-"publishDate": "2026-02-27 00:14:29",
-"thumbnailImageUrl": "https://video-phinf.pstatic.net/20260227_42/1772118894213on7WQ_JPEG/tXz8xLnIjc_03.jpg",
-"trailerUrl": "https://a01-g-naver-vod.akamaized.net/glive/c/read/v2/VOD_ALPHA/glive/7F0C8B017D3DB03A25ADE719E6ACCD6AAF2F/trailer/1772118811462/0fe78b4e-132b-11f1-8915-e4434b2a1c7c.mp4?__gda__=1772201676_c9da06dbfb93abd77fe6df9d44deeea3",
-"duration": 3929,
-"readCount": 13069,
-"publishDateAt": 1772118869295,
-"categoryType": "ETC",
-"videoCategory": "talk",
-"videoCategoryValue": "talk",
-"exposure": false,
-"adult": false,
-"clipActive": false,
-"livePv": 45574,
-"tags": [],
-"commentActive": true,
-"channel": {
-    "channelId": "3497a9a7221cc3ee5d3f95991d9f95e9",
-    "channelName": "랄로",
-    "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNDAyMTVfMTg5/MDAxNzA4MDAxOTkzNTM3.eFfaNqILr5WMC1imgLS-sUG85KB8dQpRGE7RuxRU8Jkg.TQ1EdEPnPVS256zEqmpPg-0IAcVBCP62gn0uiUMDu2sg.PNG/%ED%94%84%EC%82%AC_%EC%B4%88%EB%A1%9D.png",
-    "verifiedMark": true,
-    "activatedChannelBadgeIds": ["2025chzzkcup_3"],
-    "personalData": {"privateUserBlock": false}
-                },
-"blindType": null,
-"watchTimeline": null,
-"paidProductId": null,
-"tvAppViewingPolicyType": "ALLOWED",
-"chapterActive": false
+### 요청 정보
 
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v1/lives` |
 
-[특정 게임 카테고리 클립 목록] (시청자순)
-* https://api.chzzk.naver.com/service/v1/categories/GAME/"AAA"/clips?filterType=WITHIN_THIRTY_DAYS&orderType=POPULAR&size="NN"
-- "AAA" = 게임 슬러그
-- "NN" = 클립 개수 (최대 50개)
-- ex. https://api.chzzk.naver.com/service/v1/categories/GAME/Minecraft/clips?filterType=WITHIN_THIRTY_DAYS&orderType=POPULAR&size=10 : 특정 게임 카테고리 클립 목록 (최대 50개) (시청자순)
-* data 및 예시
-"clipUID": "L1AKEHL3p7",
-"videoId": "E6F0A0D13ADFA1C4867208201DA813466943",
-"clipTitle": "최신기술 터미널 ㅋㅋ",
-"ownerChannelId": "bdc57cc4217173f0e89f63fba2f1c6e5",
-"ownerChannel": {
+### 쿼리 파라미터
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| size | number | O | 반환할 라이브 개수 (최대 50) |
+| sortType | string | O | `POPULAR` (시청자순) |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v1/lives?size=50&sortType=POPULAR
+```
+
+### 응답 데이터 (아이템별)
+→ [2. 특정 카테고리 라이브 목록]과 동일한 구조
+
+---
+
+## 6. 전체 다시보기 목록 (시청자순)
+
+### 개요
+전체 플랫폼에서 시청자/조회수 기준으로 정렬된 다시보기 목록을 반환합니다.
+
+### 요청 정보
+
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v1/home/videos` |
+
+### 쿼리 파라미터
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| size | number | O | 반환할 영상 개수 (최대 100) |
+| sortType | string | O | `POPULAR` (인기순) |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v1/home/videos?size=100&sortType=POPULAR
+```
+
+### 응답 데이터 (아이템별)
+→ [4. 특정 카테고리 다시보기 목록]과 유사한 구조 (categoryType이 ETC 등 다른 값 가능)
+
+---
+
+## 7. 특정 게임 카테고리 클립 목록
+
+### 개요
+특정 게임의 인기 클립 목록을 반환합니다. (최근 30일 이내, 시청자순)
+
+### 요청 정보
+
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v1/categories/GAME/{slug}/clips` |
+
+### 경로 파라미터
+
+| 파라미터 | 설명 |
+|----------|------|
+| slug | 게임 슬러그 |
+
+### 쿼리 파라미터
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| filterType | string | O | `WITHIN_THIRTY_DAYS` (최근 30일) |
+| orderType | string | O | `POPULAR` (시청자순) |
+| size | number | O | 반환할 클립 개수 (최대 50) |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v1/categories/GAME/Minecraft/clips?filterType=WITHIN_THIRTY_DAYS&orderType=POPULAR&size=10
+```
+
+### 응답 데이터 (아이템별)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| clipUID | string | 클립 고유 ID |
+| videoId | string | 영상 ID |
+| clipTitle | string | 클립 제목 |
+| ownerChannelId | string | 업로더 채널 ID |
+| ownerChannel | object | 업로더 채널 정보 |
+| thumbnailImageUrl | string | 썸네일 URL |
+| clipCategory | string | 게임 영문 슬러그 |
+| duration | number | 재생 시간 (초) |
+| adult | boolean | 성인 콘텐츠 여부 |
+| createdDate | string | 생성일시 |
+| readCount | number | 조회수 |
+
+### 응답 예시
+```json
+{
+  "clipUID": "L1AKEHL3p7",
+  "videoId": "E6F0A0D13ADFA1C4867208201DA813466943",
+  "clipTitle": "최신기술 터미널 ㅋㅋ",
+  "ownerChannelId": "bdc57cc4217173f0e89f63fba2f1c6e5",
+  "ownerChannel": {
     "channelId": "bdc57cc4217173f0e89f63fba2f1c6e5",
     "channelName": "다주",
-    "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNDAxMDFfNDIg/MDAxNzA0MDc3OTAxNTEw.BFkbuXeeAI7VHdH4iWFNwhRO8J9gnSqlLQczMUPWU-4g.kUOuvYabUvpL347-O5mofCGz3h58DrvCNgHWky1mGmcg.PNG/e19ac520d13f081f-profile_image-300x300.png",
+    "channelImageUrl": "https://nng-phinf.pstatic.net/...",
     "verifiedMark": true
-                },
-"thumbnailImageUrl": "https://video-phinf.pstatic.net/20260204_282/1770204759983CoRqX_JPEG/8KO8mTmD2Q_03.jpg",
-"categoryType": "GAME",
-"clipCategory": "Minecraft",
-"duration": 29,
-"adult": false,
-"createdDate": "2026-02-04 20:32:04",
-"recId": "{\"seedClipUID\":\"L1AKEHL3p7\",\"fromType\":\"CATEGORY\",\"listType\":\"CATEGORY\",\"orderType\":\"POPULAR\",\"filterType\":\"WITHIN_THIRTY_DAYS\",\"categoryType\":\"GAME\",\"clipCategory\":\"Minecraft\"}",
-"readCount": 46580,
-"blindType": null,
-"privateUserBlock": false
+  },
+  "thumbnailImageUrl": "https://video-phinf.pstatic.net/...",
+  "clipCategory": "Minecraft",
+  "duration": 29,
+  "adult": false,
+  "createdDate": "2026-02-04 20:32:04",
+  "readCount": 46580
+}
+```
 
+---
 
-[특정 게임 정보]
-* https://api.chzzk.naver.com/service/v1/categories/GAME/"AAA"/info
-- AAA = 게임 슬러그
-- ex. https://api.chzzk.naver.com/service/v1/categories/GAME/BIOHAZARD_requiem/info
-* data 및 예시
-"categoryType": "GAME",
-"categoryId": "BIOHAZARD_requiem",
-"categoryValue": "바이오하자드 레퀴엠",
-"posterImageUrl": "https://nng-phinf.pstatic.net/MjAyNTEyMThfMTQ2/MDAxNzY2MDI1NTIyNDY1.F7quw7bm2Ni_7pR0HqXaav05hRvl50KQNmmfp0Bu4HEg.Dj6MnI_Oc1Zy0gB8KSkVlob7CWPXxvNEkhthoLWvlfQg.PNG/%EB%B0%94%EC%9D%B4%EC%98%A4%ED%95%98%EC%9E%90%EB%93%9C%EB%A0%88%ED%80%B4%EC%97%A0_%ED%8F%AC%EC%8A%A4%ED%84%B0.png",
-"openLiveCount": 180,
-"concurrentUserCount": 10213,
-"tags": ["바이오하자드 레퀴엠", "서바이벌", "호러", "PC", "캡콤"],
-"existLounge": true,
-"following": false,
-"newCategory": true,
-"dropsCampaignList": []
+## 8. 특정 게임 정보
 
+### 개요
+특정 게임 카테고리의 상세 정보를 반환합니다.
 
-[특정 라이브 정보]
-* https://api.chzzk.naver.com/service/v3.3/channels/"AAA"/live-detail?cu=false&dt="BBB"&tm=true
-- AAA = 채널 ID (https://chzzk.naver.com/live/"AAA")
-- BBB = (확인 못함)
-- ex. https://api.chzzk.naver.com/service/v3.3/channels/9351fb8417f73405c84e0846409e3263/live-detail?cu=false&dt=6998e&tm=true
-* data 및 예시
-"code": 200,
-"message": null,
-"content": {
-"liveId": 17536498,
-"liveTitle": "뭣 도네이션을 읽으면서 링 피트를 한다고? ⛅",
-"status": "OPEN",
-"liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/42153367/live/17536498/record/50951912/thumbnail/image_{type}.jpg",
-"defaultThumbnailImageUrl": null,
-"concurrentUserCount": 141,
-"cvExposure": true,
-"accumulateCount": 0,
-"openDate": "2026-02-27 21:00:39",
-"closeDate": null,
-"adult": true,
-"krOnlyViewing": false,
-"clipActive": true,
-"tags": ["리액트kr", "리액트", "버튜버", "버츄얼"],
-"chatChannelId": "N2KFnk",
-"categoryType": "GAME",
-"liveCategory": "RingFit_Adventure",
-"liveCategoryValue": "링 피트 어드벤처",
-"chatActive": true,
-"chatAvailableGroup": "ALL",
-"paidPromotion": false,
-"chatAvailableCondition": "NONE",
-"minFollowerMinute": 0,
-"allowSubscriberInFollowerMode": true,
-"livePlaybackJson": "{\"meta\":{\"videoId\":\"C9416DE698FED854074308BA95D58F5A04AF\",\"streamSeq\":42153367,\"liveId\":\"17536498\",\"paidLive\":false,\"cdnInfo\":{\"cdnType\":\"GCDN\"},\"p2p\":true,\"cmcdEnabled\":false,\"playbackAuthType\":\"NONE\"},\"serviceMeta\":{\"contentType\":\"VIDEO\"},\"live\":{\"start\":\"2026-02-27T21:00:39\",\"open\":\"2026-02-27T21:00:39\",\"timeMachine\":false,\"status\":\"STARTED\"},\"api\":[{\"name\":\"p2p-config\",\"path\":\"https://apis.naver.com/livecloud/livecloud/xray/p2p/v1/config/chzzk\"},{\"name\":\"qoeConfig\",\"path\":\"https://apis.naver.com/policy/policy/policy\"}],\"media\":[{\"mediaId\":\"HLS\",\"protocol\":\"HLS\",\"path\":\"https://ex-nlive-streaming.navercdn.com/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_hls_playlist.m3u8?hdnts=st=1772207667~exp=1772268877~acl=*/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/*~hmac=7d236757342fe334302e00f538b1ce5be69b51bce6a7c67abc51879a10492b21\",\"encodingTrack\":[{\"encodingTrackId\":\"720p\",\"videoProfile\":\"high\",\"audioProfile\":\"LC\",\"p2pPath\":\"/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie_hls_720p_playlist.m3u8?channel_id=17536498_hls_h264_720p_50951912&cdn_url=aHR0cHM6Ly9leC1ubGl2ZS1zdHJlYW1pbmcubmF2ZXJjZG4uY29tL2NoenprL2xpcDJfa3IyL2FubXNzOTA3Ni96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllX2hsc183MjBwX3BsYXlsaXN0Lm0zdTg/aGRudHM9c3Q9MTc3MjIwNzY2N35leHA9MTc3MjI2ODg3N35hY2w9Ki96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvKn5obWFjPTdkMjM2NzU3MzQyZmUzMzQzMDJlMDBmNTM4YjFjZTViZTY5YjUxYmNlNmE3YzY3YWJjNTE4NzlhMTA0OTJiMjE=&timemachine=false&service_code=chzzk&playback_auth_type=NONE\",\"p2pPathUrlEncoding\":\"/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie_hls_720p_playlist.m3u8?channel_id%3D17536498_hls_h264_720p_50951912%26cdn_url%3DaHR0cHM6Ly9leC1ubGl2ZS1zdHJlYW1pbmcubmF2ZXJjZG4uY29tL2NoenprL2xpcDJfa3IyL2FubXNzOTA3Ni96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllX2hsc183MjBwX3BsYXlsaXN0Lm0zdTg%2FaGRudHM9c3Q9MTc3MjIwNzY2N35leHA9MTc3MjI2ODg3N35hY2w9Ki96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvKn5obWFjPTdkMjM2NzU3MzQyZmUzMzQzMDJlMDBmNTM4YjFjZTViZTY5YjUxYmNlNmE3YzY3YWJjNTE4NzlhMTA0OTJiMjE%3D%26timemachine%3Dfalse%26service_code%3Dchzzk%26playback_auth_type%3DNONE\",\"videoCodec\":\"H264\",\"videoBitRate\":3000000,\"audioBitRate\":192000,\"videoFrameRate\":\"30.0\",\"videoWidth\":1280,\"videoHeight\":720,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false},{\"encodingTrackId\":\"480p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":1500000,\"audioBitRate\":192000,\"videoFrameRate\":\"30.0\",\"videoWidth\":852,\"videoHeight\":480,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"360p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":600000,\"audioBitRate\":96000,\"videoFrameRate\":\"30.0\",\"videoWidth\":640,\"videoHeight\":360,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"144p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":128000,\"audioBitRate\":64000,\"videoFrameRate\":\"30.0\",\"videoWidth\":256,\"videoHeight\":144,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"1080p\",\"videoProfile\":\"high\",\"audioProfile\":\"LC\",\"p2pPath\":\"/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie_hls_1080p_playlist.m3u8?channel_id=17536498_hls_h264_1080p_50951912&cdn_url=aHR0cHM6Ly9leC1ubGl2ZS1zdHJlYW1pbmcubmF2ZXJjZG4uY29tL2NoenprL2xpcDJfa3IyL2FubXNzOTA3Ni96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllX2hsc18xMDgwcF9wbGF5bGlzdC5tM3U4P2hkbnRzPXN0PTE3NzIyMDc2Njd+ZXhwPTE3NzIyNjg4Nzd+YWNsPSovemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLyp+aG1hYz03ZDIzNjc1NzM0MmZlMzM0MzAyZTAwZjUzOGIxY2U1YmU2OWI1MWJjZTZhN2M2N2FiYzUxODc5YTEwNDkyYjIx&timemachine=false&service_code=chzzk&playback_auth_type=NONE\",\"p2pPathUrlEncoding\":\"/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie_hls_1080p_playlist.m3u8?channel_id%3D17536498_hls_h264_1080p_50951912%26cdn_url%3DaHR0cHM6Ly9leC1ubGl2ZS1zdHJlYW1pbmcubmF2ZXJjZG4uY29tL2NoenprL2xpcDJfa3IyL2FubXNzOTA3Ni96aGI2dDRrbnBqZDRta2d5NzZ4d3RsaGJkNGlxN25obTFhaWUvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllX2hsc18xMDgwcF9wbGF5bGlzdC5tM3U4P2hkbnRzPXN0PTE3NzIyMDc2Njd%2BZXhwPTE3NzIyNjg4Nzd%2BYWNsPSovemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLyp%2BaG1hYz03ZDIzNjc1NzM0MmZlMzM0MzAyZTAwZjUzOGIxY2U1YmU2OWI1MWJjZTZhN2M2N2FiYzUxODc5YTEwNDkyYjIx%26timemachine%3Dfalse%26service_code%3Dchzzk%26playback_auth_type%3DNONE\",\"videoCodec\":\"H264\",\"videoBitRate\":8192000,\"audioBitRate\":192000,\"videoFrameRate\":\"60.0\",\"videoWidth\":1920,\"videoHeight\":1080,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":true,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"audioOnly\",\"path\":\"https://ex-nlive-streaming.navercdn.com/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_hls_audioOnly_playlist.m3u8?hdnts=st=1772207667~exp=1772268877~acl=*/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/*~hmac=7d236757342fe334302e00f538b1ce5be69b51bce6a7c67abc51879a10492b21\",\"audioCodec\":\"AAC\",\"audioBitRate\":96000,\"audioOnly\":true,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false}]},{\"mediaId\":\"LLHLS\",\"protocol\":\"HLS\",\"path\":\"https://ex-nlive-streaming.navercdn.com/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_playlist.m3u8?hdnts=st=1772207667~exp=1772268877~acl=*/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/*~hmac=7d236757342fe334302e00f538b1ce5be69b51bce6a7c67abc51879a10492b21\",\"latency\":\"lowLatency\",\"encodingTrack\":[{\"encodingTrackId\":\"720p\",\"videoProfile\":\"high\",\"audioProfile\":\"LC\",\"p2pPath\":\"/chzzk/lip2_kr/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_720p_playlist.m3u8?channel_id=17536498_hls_h264_720p_50951912&cdn_url=aHR0cHM6Ly9saXZlY2xvdWQucHN0YXRpYy5uZXQvY2h6emsvbGlwMl9rci9hbm1zczkwNzYvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLzdha296ZzRmNzR6bG52NzB3YThlbnZzNGlxN25obTE3MmJfNzIwcF9wbGF5bGlzdC5tM3U4P2hkbnRzPXN0PTE3NzIyMDc2Njd+ZXhwPTE3NzIyNjcwNzd+YWNsPSovemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLyp+aG1hYz1kZTQ1MzgxNjU3OGJlNWNhOGRjOTRhZTJjNDVmNGQ2NThmN2RhZmQxMTczM2MzNTkzODdkZjI5YjFiMTM4ZDI0&timemachine=false&service_code=chzzk&playback_auth_type=NONE\",\"p2pPathUrlEncoding\":\"/chzzk/lip2_kr/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_720p_playlist.m3u8?channel_id%3D17536498_hls_h264_720p_50951912%26cdn_url%3DaHR0cHM6Ly9saXZlY2xvdWQucHN0YXRpYy5uZXQvY2h6emsvbGlwMl9rci9hbm1zczkwNzYvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLzdha296ZzRmNzR6bG52NzB3YThlbnZzNGlxN25obTE3MmJfNzIwcF9wbGF5bGlzdC5tM3U4P2hkbnRzPXN0PTE3NzIyMDc2Njd%2BZXhwPTE3NzIyNjcwNzd%2BYWNsPSovemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLyp%2BaG1hYz1kZTQ1MzgxNjU3OGJlNWNhOGRjOTRhZTJjNDVmNGQ2NThmN2RhZmQxMTczM2MzNTkzODdkZjI5YjFiMTM4ZDI0%26timemachine%3Dfalse%26service_code%3Dchzzk%26playback_auth_type%3DNONE\",\"videoCodec\":\"H264\",\"videoBitRate\":3000000,\"audioBitRate\":192000,\"videoFrameRate\":\"30.0\",\"videoWidth\":1280,\"videoHeight\":720,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false},{\"encodingTrackId\":\"480p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":1500000,\"audioBitRate\":192000,\"videoFrameRate\":\"30.0\",\"videoWidth\":852,\"videoHeight\":480,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"360p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":600000,\"audioBitRate\":96000,\"videoFrameRate\":\"30.0\",\"videoWidth\":640,\"videoHeight\":360,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"144p\",\"videoProfile\":\"main\",\"audioProfile\":\"LC\",\"videoCodec\":\"H264\",\"videoBitRate\":128000,\"audioBitRate\":64000,\"videoFrameRate\":\"30.0\",\"videoWidth\":256,\"videoHeight\":144,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"1080p\",\"videoProfile\":\"high\",\"audioProfile\":\"LC\",\"p2pPath\":\"/chzzk/lip2_kr/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_1080p_playlist.m3u8?channel_id=17536498_hls_h264_1080p_50951912&cdn_url=aHR0cHM6Ly9saXZlY2xvdWQucHN0YXRpYy5uZXQvY2h6emsvbGlwMl9rci9hbm1zczkwNzYvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLzdha296ZzRmNzR6bG52NzB3YThlbnZzNGlxN25obTE3MmJfMTA4MHBfcGxheWxpc3QubTN1OD9oZG50cz1zdD0xNzcyMjA3NjY3fmV4cD0xNzcyMjY3MDc3fmFjbD0qL3poYjZ0NGtucGpkNG1rZ3k3Nnh3dGxoYmQ0aXE3bmhtMWFpZS8qfmhtYWM9ZGU0NTM4MTY1NzhiZTVjYThkYzk0YWUyYzQ1ZjRkNjU4ZjdkYWZkMTE3MzNjMzU5Mzg3ZGYyOWIxYjEzOGQyNA==&timemachine=false&service_code=chzzk&playback_auth_type=NONE\",\"p2pPathUrlEncoding\":\"/chzzk/lip2_kr/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_1080p_playlist.m3u8?channel_id%3D17536498_hls_h264_1080p_50951912%26cdn_url%3DaHR0cHM6Ly9saXZlY2xvdWQucHN0YXRpYy5uZXQvY2h6emsvbGlwMl9rci9hbm1zczkwNzYvemhiNnQ0a25wamQ0bWtneTc2eHd0bGhiZDRpcTduaG0xYWllLzdha296ZzRmNzR6bG52NzB3YThlbnZzNGlxN25obTE3MmJfMTA4MHBfcGxheWxpc3QubTN1OD9oZG50cz1zdD0xNzcyMjA3NjY3fmV4cD0xNzcyMjY3MDc3fmFjbD0qL3poYjZ0NGtucGpkNG1rZ3k3Nnh3dGxoYmQ0aXE3bmhtMWFpZS8qfmhtYWM9ZGU0NTM4MTY1NzhiZTVjYThkYzk0YWUyYzQ1ZjRkNjU4ZjdkYWZkMTE3MzNjMzU5Mzg3ZGYyOWIxYjEzOGQyNA%3D%3D%26timemachine%3Dfalse%26service_code%3Dchzzk%26playback_auth_type%3DNONE\",\"videoCodec\":\"H264\",\"videoBitRate\":8192000,\"audioBitRate\":192000,\"videoFrameRate\":\"60.0\",\"videoWidth\":1920,\"videoHeight\":1080,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":true,\"videoDynamicRange\":\"SDR\"},{\"encodingTrackId\":\"audioOnly\",\"path\":\"https://ex-nlive-streaming.navercdn.com/chzzk/lip2_kr2/anmss9076/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/7akozg4f74zlnv70wa8envs4iq7nhm172b_audioOnly_playlist.m3u8?hdnts=st=1772207667~exp=1772268877~acl=*/zhb6t4knpjd4mkgy76xwtlhbd4iq7nhm1aie/*~hmac=7d236757342fe334302e00f538b1ce5be69b51bce6a7c67abc51879a10492b21\",\"audioCodec\":\"AAC\",\"audioBitRate\":96000,\"audioOnly\":true,\"audioSamplingRate\":48000,\"audioChannel\":2,\"avoidReencoding\":false}]}],\"thumbnail\":{\"snapshotThumbnailTemplate\":\"https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/42153367/live/17536498/record/50951912/thumbnail/image_{type}.jpg\",\"spriteSeekingThumbnail\":{\"spriteFormat\":{\"rowCount\":3,\"columnCount\":4,\"intervalType\":\"millisecond\",\"interval\":20000,\"thumbnailWidth\":160,\"thumbnailHeight\":90},\"urlTemplate\":\"https://livecloud-thumb.akamaized.net/chzzk/kr/live-image/live/record/50951912/seeking/thumbnail/image_4x3x20000_17536498_{spriteIndex}.jpg\",\"processingSeconds\":120},\"types\":[\"720\",\"480\",\"360\",\"270\",\"144\"]},\"multiview\":[]}",
-"p2pQuality": [
-    "720p",
-    "1080p"
-        ],
-"timeMachineActive": false,
-"timeMachinePlayback": false,
-"channel": {
-    "channelId": "3001c37f75cbf22525da511c05172c5e",
-    "channelName": "아사미야 나오",
-    "channelImageUrl": "https://nng-phinf.pstatic.net/MjAyNTA4MjFfMTAz/MDAxNzU1Nzg2NjYyMzM2.leNX0UAXFlJkRE5inQN3B6QKuD1PL_iRPxRS-PU1SNYg.pkc1-gFWk03COlgSPT1ioxsx7bQh-O7gpn0OY4DLlFAg.PNG/%ED%94%84%EB%A1%9C%ED%95%84.png",
-    "verifiedMark": false,
-    "activatedChannelBadgeIds": []
-        },
-"livePollingStatusJson": "{\"status\": \"STARTED\", \"isPublishing\": true, \"playableStatus\": \"PLAYABLE\", \"trafficThrottling\": -1, \"callPeriodMilliSecond\": 10000}",
-"userAdultStatus": "ADULT",
-"blindType": null,
-"chatDonationRankingExposure": false,
-"logPower": {
-    "active": true,
-    "exposureWeeklyRanking": false,
-    "exposureMonthlyRanking": false
-        },
-"adParameter": {
-    "tag": "none"
-        },
-"dropsCampaignNo": null,
-"watchPartyNo": null,
-"watchPartyTag": null,
-"watchPartyPaidProductId": null,
-"watchPartyType": null,
-"dab": true,
-"earthquake": false,
-"paidProduct": null,
-"tvAppViewingPolicyType": "ALLOWED",
-"party": null
+### 요청 정보
+
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v1/categories/GAME/{slug}/info` |
+
+### 경로 파라미터
+
+| 파라미터 | 설명 |
+|----------|------|
+| slug | 게임 슬러그 |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v1/categories/GAME/BIOHAZARD_requiem/info
+```
+
+### 응답 데이터
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| categoryType | string | `"GAME"` |
+| categoryId | string | 카테고리 ID (영문 슬러그) |
+| categoryValue | string | 카테고리 한글명 |
+| posterImageUrl | string | 포스터 이미지 URL |
+| openLiveCount | number | 현재 진행 중인 라이브 개수 |
+| concurrentUserCount | number | 총 시청자 수 |
+| tags | string[] | 태그 목록 |
+| existLounge | boolean | 라운지 존재 여부 |
+| following | boolean | 팔로잉 여부 |
+| newCategory | boolean | 신규 카테고리 여부 |
+| dropsCampaignList | array | 드롭스 캠페인 목록 |
+
+### 응답 예시
+```json
+{
+  "categoryType": "GAME",
+  "categoryId": "BIOHAZARD_requiem",
+  "categoryValue": "바이오하자드 레퀴엠",
+  "posterImageUrl": "https://nng-phinf.pstatic.net/...",
+  "openLiveCount": 180,
+  "concurrentUserCount": 10213,
+  "tags": ["바이오하자드 레퀴엠", "서바이벌", "호러", "PC", "캡콤"],
+  "existLounge": true,
+  "following": false,
+  "newCategory": true,
+  "dropsCampaignList": []
+}
+```
+
+---
+
+## 9. 특정 라이브 정보 (채널별 상세)
+
+### 개요
+특정 채널의 라이브 방송 상세 정보를 반환합니다. 스트리밍 URL(HLS), 채팅 채널 ID 등 포함.
+
+### 요청 정보
+
+| 항목 | 내용 |
+|------|------|
+| **Method** | GET |
+| **Base URL** | `https://api.chzzk.naver.com/service/v3.3/channels/{channelId}/live-detail` |
+
+### 경로 파라미터
+
+| 파라미터 | 설명 |
+|----------|------|
+| channelId | 채널 ID (예: `https://chzzk.naver.com/live/{channelId}`) |
+
+### 쿼리 파라미터
+
+| 파라미터 | 설명 |
+|----------|------|
+| cu | (미확인) |
+| dt | (미확인) |
+| tm | `true` (타임머신 관련) |
+
+### 예시 URL
+```
+https://api.chzzk.naver.com/service/v3.3/channels/9351fb8417f73405c84e0846409e3263/live-detail?cu=false&dt=6998e&tm=true
+```
+
+### 응답 구조 (최상위)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| code | number | 응답 코드 (200 = 성공) |
+| message | string \| null | 에러 메시지 |
+| content | object | 라이브 상세 데이터 |
+
+### content 주요 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| liveId | number | 라이브 ID |
+| liveTitle | string | 방송 제목 |
+| status | string | `OPEN`(방송중) / `CLOSE`(종료) |
+| liveImageUrl | string | 썸네일 URL (`{type}` 치환 가능) |
+| concurrentUserCount | number | 시청자 수 |
+| openDate | string | 방송 시작일시 |
+| closeDate | string \| null | 방송 종료일시 |
+| adult | boolean | 성인 콘텐츠 여부 |
+| tags | string[] | 태그 목록 |
+| chatChannelId | string | 채팅 채널 ID |
+| liveCategory | string | 게임 영문 슬러그 |
+| liveCategoryValue | string | 게임 한글명 |
+| livePlaybackJson | string | JSON 문자열 (HLS 스트리밍 URL, 인코딩 트랙 등 포함) |
+| channel | object | 채널 정보 |
+
+### 응답 예시 (요약)
+```json
+{
+  "code": 200,
+  "message": null,
+  "content": {
+    "liveId": 17536498,
+    "liveTitle": "뭣 도네이션을 읽으면서 링 피트를 한다고? ⛅",
+    "status": "OPEN",
+    "liveImageUrl": "https://livecloud-thumb.akamaized.net/.../image_{type}.jpg",
+    "concurrentUserCount": 141,
+    "openDate": "2026-02-27 21:00:39",
+    "closeDate": null,
+    "adult": true,
+    "tags": ["리액트kr", "리액트", "버튜버", "버츄얼"],
+    "chatChannelId": "N2KFnk",
+    "liveCategory": "RingFit_Adventure",
+    "liveCategoryValue": "링 피트 어드벤처",
+    "livePlaybackJson": "{...HLS URL, encodingTrack 등...}",
+    "channel": {
+      "channelId": "3001c37f75cbf22525da511c05172c5e",
+      "channelName": "아사미야 나오",
+      "channelImageUrl": "https://nng-phinf.pstatic.net/..."
     }
+  }
+}
+```
+
+---
+
+## 공통 사항
+
+### 이미지 URL 치환
+- 썸네일 URL에 `{type}` 플레이스홀더가 있는 경우, `480`, `720`, `1080` 등으로 치환하여 해상도 선택 가능
+
+### 참고
+- 모든 API는 비공식이며, 변경·중단될 수 있습니다.
+- 요청 시 `User-Agent`, `Referer` 등 브라우저 헤더를 설정하는 것이 안정적입니다.

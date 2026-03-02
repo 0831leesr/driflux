@@ -9,6 +9,7 @@ import { TrendingGames } from "@/components/trending-games"
 import type { TrendingGameRow, EsportsChannel } from "@/lib/data"
 import { FollowStreamGrid } from "@/components/follow-stream-grid"
 import { FollowReplayGrid } from "@/components/follow-replay-grid"
+import { SavedReplayGrid } from "@/components/saved-replay-grid"
 import type { StreamData } from "@/components/stream-card"
 import type { VideoData } from "@/components/video-card"
 import { CalendarContent } from "@/components/calendar-content"
@@ -202,9 +203,12 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
                   />
                 )}
                 {followSubTab === "saved" && (
-                  <div className="flex flex-1 items-center justify-center rounded-xl border border-border bg-card/50 p-12 text-center">
-                    <p className="text-sm text-muted-foreground">추후 업데이트 예정입니다.</p>
-                  </div>
+                  <SavedReplayGrid
+                    title="저장한 다시보기"
+                    icon={<Bookmark className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
+                    onVideoClick={handleVideoClick}
+                    emptyMessage="저장한 다시보기 영상이 없습니다. 다시보기 영상에 북마크를 추가하면 여기서 확인할 수 있습니다!"
+                  />
                 )}
               </div>
             </Tabs>

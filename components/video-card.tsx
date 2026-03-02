@@ -3,8 +3,11 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Play } from "lucide-react"
+import { Play, Bookmark } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { formatViewerCountShort, getGameImageSrc, DEFAULT_STREAMING_IMAGE } from "@/lib/utils"
+import { useFavoriteVideos } from "@/contexts/favorites-context"
+
 export interface VideoData {
   videoId: string
   videoTitle: string
@@ -24,15 +27,26 @@ export function VideoCard({
   video,
   onVideoClick,
   priority,
+  showSaveButton = true,
 }: {
   video: VideoData
   onVideoClick?: (video: VideoData) => void
   priority?: boolean
+  /** Hide save button (e.g. in Saved tab when removing is preferred) */
+  showSaveButton?: boolean
 }) {
+  const { isSaved, toggleSavedVideo } = useFavoriteVideos()
   const gameCoverSrc = getGameImageSrc(video.gameCover, "cover")
   const initialThumbnail = video.thumbnailImageUrl || gameCoverSrc
   const [thumbnailSrc, setThumbnailSrc] = useState(initialThumbnail)
   const readCountDisplay = formatViewerCountShort(video.readCount)
+  const isVideoSaved = isSaved(video.videoId)
+
+  const handleSaveClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    toggleSavedVideo(video)
+  }
 
   useEffect(() => {
     setThumbnailSrc(video.thumbnailImageUrl || gameCoverSrc)
@@ -86,6 +100,29 @@ export function VideoCard({
             {readCountDisplay}
           </span>
         </div>
+
+        {/* Save button (top right) */}
+        {showSaveButton && (
+          <div className="absolute right-2 top-2">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleSaveClick}
+              className={`h-8 w-8 rounded-full backdrop-blur-sm transition-all ${
+                isVideoSaved
+                  ? "bg-[hsl(var(--neon-purple))]/90 text-white hover:bg-[hsl(var(--neon-purple))]/80"
+                  : "bg-black/40 text-white hover:bg-black/60"
+              }`}
+              aria-label={isVideoSaved ? "저장 취소" : "저장"}
+            >
+              <Bookmark
+                className={`h-4 w-4 transition-all ${
+                  isVideoSaved ? "fill-current" : ""
+                }`}
+              />
+            </Button>
+          </div>
+        )}
 
         {/* Game cover overlay - clickable to game details */}
         {video.gameId ? (
