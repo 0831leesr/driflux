@@ -3,9 +3,9 @@
 import { usePathname } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { Gamepad2, Tags } from "lucide-react"
+import { Gamepad2, Tags, UserCircle2 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useFavoriteGames, useFavoriteTags } from "@/contexts/favorites-context"
+import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers } from "@/contexts/favorites-context"
 import { useEffect, useState } from "react"
 import { fetchGamesByIds, type GameRow } from "@/lib/data"
 import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
@@ -47,8 +47,11 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
   const pathname = usePathname()
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
+  const { favorites: favoriteStreamers, isInitialized: streamersInitialized } = useFavoriteStreamers()
   const [games, setGames] = useState<GameRow[]>([])
   const [isLoadingGames, setIsLoadingGames] = useState(true)
+  const [streamerStatuses, setStreamerStatuses] = useState<Record<string, { isLive: boolean; gameTitle?: string }>>({})
+  const [isLoadingStreamers, setIsLoadingStreamers] = useState(false)
 
   // Fetch games data when favorite IDs change
   useEffect(() => {
@@ -76,6 +79,49 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
     
     loadGames()
   }, [favoriteGameIds, gamesInitialized])
+
+  // Fetch streamer live status when followed streamers change
+  useEffect(() => {
+    if (!streamersInitialized || favoriteStreamers.length === 0) {
+      setStreamerStatuses({})
+      return
+    }
+
+    const channelIds = favoriteStreamers.map((s) => s.channelId)
+
+    const loadStatuses = async () => {
+      setIsLoadingStreamers(true)
+      try {
+        const res = await fetch("/api/streamers/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelIds }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? "Failed to fetch")
+        const data = (json.data ?? []) as Array<{
+          chzzk_channel_id: string
+          is_live: boolean
+          category?: string
+        }>
+        const map: Record<string, { isLive: boolean; gameTitle?: string }> = {}
+        for (const item of data) {
+          map[item.chzzk_channel_id] = {
+            isLive: item.is_live,
+            gameTitle: item.category,
+          }
+        }
+        setStreamerStatuses(map)
+      } catch (error) {
+        console.error("Error loading streamer statuses:", error)
+        setStreamerStatuses({})
+      } finally {
+        setIsLoadingStreamers(false)
+      }
+    }
+
+    loadStatuses()
+  }, [favoriteStreamers, streamersInitialized])
 
   // Check if current path matches a game page by ID
   const isGameActive = (gameId: number) => {
@@ -226,6 +272,91 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                   className={`py-4 text-center text-xs text-muted-foreground ${isCollapsed ? "px-0" : "px-2"}`}
                 >
                   {!isCollapsed && "No favorite tags yet"}
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* My Followed Streamers */}
+          <section>
+            <h3
+              className={`mb-3 flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground ${
+                isCollapsed ? "justify-center" : "gap-2"
+              }`}
+            >
+              <UserCircle2 className="h-3.5 w-3.5 shrink-0" />
+              {!isCollapsed && <span>My Followed Streamers</span>}
+            </h3>
+            <div className="flex flex-col gap-0.5 transition-opacity duration-200">
+              {!streamersInitialized ? (
+                Array.from({ length: 2 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-center gap-2.5 py-1.5 ${isCollapsed ? "justify-center px-0" : "px-2"}`}
+                  >
+                    <Skeleton className="h-6 w-6 shrink-0 rounded-full" />
+                    {!isCollapsed && <Skeleton className="h-4 flex-1" />}
+                  </div>
+                ))
+              ) : favoriteStreamers.length > 0 ? (
+                favoriteStreamers.map((streamer) => {
+                  const status = streamerStatuses[streamer.channelId]
+                  const isLive = status?.isLive ?? false
+                  const gameTitle = status?.gameTitle
+                  const chzzkUrl = `https://chzzk.naver.com/live/${streamer.channelId}`
+
+                  return (
+                    <a
+                      key={streamer.channelId}
+                      href={chzzkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={isCollapsed ? streamer.streamerName : undefined}
+                      className={`flex items-center rounded-md py-1.5 text-left transition-all duration-200 animate-in fade-in ${
+                        isCollapsed ? "justify-center px-0" : "gap-2.5 px-2"
+                      } text-foreground hover:bg-secondary`}
+                    >
+                      <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full bg-secondary">
+                        {streamer.channelImageUrl ? (
+                          <Image
+                            src={streamer.channelImageUrl}
+                            alt={streamer.streamerName}
+                            fill
+                            placeholder="empty"
+                            className="object-cover"
+                            sizes="24px"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs">
+                            <UserCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
+                      {!isCollapsed && (
+                        <>
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-sm">{streamer.streamerName}</span>
+                            <span className="block truncate text-[10px] text-muted-foreground">
+                              {isLoadingStreamers ? "..." : isLive ? gameTitle ?? "Live" : "오프라인"}
+                            </span>
+                          </div>
+                          {isLive && (
+                            <span
+                              className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[hsl(var(--live-red))]"
+                              aria-label="Live"
+                            />
+                          )}
+                        </>
+                      )}
+                    </a>
+                  )
+                })
+              ) : (
+                <p
+                  className={`py-4 text-center text-xs text-muted-foreground ${isCollapsed ? "px-0" : "px-2"}`}
+                >
+                  {!isCollapsed && "No followed streamers yet"}
                 </p>
               )}
             </div>

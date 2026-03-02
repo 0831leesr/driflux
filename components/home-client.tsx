@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Gamepad2, Tags, Video, Bookmark } from "lucide-react"
+import { Gamepad2, Tags, Video, Bookmark, UserCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
@@ -15,8 +15,9 @@ import type { VideoData } from "@/components/video-card"
 import { CalendarContent } from "@/components/calendar-content"
 import type { EventRow } from "@/lib/types"
 import { ExploreTabContent } from "@/components/explore/explore-tab-content"
-import { useFavoriteGames, useFavoriteTags } from "@/contexts/favorites-context"
+import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers } from "@/contexts/favorites-context"
 import { fetchStreamsForFollowedGames, fetchStreamsForFollowedTags } from "@/lib/data"
+import { formatViewerCountShort } from "@/lib/utils"
 interface HomeClientProps {
   liveStreams: StreamData[]
   trendingGames: TrendingGameRow[]
@@ -27,11 +28,13 @@ interface HomeClientProps {
 export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esportsChannels }: HomeClientProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("main")
-  const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved">("games")
+  const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved" | "streamers">("games")
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
+  const { favorites: favoriteStreamers, isInitialized: streamersInitialized } = useFavoriteStreamers()
   const [followedStreams, setFollowedStreams] = useState<StreamData[]>([])
   const [followedTagStreams, setFollowedTagStreams] = useState<StreamData[]>([])
+  const [followedStreamerStreams, setFollowedStreamerStreams] = useState<StreamData[]>([])
 
   useEffect(() => {
     async function loadFollowedStreams() {
@@ -73,6 +76,69 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
     loadFollowedTagStreams()
   }, [favoriteTags, tagsInitialized])
 
+  useEffect(() => {
+    async function loadFollowedStreamerStreams() {
+      if (!streamersInitialized || favoriteStreamers.length === 0) {
+        setFollowedStreamerStreams([])
+        return
+      }
+
+      try {
+        const res = await fetch("/api/streamers/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channelIds: favoriteStreamers.map((s) => s.channelId),
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? "Failed to fetch")
+        const data = (json.data ?? []) as Array<{
+          chzzk_channel_id: string
+          title: string
+          thumbnail_url: string | null
+          is_live: boolean
+          viewer_count: number
+          category?: string
+        }>
+        const nameMap = Object.fromEntries(
+          favoriteStreamers.map((s) => [s.channelId, s.streamerName])
+        )
+        const imageMap = Object.fromEntries(
+          favoriteStreamers
+            .filter((s) => s.channelImageUrl)
+            .map((s) => [s.channelId, s.channelImageUrl!])
+        )
+        const streams: StreamData[] = data
+          .filter((d) => d.is_live)
+          .map((d) => {
+            const id = Math.abs(
+              d.chzzk_channel_id.split("").reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)
+            )
+            return {
+              id,
+              thumbnail: d.thumbnail_url ?? "/streams/stream-1.jpg",
+              gameCover: d.thumbnail_url ?? "/streams/stream-1.jpg",
+              gameTitle: d.category ?? "Unknown",
+              streamTitle: d.title,
+              streamerName: nameMap[d.chzzk_channel_id] ?? "Unknown",
+              viewers: d.viewer_count,
+              viewersFormatted: formatViewerCountShort(d.viewer_count),
+              isLive: true,
+              channelId: d.chzzk_channel_id,
+              channelImageUrl: imageMap[d.chzzk_channel_id],
+            }
+          })
+        setFollowedStreamerStreams(streams)
+      } catch (error) {
+        console.error("Error loading followed streamer streams:", error)
+        setFollowedStreamerStreams([])
+      }
+    }
+
+    loadFollowedStreamerStreams()
+  }, [favoriteStreamers, streamersInitialized])
+
   const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
   const CHZZK_VIDEO_URL = "https://chzzk.naver.com/video"
   function handleStreamClick(stream: StreamData) {
@@ -87,6 +153,7 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
   /* Use followed streams, show empty if no favorites */
   const followingGamesStreams = followedStreams
   const followingTagsStreams = followedTagStreams
+  const followingStreamerStreams = followedStreamerStreams
 
   return (
     <>
@@ -130,7 +197,7 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
           </div>
         ) : activeTab === "follow" ? (
           <div className="flex flex-col p-4 lg:p-6">
-            <Tabs value={followSubTab} onValueChange={(v) => setFollowSubTab(v as "games" | "tags" | "replay" | "saved")} className="w-full">
+            <Tabs value={followSubTab} onValueChange={(v) => setFollowSubTab(v as "games" | "tags" | "replay" | "saved" | "streamers")} className="w-full">
               <TabsList className="mb-4 h-10 bg-muted/50 p-1">
                 <TabsTrigger value="games" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Gamepad2 className="h-4 w-4" />
@@ -139,6 +206,10 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
                 <TabsTrigger value="tags" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Tags className="h-4 w-4" />
                   태그
+                </TabsTrigger>
+                <TabsTrigger value="streamers" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <UserCircle2 className="h-4 w-4" />
+                  스트리머
                 </TabsTrigger>
                 <TabsTrigger value="replay" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <Video className="h-4 w-4" />
@@ -166,6 +237,15 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
                     streams={followingTagsStreams}
                     onStreamClick={handleStreamClick}
                     emptyMessage="팔로우 중인 태그가 없습니다. 태그를 팔로우하면 여기서 라이브 스트림을 확인할 수 있습니다!"
+                  />
+                )}
+                {followSubTab === "streamers" && (
+                  <FollowStreamGrid
+                    title="팔로우 중인 스트리머"
+                    icon={<UserCircle2 className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
+                    streams={followingStreamerStreams}
+                    onStreamClick={handleStreamClick}
+                    emptyMessage="팔로우 중인 스트리머가 없습니다. 스트리밍 카드에서 팔로우 버튼을 누르면 여기서 라이브 스트림을 확인할 수 있습니다!"
                   />
                 )}
                 {followSubTab === "replay" && (

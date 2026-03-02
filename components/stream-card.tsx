@@ -4,8 +4,9 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { Eye } from "lucide-react"
+import { Eye, UserPlus } from "lucide-react"
 import { formatViewerCountShort, getGameImageSrc, DEFAULT_STREAMING_IMAGE } from "@/lib/utils"
+import { useFavoriteStreamers } from "@/contexts/favorites-context"
 
 export interface StreamData {
   id: number
@@ -22,6 +23,8 @@ export interface StreamData {
   gameId?: number
   /** Chzzk channel ID for external link: https://chzzk.naver.com/live/{channelId} */
   channelId?: string | null
+  /** Channel profile image URL (for sidebar avatar) */
+  channelImageUrl?: string | null
   /** Direct URL (if provided, takes precedence over channelId) */
   url?: string | null
   rawData?: {
@@ -48,14 +51,27 @@ export function StreamCard({ stream, onStreamClick, priority }: { stream: Stream
     )
   }
 
+  const { isFavorite: isFollowingStreamer, toggleFavorite: toggleFollowStreamer } = useFavoriteStreamers()
+  const hasChannelId = Boolean(stream.channelId?.trim())
+  const isFollowing = hasChannelId && isFollowingStreamer(stream.channelId!)
+
   const handleStreamClick = (e: React.MouseEvent) => {
-    // Check if click was on game-related elements
     const target = e.target as HTMLElement
-    if (target.closest('.game-link')) {
+    if (target.closest(".game-link") || target.closest(".streamer-follow-btn")) {
       e.stopPropagation()
       return
     }
     onStreamClick?.(stream)
+  }
+
+  const handleFollowClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!hasChannelId) return
+    toggleFollowStreamer({
+      channelId: stream.channelId!,
+      streamerName: stream.streamerName,
+      channelImageUrl: stream.channelImageUrl ?? undefined,
+    })
   }
 
   return (
@@ -138,19 +154,31 @@ export function StreamCard({ stream, onStreamClick, priority }: { stream: Stream
           {stream.gameId ? (
             <Link
               href={`/game/${stream.gameId}`}
-              className="game-link truncate text-base font-bold text-foreground hover:text-[hsl(var(--neon-purple))] transition-colors"
+              className="game-link min-w-0 truncate text-base font-bold text-foreground hover:text-[hsl(var(--neon-purple))] transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
               {stream.gameTitle}
             </Link>
           ) : (
-            <h3 className="truncate text-base font-bold text-foreground">
+            <h3 className="min-w-0 truncate text-base font-bold text-foreground">
               {stream.gameTitle}
             </h3>
           )}
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
             {stream.streamerName}
           </span>
+          {hasChannelId && (
+            <button
+              type="button"
+              aria-label={isFollowing ? "Unfollow streamer" : "Follow streamer"}
+              className="streamer-follow-btn ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[hsl(var(--neon-purple))]/15 hover:text-[hsl(var(--neon-purple))]"
+              onClick={handleFollowClick}
+            >
+              <UserPlus
+                className={`h-3.5 w-3.5 ${isFollowing ? "fill-current text-[hsl(var(--neon-purple))]" : ""}`}
+              />
+            </button>
+          )}
         </div>
         <p className="mb-2 truncate text-sm leading-snug text-secondary-foreground/70">
           {stream.streamTitle}

@@ -9,12 +9,19 @@ import type { VideoData } from "@/components/video-card"
 
 const STORAGE_KEY_GAMES = "driflux_favorite_games"
 const STORAGE_KEY_TAGS = "driflux_favorite_tags"
+const STORAGE_KEY_STREAMERS = "driflux_favorite_streamers"
 const STORAGE_KEY_VIDEOS = "driflux_saved_videos"
 const MAX_SAVED_VIDEOS = 500
 
 /* ═══════════════════════════════════════════════════════════════
    Context Types
    ═══════════════════════════════════════════════════════════════ */
+
+export interface FollowedStreamer {
+  channelId: string
+  streamerName: string
+  channelImageUrl?: string
+}
 
 interface FavoriteVideosContextType {
   savedVideos: VideoData[]
@@ -43,12 +50,22 @@ interface FavoriteTagsContextType {
   isInitialized: boolean
 }
 
+interface FavoriteStreamersContextType {
+  favorites: FollowedStreamer[]
+  isFavorite: (channelId: string) => boolean
+  addFavorite: (streamer: FollowedStreamer) => void
+  removeFavorite: (channelId: string) => void
+  toggleFavorite: (streamer: FollowedStreamer) => void
+  isInitialized: boolean
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Create Contexts
    ═══════════════════════════════════════════════════════════════ */
 
 const FavoriteGamesContext = createContext<FavoriteGamesContextType | undefined>(undefined)
 const FavoriteTagsContext = createContext<FavoriteTagsContextType | undefined>(undefined)
+const FavoriteStreamersContext = createContext<FavoriteStreamersContextType | undefined>(undefined)
 const FavoriteVideosContext = createContext<FavoriteVideosContextType | undefined>(undefined)
 
 /* ═══════════════════════════════════════════════════════════════
@@ -82,6 +99,29 @@ function setStoredArray<T>(key: string, value: T[]): void {
     }))
   } catch (error) {
     console.error(`Error writing ${key} to localStorage:`, error)
+  }
+}
+
+function getStoredStreamers(): FollowedStreamer[] {
+  const raw = getStoredArray<{ channelId?: string; streamerName?: string; channelImageUrl?: string }>(STORAGE_KEY_STREAMERS, [])
+  return raw
+    .filter((s) => s && typeof s.channelId === "string" && s.channelId.trim() !== "")
+    .map((s) => ({
+      channelId: String(s!.channelId).trim(),
+      streamerName: typeof s!.streamerName === "string" ? s!.streamerName : "Unknown",
+      channelImageUrl: typeof s!.channelImageUrl === "string" ? s.channelImageUrl : undefined,
+    }))
+}
+
+function setStoredStreamers(value: FollowedStreamer[]): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(STORAGE_KEY_STREAMERS, JSON.stringify(value))
+    window.dispatchEvent(new CustomEvent("localStorageChange", {
+      detail: { key: STORAGE_KEY_STREAMERS, value },
+    }))
+  } catch (error) {
+    console.error(`Error writing ${STORAGE_KEY_STREAMERS} to localStorage:`, error)
   }
 }
 
@@ -122,6 +162,10 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const [favoriteTags, setFavoriteTags] = useState<string[]>([])
   const [tagsInitialized, setTagsInitialized] = useState(false)
 
+  // Streamers state
+  const [favoriteStreamers, setFavoriteStreamers] = useState<FollowedStreamer[]>([])
+  const [streamersInitialized, setStreamersInitialized] = useState(false)
+
   // Videos state (saved replay videos)
   const [savedVideos, setSavedVideos] = useState<VideoData[]>([])
   const [videosInitialized, setVideosInitialized] = useState(false)
@@ -130,13 +174,16 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedGames = getStoredArray<number>(STORAGE_KEY_GAMES, [])
     const storedTags = getStoredArray<string>(STORAGE_KEY_TAGS, [])
+    const storedStreamers = getStoredStreamers()
     const storedVideos = getStoredVideos()
 
     setFavoriteGames(storedGames)
     setFavoriteTags(storedTags)
+    setFavoriteStreamers(storedStreamers)
     setSavedVideos(storedVideos)
     setGamesInitialized(true)
     setTagsInitialized(true)
+    setStreamersInitialized(true)
     setVideosInitialized(true)
   }, [])
 
@@ -153,6 +200,13 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       setStoredArray(STORAGE_KEY_TAGS, favoriteTags)
     }
   }, [favoriteTags, tagsInitialized])
+
+  // Save streamers to localStorage whenever they change
+  useEffect(() => {
+    if (streamersInitialized) {
+      setStoredStreamers(favoriteStreamers)
+    }
+  }, [favoriteStreamers, streamersInitialized])
 
   // Save videos to localStorage whenever they change
   useEffect(() => {
@@ -246,12 +300,42 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     },
   }
 
+  // Streamers context value
+  const streamersContextValue: FavoriteStreamersContextType = {
+    favorites: favoriteStreamers,
+    isInitialized: streamersInitialized,
+    isFavorite: (channelId: string) =>
+      favoriteStreamers.some((s) => s.channelId === channelId),
+    addFavorite: (streamer: FollowedStreamer) => {
+      setFavoriteStreamers((prev) => {
+        if (prev.some((s) => s.channelId === streamer.channelId)) return prev
+        return [...prev, streamer]
+      })
+    },
+    removeFavorite: (channelId: string) => {
+      setFavoriteStreamers((prev) =>
+        prev.filter((s) => s.channelId !== channelId)
+      )
+    },
+    toggleFavorite: (streamer: FollowedStreamer) => {
+      setFavoriteStreamers((prev) => {
+        const exists = prev.some((s) => s.channelId === streamer.channelId)
+        if (exists) {
+          return prev.filter((s) => s.channelId !== streamer.channelId)
+        }
+        return [...prev, streamer]
+      })
+    },
+  }
+
   return (
     <FavoriteGamesContext.Provider value={gamesContextValue}>
       <FavoriteTagsContext.Provider value={tagsContextValue}>
-        <FavoriteVideosContext.Provider value={videosContextValue}>
-          {children}
-        </FavoriteVideosContext.Provider>
+        <FavoriteStreamersContext.Provider value={streamersContextValue}>
+          <FavoriteVideosContext.Provider value={videosContextValue}>
+            {children}
+          </FavoriteVideosContext.Provider>
+        </FavoriteStreamersContext.Provider>
       </FavoriteTagsContext.Provider>
     </FavoriteGamesContext.Provider>
   )
@@ -273,6 +357,14 @@ export function useFavoriteTags(): FavoriteTagsContextType {
   const context = useContext(FavoriteTagsContext)
   if (context === undefined) {
     throw new Error("useFavoriteTags must be used within a FavoritesProvider")
+  }
+  return context
+}
+
+export function useFavoriteStreamers(): FavoriteStreamersContextType {
+  const context = useContext(FavoriteStreamersContext)
+  if (context === undefined) {
+    throw new Error("useFavoriteStreamers must be used within a FavoritesProvider")
   }
   return context
 }
