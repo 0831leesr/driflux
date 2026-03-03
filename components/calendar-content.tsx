@@ -236,8 +236,17 @@ function MiniCalendar({
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
 
-  const prevMonth = () => setViewMonth(new Date(year, month - 1, 1))
-  const nextMonth = () => setViewMonth(new Date(year, month + 1, 1))
+  const startMonth = new Date(today.getFullYear(), today.getMonth() - 6, 1)
+  const endMonth = new Date(today.getFullYear(), today.getMonth() + 6, 1)
+  const canPrev = new Date(year, month - 1, 1) >= startMonth
+  const canNext = new Date(year, month + 1, 1) <= endMonth
+
+  const prevMonth = () => {
+    if (canPrev) setViewMonth(new Date(year, month - 1, 1))
+  }
+  const nextMonth = () => {
+    if (canNext) setViewMonth(new Date(year, month + 1, 1))
+  }
 
   const cells: (number | null)[] = []
   for (let i = 0; i < firstDay; i++) cells.push(null)
@@ -246,11 +255,25 @@ function MiniCalendar({
   return (
     <div className="rounded-xl border border-border bg-card p-3">
       <div className="mb-3 flex items-center justify-between">
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={prevMonth} aria-label="Previous month">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground disabled:opacity-30"
+          onClick={prevMonth}
+          disabled={!canPrev}
+          aria-label="이전 달"
+        >
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <span className="text-sm font-semibold text-foreground">{MONTHS_FULL[month]} {year}</span>
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={nextMonth} aria-label="Next month">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground disabled:opacity-30"
+          onClick={nextMonth}
+          disabled={!canNext}
+          aria-label="다음 달"
+        >
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -495,6 +518,28 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
     [serverGameEvents, customGameEvents]
   )
 
+  /** E-sports 채널 목록: 일정에 표시되는 이벤트의 채널 + fetchEsportsChannels 결과 병합 (모든 이벤트 채널이 필터에 포함되도록) */
+  const esportsChannelsForFilter = useMemo(() => {
+    const byUrl = new Map<string, string>()
+    for (const ev of events) {
+      if ((ev.event_type ?? "").toLowerCase() !== "esports") continue
+      const url = ev.external_url?.trim()
+      if (!url) continue
+      if (byUrl.has(url)) continue
+      const match = (ev.title ?? "").match(/^\[([^\]]+)\]/)
+      byUrl.set(url, match ? match[1].trim() : url)
+    }
+    for (const { url, name } of esportsChannels) {
+      const u = url?.trim()
+      if (!u) continue
+      if (byUrl.has(u)) continue
+      byUrl.set(u, name ?? u)
+    }
+    return Array.from(byUrl.entries())
+      .map(([url, name]) => ({ url, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [events, esportsChannels])
+
   /** E-sports 이벤트가 채널 필터를 통과하는지 (esportsChannelsChecked: null=전체, []=없음, string[]=선택) */
   function passesEsportsChannelFilter(ev: GameEvent): boolean {
     if (ev.category !== "competition") return true
@@ -588,14 +633,14 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
   const setChannelChecked = (url: string, checked: boolean) => {
     const base =
       esportsChannelsChecked === null
-        ? new Set(esportsChannels.map((c) => c.url))
+        ? new Set(esportsChannelsForFilter.map((c) => c.url))
         : new Set(esportsChannelsChecked)
     if (checked) {
       base.add(url)
     } else {
       base.delete(url)
     }
-    setEsportsChannelsChecked(base.size === esportsChannels.length ? null : base)
+    setEsportsChannelsChecked(base.size === esportsChannelsForFilter.length ? null : base)
   }
 
   const setAllChannelsChecked = (checked: boolean) => {
@@ -641,7 +686,7 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
                   <PopoverContent align="end" className="w-72 p-0">
                     <div className="border-b border-border p-3">
                       <p className="text-xs font-medium text-muted-foreground">채널별 필터</p>
-                      {esportsChannels.length > 0 && (
+                      {esportsChannelsForFilter.length > 0 && (
                         <div className="mt-2 flex gap-2">
                           <Button
                             variant="outline"
@@ -662,14 +707,14 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
                         </div>
                       )}
                     </div>
-                    <ScrollArea className="max-h-56">
+                    <ScrollArea className="h-72 max-h-[70vh]">
                       <div className="flex flex-col gap-1 p-2">
-                        {esportsChannels.length === 0 ? (
+                        {esportsChannelsForFilter.length === 0 ? (
                           <p className="py-4 text-center text-xs text-muted-foreground">
                             Esports 채널이 없습니다.
                           </p>
                         ) : (
-                          esportsChannels.map(({ url, name }) => (
+                          esportsChannelsForFilter.map(({ url, name }) => (
                             <label
                               key={url}
                               className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50"

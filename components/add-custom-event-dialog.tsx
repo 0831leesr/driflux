@@ -79,6 +79,10 @@ export function AddCustomEventDialog({ open, onOpenChange, onAdd, onUpdate, init
     ? (selectedGame.korean_title || selectedGame.title) ?? ""
     : freeGameText
 
+  const now = new Date()
+  const calendarStartMonth = new Date(now.getFullYear(), now.getMonth() - 6, 1)
+  const calendarEndMonth = new Date(now.getFullYear(), now.getMonth() + 6, 1)
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim() || !date) return
@@ -147,6 +151,8 @@ export function AddCustomEventDialog({ open, onOpenChange, onAdd, onUpdate, init
                     setDatePopoverOpen(false)
                   }}
                   initialFocus
+                  startMonth={calendarStartMonth}
+                  endMonth={calendarEndMonth}
                 />
               </PopoverContent>
             </Popover>

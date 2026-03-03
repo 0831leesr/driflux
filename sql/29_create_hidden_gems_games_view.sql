@@ -2,7 +2,7 @@
 -- hidden_gems_games View
 -- ============================================
 -- 트렌딩 게임(첫 번째 섹션)에 선정되지 않은 게임만 포함.
--- Score = (total_viewers / stream_count) * LN(stream_count) 로 꿀잼 점수 계산.
+-- Score = total_viewers / (stream_count^2) 로 꿀잼 점수 계산.
 -- fetchHiddenGemsGames()에서 사용 (score 내림차순, 최대 8개).
 
 DROP VIEW IF EXISTS hidden_gems_games;
@@ -32,8 +32,8 @@ SELECT
     COUNT(s.id)::integer AS stream_count,
     COALESCE(SUM(s.viewer_count), 0)::bigint AS total_viewers,
     (
-        (COALESCE(SUM(s.viewer_count), 0)::float / NULLIF(COUNT(s.id), 0))
-        * LN(COUNT(s.id))
+        COALESCE(SUM(s.viewer_count), 0)::float
+        / NULLIF(COUNT(s.id) * COUNT(s.id), 0)
     ) AS score
 FROM games g
 JOIN streams s ON s.game_id = g.id
