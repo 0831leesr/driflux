@@ -119,6 +119,26 @@ export interface ChzzkPopularCategory {
   imageUrl: string | null
 }
 
+/** 특정 게임 클립 API 응답 아이템 */
+export interface ChzzkClipItem {
+  clipUID: string
+  videoId: string
+  clipTitle: string
+  ownerChannelId: string
+  ownerChannel: {
+    channelId: string
+    channelName: string
+    channelImageUrl: string
+    verifiedMark?: boolean
+  }
+  thumbnailImageUrl: string
+  clipCategory: string
+  duration: number
+  adult: boolean
+  createdDate: string
+  readCount: number
+}
+
 /* ── Constants ── */
 export const CHZZK_API_BASE = "https://api.chzzk.naver.com"
 const CHZZK_SERVICE_V1 = `${CHZZK_API_BASE}/service/v1`
@@ -128,6 +148,8 @@ export const CHZZK_CATEGORY_LIVES_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V2}/categories/GAME/${encodeURIComponent(categoryId)}/lives`
 export const CHZZK_CATEGORY_VIDEOS_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V2}/categories/GAME/${encodeURIComponent(categoryId)}/videos`
+const CHZZK_CATEGORY_CLIPS_URL = (categoryId: string) =>
+  `${CHZZK_SERVICE_V1}/categories/GAME/${encodeURIComponent(categoryId)}/clips`
 const RATE_LIMIT_DELAY = 1000 // 1초 (치지직 API Rate Limit 고려)
 const DEFAULT_THUMBNAIL_SIZE = "720" // 썸네일 해상도 (480, 720, 1080 등)
 const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/1280x720/1a1a1a/ffffff?text=No+Thumbnail" // Fallback thumbnail
@@ -568,6 +590,98 @@ export async function getChzzkVideosByCategory(
     }))
   } catch (error) {
     console.error(`[Chzzk Videos] ✗ Exception:`, error instanceof Error ? error.message : String(error))
+    return []
+  }
+}
+
+/** filterType for clips API */
+export type ChzzkClipFilterType = "WITHIN_THIRTY_DAYS" | "WITHIN_SEVEN_DAYS" | "WITHIN_ONE_DAY" | "ALL"
+/** orderType for clips API */
+export type ChzzkClipOrderType = "POPULAR" | "RECENT"
+
+/**
+ * Get clips list by category ID (game's english_title = Chzzk category)
+ *
+ * API: GET https://api.chzzk.naver.com/service/v1/categories/GAME/{slug}/clips
+ *
+ * @param categoryId - Chzzk category ID (e.g., "Minecraft", "League_of_Legends")
+ * @param filterType - Time filter: WITHIN_THIRTY_DAYS, WITHIN_SEVEN_DAYS, WITHIN_ONE_DAY, ALL
+ * @param orderType - Sort: POPULAR (인기순), RECENT (최신순)
+ * @param size - Number of clips to fetch (max 50)
+ * @returns Array of clip data
+ */
+export async function getChzzkClipsByCategory(
+  categoryId: string,
+  filterType: ChzzkClipFilterType = "WITHIN_THIRTY_DAYS",
+  orderType: ChzzkClipOrderType = "POPULAR",
+  size: number = 50
+): Promise<ChzzkClipItem[]> {
+  if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+    console.warn("[Chzzk Clips] Skipping invalid categoryId:", JSON.stringify(categoryId))
+    return []
+  }
+
+  const trimmedId = categoryId.trim()
+  const safeSize = Math.min(50, Math.max(1, size))
+  const url = `${CHZZK_CATEGORY_CLIPS_URL(trimmedId)}?filterType=${filterType}&orderType=${orderType}&size=${safeSize}`
+  console.log("[Chzzk Request] Fetching category clips:", url)
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": BROWSER_USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://chzzk.naver.com/",
+      },
+      cache: "no-store",
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`[Chzzk Clips] 404 Not Found: ${url}`)
+      } else {
+        console.error(`[Chzzk Clips] ✗ HTTP Error: ${response.status}`)
+        const errorText = await response.text()
+        console.error(`[Chzzk Clips] Error Body:`, errorText.substring(0, 500))
+      }
+      return []
+    }
+
+    const data = await response.json()
+    if (!data || data.code !== 200) {
+      console.error(`[Chzzk Clips] ✗ API Error: code=${data?.code}`)
+      return []
+    }
+
+    const items = data.content?.data ?? data.content ?? []
+    console.log(`[Chzzk] Fetched ${Array.isArray(items) ? items.length : 0} clips for category "${trimmedId}".`)
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return []
+    }
+
+    return items.map((item: any) => ({
+      clipUID: item.clipUID ?? "",
+      videoId: item.videoId ?? "",
+      clipTitle: item.clipTitle ?? "No Title",
+      ownerChannelId: item.ownerChannelId ?? "",
+      ownerChannel: {
+        channelId: item.ownerChannel?.channelId ?? item.ownerChannelId ?? "",
+        channelName: item.ownerChannel?.channelName ?? "Unknown",
+        channelImageUrl: item.ownerChannel?.channelImageUrl ?? "",
+        verifiedMark: item.ownerChannel?.verifiedMark ?? false,
+      },
+      thumbnailImageUrl: item.thumbnailImageUrl ?? "",
+      clipCategory: item.clipCategory ?? trimmedId,
+      duration: Number(item.duration ?? 0),
+      adult: Boolean(item.adult),
+      createdDate: item.createdDate ?? "",
+      readCount: Number(item.readCount ?? 0),
+    }))
+  } catch (error) {
+    console.error(`[Chzzk Clips] ✗ Exception:`, error instanceof Error ? error.message : String(error))
     return []
   }
 }

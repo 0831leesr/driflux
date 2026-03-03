@@ -10,11 +10,13 @@ import {
   Tag,
   Users,
   Video,
+  Scissors,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StreamCard, type StreamData } from "@/components/stream-card"
 import { VideoCard, type VideoData } from "@/components/video-card"
+import { ClipCard, type ClipData } from "@/components/clip-card"
 import type { GameRow } from "@/lib/data"
 import { getDisplayGameTitle, getBestGameImage } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
@@ -41,8 +43,20 @@ function isValidSteamReview(game: { steam_review_desc?: string | null }): boolea
   return true
 }
 
+/* ── Clip filter/order types ── */
+const CLIP_FILTER_OPTIONS = [
+  { value: "WITHIN_THIRTY_DAYS", label: "30일" },
+  { value: "WITHIN_SEVEN_DAYS", label: "7일" },
+  { value: "WITHIN_ONE_DAY", label: "24시간" },
+  { value: "ALL", label: "전체" },
+] as const
+const CLIP_ORDER_OPTIONS = [
+  { value: "POPULAR", label: "인기순" },
+  { value: "RECENT", label: "최신순" },
+] as const
+
 /* ── Main Game Details Component ── */
-type TabType = "live" | "video"
+type TabType = "live" | "video" | "clip"
 
 export function GameDetailsClient({
   game,
@@ -50,12 +64,14 @@ export function GameDetailsClient({
   onBack,
   onStreamClick,
   onVideoClick,
+  onClipClick,
 }: {
   game: GameRow
   streams: StreamData[]
   onBack: () => void
   onStreamClick?: (stream: StreamData) => void
   onVideoClick?: (video: VideoData) => void
+  onClipClick?: (clip: ClipData) => void
 }) {
   const { isFavorite, toggleFavorite } = useFavoriteGames()
   const isFollowing = isFavorite(game.id)
@@ -65,6 +81,12 @@ export function GameDetailsClient({
   const [videosLoading, setVideosLoading] = useState(false)
   const [loadMoreLoading, setLoadMoreLoading] = useState(false)
   const [hasMoreVideos, setHasMoreVideos] = useState(true)
+
+  const [clips, setClips] = useState<ClipData[]>([])
+  const [clipsLoading, setClipsLoading] = useState(false)
+  const [clipFilterType, setClipFilterType] = useState<"WITHIN_THIRTY_DAYS" | "WITHIN_SEVEN_DAYS" | "WITHIN_ONE_DAY" | "ALL">("WITHIN_THIRTY_DAYS")
+  const [clipOrderType, setClipOrderType] = useState<"POPULAR" | "RECENT">("POPULAR")
+  const [displayClipCount, setDisplayClipCount] = useState(16) // 4 rows × 4 cols
 
   const liveStreams = streams
   const categoryId = game.english_title?.trim()
@@ -104,6 +126,36 @@ export function GameDetailsClient({
       .finally(() => setVideosLoading(false))
   }, [activeTab, categoryId, gameCover, gameTitle, game.id])
 
+  useEffect(() => {
+    if (activeTab !== "clip" || !categoryId) return
+    setClips([])
+    setDisplayClipCount(16)
+    setClipsLoading(true)
+    fetch(
+      `/api/chzzk/clips?categoryId=${encodeURIComponent(categoryId)}&filterType=${clipFilterType}&orderType=${clipOrderType}&size=50`
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        const items = data.clips ?? []
+        setClips(
+          items.map((c: any) => ({
+            clipUID: c.clipUID ?? "",
+            clipTitle: c.clipTitle ?? "No Title",
+            thumbnailImageUrl: c.thumbnailImageUrl ?? "",
+            readCount: Number(c.readCount ?? 0),
+            duration: Number(c.duration ?? 0),
+            channelName: c.ownerChannel?.channelName ?? "Unknown",
+            channelId: c.ownerChannel?.channelId ?? c.ownerChannelId ?? "",
+            gameCover,
+            gameTitle,
+            gameId: game.id,
+          }))
+        )
+      })
+      .catch(() => setClips([]))
+      .finally(() => setClipsLoading(false))
+  }, [activeTab, categoryId, clipFilterType, clipOrderType, gameCover, gameTitle, game.id])
+
   const handleLoadMoreVideos = () => {
     if (!categoryId || loadMoreLoading || !hasMoreVideos) return
     setLoadMoreLoading(true)
@@ -131,7 +183,14 @@ export function GameDetailsClient({
       .catch(() => setHasMoreVideos(false))
       .finally(() => setLoadMoreLoading(false))
   }
-  
+
+  const handleLoadMoreClips = () => {
+    setDisplayClipCount((prev) => prev + 16) // 4 rows × 4 cols
+  }
+
+  const displayedClips = clips.slice(0, displayClipCount)
+  const hasMoreClips = clips.length > displayClipCount
+
   // Calculate total viewers
   const totalViewers = liveStreams.reduce((sum, stream) => sum + (stream.viewers || 0), 0)
   const viewersFormatted = totalViewers >= 1000 
@@ -379,6 +438,19 @@ export function GameDetailsClient({
             <Video className="mr-1.5 h-4 w-4" />
             Video
           </Button>
+          <Button
+            variant={activeTab === "clip" ? "default" : "ghost"}
+            size="sm"
+            className={
+              activeTab === "clip"
+                ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+                : "text-muted-foreground hover:text-foreground"
+            }
+            onClick={() => setActiveTab("clip")}
+          >
+            <Scissors className="mr-1.5 h-4 w-4" />
+            클립
+          </Button>
         </div>
 
         {activeTab === "live" && (
@@ -433,6 +505,91 @@ export function GameDetailsClient({
                   className="min-w-[140px] border-border"
                 >
                   {loadMoreLoading ? "로딩 중..." : "더 보기"}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "clip" && (
+          <div className="space-y-6">
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">기간:</span>
+                <div className="flex gap-1 rounded-lg border border-border p-0.5">
+                  {CLIP_FILTER_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setClipFilterType(opt.value)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        clipFilterType === opt.value
+                          ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))]"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">정렬:</span>
+                <div className="flex gap-1 rounded-lg border border-border p-0.5">
+                  {CLIP_ORDER_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setClipOrderType(opt.value)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        clipOrderType === opt.value
+                          ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))]"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
+              {!categoryId ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  이 게임의 클립 정보를 불러올 수 없습니다.
+                </p>
+              ) : clipsLoading ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  클립 목록을 불러오는 중...
+                </p>
+              ) : clips.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  아직 등록된 인기 클립이 없습니다.
+                </p>
+              ) : (
+                <div className="card-grid-4">
+                  {displayedClips.map((clip, i) => (
+                    <ClipCard
+                      key={`${clip.clipUID}-${i}`}
+                      clip={clip}
+                      onClipClick={onClipClick}
+                      priority={i < 4}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            {hasMoreClips && clips.length > 0 && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleLoadMoreClips}
+                  className="min-w-[140px] border-border"
+                >
+                  더 보기
                 </Button>
               </div>
             )}

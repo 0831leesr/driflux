@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import type { VideoData } from "@/components/video-card"
+import type { ClipData } from "@/components/clip-card"
 
 /* ═══════════════════════════════════════════════════════════════
    Local Storage Keys
@@ -11,7 +12,9 @@ const STORAGE_KEY_GAMES = "driflux_favorite_games"
 const STORAGE_KEY_TAGS = "driflux_favorite_tags"
 const STORAGE_KEY_STREAMERS = "driflux_favorite_streamers"
 const STORAGE_KEY_VIDEOS = "driflux_saved_videos"
+const STORAGE_KEY_CLIPS = "driflux_saved_clips"
 const MAX_SAVED_VIDEOS = 500
+const MAX_SAVED_CLIPS = 500
 
 /* ═══════════════════════════════════════════════════════════════
    Context Types
@@ -59,6 +62,15 @@ interface FavoriteStreamersContextType {
   isInitialized: boolean
 }
 
+interface FavoriteClipsContextType {
+  savedClips: ClipData[]
+  isSaved: (clipUID: string) => boolean
+  addSavedClip: (clip: ClipData) => void
+  removeSavedClip: (clipUID: string) => void
+  toggleSavedClip: (clip: ClipData) => void
+  isInitialized: boolean
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Create Contexts
    ═══════════════════════════════════════════════════════════════ */
@@ -67,6 +79,7 @@ const FavoriteGamesContext = createContext<FavoriteGamesContextType | undefined>
 const FavoriteTagsContext = createContext<FavoriteTagsContextType | undefined>(undefined)
 const FavoriteStreamersContext = createContext<FavoriteStreamersContextType | undefined>(undefined)
 const FavoriteVideosContext = createContext<FavoriteVideosContextType | undefined>(undefined)
+const FavoriteClipsContext = createContext<FavoriteClipsContextType | undefined>(undefined)
 
 /* ═══════════════════════════════════════════════════════════════
    Helper Functions
@@ -149,6 +162,30 @@ function setStoredVideos(value: VideoData[]): void {
   }
 }
 
+function getStoredClips(): ClipData[] {
+  if (typeof window === "undefined") return []
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_CLIPS)
+    if (stored === null) return []
+    const parsed = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function setStoredClips(value: ClipData[]): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(STORAGE_KEY_CLIPS, JSON.stringify(value))
+    window.dispatchEvent(new CustomEvent('localStorageChange', {
+      detail: { key: STORAGE_KEY_CLIPS, value }
+    }))
+  } catch (error) {
+    console.error(`Error writing ${STORAGE_KEY_CLIPS} to localStorage:`, error)
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Favorites Provider Component
    ═══════════════════════════════════════════════════════════════ */
@@ -170,21 +207,28 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const [savedVideos, setSavedVideos] = useState<VideoData[]>([])
   const [videosInitialized, setVideosInitialized] = useState(false)
 
+  // Clips state (saved clips)
+  const [savedClips, setSavedClips] = useState<ClipData[]>([])
+  const [clipsInitialized, setClipsInitialized] = useState(false)
+
   // Initialize from localStorage on mount
   useEffect(() => {
     const storedGames = getStoredArray<number>(STORAGE_KEY_GAMES, [])
     const storedTags = getStoredArray<string>(STORAGE_KEY_TAGS, [])
     const storedStreamers = getStoredStreamers()
     const storedVideos = getStoredVideos()
+    const storedClips = getStoredClips()
 
     setFavoriteGames(storedGames)
     setFavoriteTags(storedTags)
     setFavoriteStreamers(storedStreamers)
     setSavedVideos(storedVideos)
+    setSavedClips(storedClips)
     setGamesInitialized(true)
     setTagsInitialized(true)
     setStreamersInitialized(true)
     setVideosInitialized(true)
+    setClipsInitialized(true)
   }, [])
 
   // Save games to localStorage whenever they change
@@ -215,6 +259,13 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     }
   }, [savedVideos, videosInitialized])
 
+  // Save clips to localStorage whenever they change
+  useEffect(() => {
+    if (clipsInitialized) {
+      setStoredClips(savedClips)
+    }
+  }, [savedClips, clipsInitialized])
+
   // Videos context value
   const videosContextValue: FavoriteVideosContextType = {
     savedVideos,
@@ -236,6 +287,31 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
         if (exists) return prev.filter((v) => v.videoId !== video.videoId)
         const next = [...prev, video]
         return next.length > MAX_SAVED_VIDEOS ? next.slice(-MAX_SAVED_VIDEOS) : next
+      })
+    },
+  }
+
+  // Clips context value
+  const clipsContextValue: FavoriteClipsContextType = {
+    savedClips,
+    isInitialized: clipsInitialized,
+    isSaved: (clipUID: string) => savedClips.some((c) => c.clipUID === clipUID),
+    addSavedClip: (clip: ClipData) => {
+      setSavedClips((prev) => {
+        if (prev.some((c) => c.clipUID === clip.clipUID)) return prev
+        const next = [...prev, clip]
+        return next.length > MAX_SAVED_CLIPS ? next.slice(-MAX_SAVED_CLIPS) : next
+      })
+    },
+    removeSavedClip: (clipUID: string) => {
+      setSavedClips((prev) => prev.filter((c) => c.clipUID !== clipUID))
+    },
+    toggleSavedClip: (clip: ClipData) => {
+      setSavedClips((prev) => {
+        const exists = prev.some((c) => c.clipUID === clip.clipUID)
+        if (exists) return prev.filter((c) => c.clipUID !== clip.clipUID)
+        const next = [...prev, clip]
+        return next.length > MAX_SAVED_CLIPS ? next.slice(-MAX_SAVED_CLIPS) : next
       })
     },
   }
@@ -333,7 +409,9 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       <FavoriteTagsContext.Provider value={tagsContextValue}>
         <FavoriteStreamersContext.Provider value={streamersContextValue}>
           <FavoriteVideosContext.Provider value={videosContextValue}>
-            {children}
+            <FavoriteClipsContext.Provider value={clipsContextValue}>
+              {children}
+            </FavoriteClipsContext.Provider>
           </FavoriteVideosContext.Provider>
         </FavoriteStreamersContext.Provider>
       </FavoriteTagsContext.Provider>
@@ -373,6 +451,14 @@ export function useFavoriteVideos(): FavoriteVideosContextType {
   const context = useContext(FavoriteVideosContext)
   if (context === undefined) {
     throw new Error("useFavoriteVideos must be used within a FavoritesProvider")
+  }
+  return context
+}
+
+export function useFavoriteClips(): FavoriteClipsContextType {
+  const context = useContext(FavoriteClipsContext)
+  if (context === undefined) {
+    throw new Error("useFavoriteClips must be used within a FavoritesProvider")
   }
   return context
 }

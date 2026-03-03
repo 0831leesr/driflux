@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Gamepad2, Tags, Video, Bookmark, UserCircle2 } from "lucide-react"
+import { Gamepad2, Tags, Video, Bookmark, UserCircle2, Scissors } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
@@ -19,8 +19,10 @@ import type {
 import { FollowStreamGrid } from "@/components/follow-stream-grid"
 import { FollowReplayGrid } from "@/components/follow-replay-grid"
 import { SavedReplayGrid } from "@/components/saved-replay-grid"
+import { SavedClipGrid } from "@/components/saved-clip-grid"
 import type { StreamData } from "@/components/stream-card"
 import type { VideoData } from "@/components/video-card"
+import type { ClipData } from "@/components/clip-card"
 import { CalendarContent } from "@/components/calendar-content"
 import type { EventRow } from "@/lib/types"
 import { ExploreTabContent } from "@/components/explore/explore-tab-content"
@@ -49,6 +51,7 @@ export function HomeClient({
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("main")
   const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved" | "streamers">("games")
+  const [savedSubTab, setSavedSubTab] = useState<"replay" | "clips">("replay")
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
   const { favorites: favoriteStreamers, isInitialized: streamersInitialized } = useFavoriteStreamers()
@@ -169,6 +172,11 @@ export function HomeClient({
     const url = video?.videoId ? `${CHZZK_VIDEO_URL}/${video.videoId}` : null
     if (url) window.open(url, "_blank")
   }
+  const CHZZK_CLIP_URL = "https://chzzk.naver.com/clip"
+  function handleClipClick(clip: ClipData) {
+    const url = clip?.clipUID ? `${CHZZK_CLIP_URL}/${clip.clipUID}` : null
+    if (url) window.open(url, "_blank")
+  }
 
   /* Use followed streams, show empty if no favorites */
   const followingGamesStreams = followedStreams
@@ -281,12 +289,40 @@ export function HomeClient({
                   />
                 )}
                 {followSubTab === "saved" && (
-                  <SavedReplayGrid
-                    title="저장한 다시보기"
-                    icon={<Bookmark className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
-                    onVideoClick={handleVideoClick}
-                    emptyMessage="저장한 다시보기 영상이 없습니다. 다시보기 영상에 북마크를 추가하면 여기서 확인할 수 있습니다!"
-                  />
+                  <Tabs
+                    value={savedSubTab}
+                    onValueChange={(v) => setSavedSubTab(v as "replay" | "clips")}
+                    className="w-full"
+                  >
+                    <TabsList className="mb-4 h-10 bg-muted/30 p-1 w-fit">
+                      <TabsTrigger value="replay" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        <Video className="h-4 w-4" />
+                        다시보기
+                      </TabsTrigger>
+                      <TabsTrigger value="clips" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        <Scissors className="h-4 w-4" />
+                        클립
+                      </TabsTrigger>
+                    </TabsList>
+                    <div className="flex-1">
+                      {savedSubTab === "replay" && (
+                        <SavedReplayGrid
+                          title="저장한 다시보기"
+                          icon={<Video className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
+                          onVideoClick={handleVideoClick}
+                          emptyMessage="저장한 다시보기 영상이 없습니다. 다시보기 영상에 북마크를 추가하면 여기서 확인할 수 있습니다!"
+                        />
+                      )}
+                      {savedSubTab === "clips" && (
+                        <SavedClipGrid
+                          title="저장한 클립"
+                          icon={<Scissors className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
+                          onClipClick={handleClipClick}
+                          emptyMessage="저장한 클립 영상이 없습니다. 클립 영상에 북마크를 추가하면 여기서 확인할 수 있습니다!"
+                        />
+                      )}
+                    </div>
+                  </Tabs>
                 )}
               </div>
             </Tabs>
