@@ -76,10 +76,12 @@ export async function GET(request: Request) {
 
     console.log("[Steam Update] ✓ Admin client initialized with Service Role Key")
 
-    // Fetch ALL games (Steam + non-Steam). header_image_url NULL 우선 처리.
+    // Fetch ALL games (Steam + non-Steam).
+    // 할인 중인 게임(discount_rate > 0) 우선 갱신하여 만료된 할인 정보 갱신, 그 다음 header_image_url NULL 우선
     let query = supabase
       .from("games")
-      .select("id, title, korean_title, english_title, steam_appid, header_image_url")
+      .select("id, title, korean_title, english_title, steam_appid, header_image_url, discount_rate")
+      .order("discount_rate", { ascending: false, nullsFirst: false })
       .order("header_image_url", { ascending: true, nullsFirst: true })
 
     // Filter by specific app ID if provided (Steam games only)
@@ -268,6 +270,10 @@ export async function GET(request: Request) {
           price_krw: priceFromSteam ?? priceFallback?.price_krw ?? null,
           original_price_krw: (st ? st.original_price_krw : null) ?? priceFallback?.original_price_krw ?? null,
           discount_rate: (st ? st.discount_rate : null) ?? priceFallback?.discount_rate ?? null,
+          discount_expiration:
+            (st && (st.discount_rate ?? 0) === 0)
+              ? null
+              : (priceFallback?.discount_expiration ?? null),
           is_free: st ? st.is_free : false,
           currency: (st ? st.currency : null) ?? priceFallback?.currency ?? null,
           platform: mapping?.skip_steam ? "non-steam" : (steamAppId != null ? "steam" : "unknown"),
@@ -294,6 +300,7 @@ export async function GET(request: Request) {
             updatePayload.price_krw = mapping.override_price
             updatePayload.original_price_krw = mapping.override_price
             updatePayload.discount_rate = 0
+            updatePayload.discount_expiration = null
           }
           if (mapping.override_is_free !== null) updatePayload.is_free = mapping.override_is_free
           if (mapping.steam_appid !== null) updatePayload.steam_appid = mapping.steam_appid

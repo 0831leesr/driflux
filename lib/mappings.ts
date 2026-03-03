@@ -104,3 +104,28 @@ export function resolveMapping(
   }
   return null
 }
+
+/** 게임 객체에 매핑 오버라이드(override_price, override_is_free) 적용. 표시용. */
+export function applyMappingOverridesToGame<
+  T extends {
+    price_krw?: number | null
+    original_price_krw?: number | null
+    discount_rate?: number | null
+    is_free?: boolean | null
+    korean_title?: string | null
+    title?: string | null
+    english_title?: string | null
+  }
+>(game: T, mapping: GameMapping | null): T {
+  if (!mapping) return game
+  const out = { ...game }
+  if (mapping.override_price !== null) {
+    out.price_krw = mapping.override_price
+    out.original_price_krw = mapping.override_price
+    out.discount_rate = 0
+  }
+  if (mapping.override_is_free !== null) {
+    out.is_free = mapping.override_is_free
+  }
+  return out
+}

@@ -248,6 +248,8 @@ export interface SteamSearchPriceInfo {
   original_price_krw: number | null
   discount_rate: number
   currency: string
+  /** 할인 종료 시각 (Unix timestamp), storesearch API에서 제공 */
+  discount_expiration?: number | null
 }
 
 /**
@@ -328,6 +330,7 @@ function toSearchPriceInfo(r: SteamSearchResult): SteamSearchPriceInfo {
     original_price_krw,
     discount_rate: r.discount_percent ?? 0,
     currency: r.currency || "KRW",
+    discount_expiration: r.discount_expiration ?? null,
   }
 }
 

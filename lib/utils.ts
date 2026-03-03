@@ -79,6 +79,19 @@ export function formatDiscountRate(rate: number | null | undefined): string {
 }
 
 /**
+ * 할인 만료 체크 후 유효한 discount_rate 반환.
+ * discount_expiration(Unix timestamp)이 있고 현재 시각이 지났으면 0 반환.
+ */
+export function getEffectiveDiscountRate(
+  discountRate: number | null | undefined,
+  discountExpiration?: number | null
+): number {
+  if (!discountRate || discountRate <= 0) return 0
+  if (discountExpiration != null && Date.now() / 1000 > discountExpiration) return 0
+  return discountRate
+}
+
+/**
  * 기본 플레이스홀더 이미지 URL (next/image용)
  * via.placeholder.com은 next.config.ts remotePatterns에 등록됨
  */

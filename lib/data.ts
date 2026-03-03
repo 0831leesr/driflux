@@ -3,7 +3,8 @@
 import { unstable_cache } from "next/cache"
 import { createClient, createClientForCache } from "@/lib/supabase/server"
 import type { EventRow } from "@/lib/types"
-import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
+import { getBestGameImage, getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
+import { getGameMappings, resolveMapping, applyMappingOverridesToGame, type GameMapping } from "@/lib/mappings"
 
 /* ── Cache config (revalidate in seconds) ── */
 const CACHE_REVALIDATE_TRENDING = 30
@@ -43,6 +44,8 @@ export interface GameRow {
   steam_total_reviews?: number | null
   /** Game release date (from IGDB or Steam) */
   release_date?: string | null
+  /** 할인 종료 시각 (Unix timestamp), 만료 시 discount_rate 무시 */
+  discount_expiration?: number | null
 }
 
 export interface StreamRow {
@@ -75,6 +78,23 @@ function formatViewers(count: number | null): string {
   if (!count) return "0"
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`
   return String(count)
+}
+
+type StreamWithGames = { games?: { title?: string | null; korean_title?: string | null; english_title?: string | null; header_image_url?: string | null; cover_image_url?: string | null; discount_rate?: number | null; discount_expiration?: number | null } | null }
+
+function buildStreamWithMergedGame(s: StreamWithGames & Record<string, unknown>, mappings: Record<string, GameMapping>) {
+  const g = s.games
+  const m = g ? resolveMapping(mappings, g.title ?? "", g.english_title ?? null, g.korean_title ?? null) : null
+  const merged = g ? applyMappingOverridesToGame(g as Record<string, unknown>, m) : null
+  const effectiveRate = merged
+    ? getEffectiveDiscountRate((merged as { discount_rate?: number | null }).discount_rate, (merged as { discount_expiration?: number | null }).discount_expiration)
+    : 0
+  return {
+    gameCover: getBestGameImage((merged as { header_image_url?: string | null })?.header_image_url, (merged as { cover_image_url?: string | null })?.cover_image_url),
+    gameTitle: (s as { stream_category?: string | null }).stream_category || getDisplayGameTitle(merged ?? {}),
+    saleDiscount: effectiveRate > 0 ? `-${effectiveRate}%` : undefined,
+    mergedGame: merged,
+  }
 }
 
 /* ── Fetch all games ── */
@@ -126,29 +146,29 @@ async function fetchLiveStreamsImpl(limit?: number, offset: number = 0) {
     console.error("fetchLiveStreams error:", error.message)
     return []
   }
-  return (data ?? []).map((s: StreamRow) => ({
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    // Priority: stream_category (치지직) > game title > "Unknown"
-    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0
-      ? `-${s.games.discount_rate}%`
-      : undefined,
-    hasDrops: s.has_drops ?? false,
-    gameId: s.game_id ?? undefined,
-    channelId: s.chzzk_channel_id ?? undefined,
-    // Original data for reference
-    rawData: {
-      streamCategory: s.stream_category,
-      gameData: s.games,
+  const mappings = await getGameMappings()
+  return (data ?? []).map((s: StreamRow) => {
+    const merged = buildStreamWithMergedGame(s as StreamWithGames & Record<string, unknown>, mappings)
+    return {
+      id: s.id,
+      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
+      gameCover: merged.gameCover,
+      gameTitle: merged.gameTitle,
+      streamTitle: s.title ?? "Untitled Stream",
+      streamerName: s.streamer_name ?? "Anonymous",
+      viewers: s.viewer_count ?? 0,
+      viewersFormatted: formatViewers(s.viewer_count),
+      isLive: s.is_live,
+      saleDiscount: merged.saleDiscount,
+      hasDrops: s.has_drops ?? false,
+      gameId: s.game_id ?? undefined,
+      channelId: s.chzzk_channel_id ?? undefined,
+      rawData: {
+        streamCategory: s.stream_category,
+        gameData: merged.mergedGame ?? s.games,
+      },
     }
-  }))
+  })
 }
 
 export async function fetchLiveStreams(limit?: number, offset: number = 0) {
@@ -163,21 +183,37 @@ export async function fetchLiveStreams(limit?: number, offset: number = 0) {
 /* ── Fetch games that are on sale with their top stream ── */
 export async function fetchSaleGames() {
   const supabase = await createClient()
-  const { data: games, error } = await supabase
+  const mappings = await getGameMappings()
+  const { data: allSaleGames, error } = await supabase
     .from("games")
     .select("*")
     .gt("discount_rate", 0)
     .order("discount_rate", { ascending: false })
-    .limit(12) // Limit to top 12 sale games
+    .limit(50)
   if (error) {
     console.error("fetchSaleGames error:", error.message)
     return []
   }
-  if (!games || games.length === 0) return []
+  if (!allSaleGames || allSaleGames.length === 0) return []
+
+  const gamesWithMerged = allSaleGames.map((g) => {
+    const mapping = resolveMapping(
+      mappings,
+      g.title ?? "",
+      (g as { english_title?: string | null }).english_title,
+      (g as { korean_title?: string | null }).korean_title
+    )
+    return applyMappingOverridesToGame(g, mapping)
+  })
+  const games = gamesWithMerged
+    .filter(
+      (g) =>
+        getEffectiveDiscountRate(g.discount_rate, (g as { discount_expiration?: number | null }).discount_expiration) > 0
+    )
+    .slice(0, 12)
 
   const gameIds = games.map((g) => g.id)
 
-  // Batch fetch top stream per game: all live streams for these games, then pick top per game_id
   const { data: streams, error: streamsError } = await supabase
     .from("streams")
     .select("id, game_id, thumbnail_url, streamer_name, viewer_count")
@@ -189,7 +225,6 @@ export async function fetchSaleGames() {
     console.error("fetchSaleGames streams error:", streamsError.message)
   }
 
-  // Map game_id -> top stream (first by viewer_count, already ordered)
   const topStreamByGameId = new Map<number, { thumbnail_url: string | null; streamer_name: string | null; viewer_count: number | null }>()
   for (const s of streams ?? []) {
     if (s.game_id && !topStreamByGameId.has(s.game_id)) {
@@ -202,27 +237,26 @@ export async function fetchSaleGames() {
   }
 
   const results = []
-  for (const game of games) {
-    const topStream = topStreamByGameId.get(game.id)
-    const topTags = Array.isArray(game.top_tags) ? game.top_tags : []
+  for (const merged of games) {
+    const effectiveRate = getEffectiveDiscountRate(merged.discount_rate, (merged as { discount_expiration?: number | null }).discount_expiration)
+    const topStream = topStreamByGameId.get(merged.id)
+    const topTags = Array.isArray(merged.top_tags) ? merged.top_tags : []
     const topTag = topTags.length > 0 ? topTags[0] : undefined
     results.push({
-      // Stream data
       thumbnail: topStream?.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: getBestGameImage(game.header_image_url, game.cover_image_url),
-      gameTitle: getDisplayGameTitle(game),
+      gameCover: getBestGameImage(merged.header_image_url, merged.cover_image_url),
+      gameTitle: getDisplayGameTitle(merged),
       streamerName: topStream?.streamer_name ?? "N/A",
       viewers: formatViewers(topStream?.viewer_count ?? 0),
-      discount: `-${game.discount_rate}% OFF`,
-      // Game data (for compatibility with game cards)
-      id: game.id,
-      title: getDisplayGameTitle(game),
-      cover_image_url: game.cover_image_url,
-      header_image_url: game.header_image_url,
-      price_krw: game.price_krw,
-      original_price_krw: game.original_price_krw,
-      discount_rate: game.discount_rate,
-      is_free: game.is_free,
+      discount: effectiveRate > 0 ? `-${effectiveRate}% OFF` : "",
+      id: merged.id,
+      title: getDisplayGameTitle(merged),
+      cover_image_url: merged.cover_image_url,
+      header_image_url: merged.header_image_url,
+      price_krw: merged.price_krw,
+      original_price_krw: merged.original_price_krw,
+      discount_rate: effectiveRate > 0 ? effectiveRate : null,
+      is_free: merged.is_free ?? false,
       topTag,
     })
   }
@@ -238,7 +272,19 @@ export async function fetchStreamsByGameTitle(gameTitle: string) {
     .ilike("title", gameTitle)
     .limit(1)
   if (!games || games.length === 0) return []
-  const game = games[0]
+  const rawGame = games[0]
+  const mappings = await getGameMappings()
+  const mapping = resolveMapping(
+    mappings,
+    rawGame.title ?? "",
+    (rawGame as { english_title?: string | null }).english_title,
+    (rawGame as { korean_title?: string | null }).korean_title
+  )
+  const game = applyMappingOverridesToGame(rawGame, mapping)
+  const effectiveRate = getEffectiveDiscountRate(
+    game.discount_rate,
+    (game as { discount_expiration?: number | null }).discount_expiration
+  )
 
   const { data: streams, error } = await supabase
     .from("streams")
@@ -256,9 +302,7 @@ export async function fetchStreamsByGameTitle(gameTitle: string) {
     viewers: s.viewer_count ?? 0,
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
-    saleDiscount: game.discount_rate && game.discount_rate > 0
-      ? `-${game.discount_rate}%`
-      : undefined,
+    saleDiscount: effectiveRate > 0 ? `-${effectiveRate}%` : undefined,
     hasDrops: s.has_drops ?? false,
     channelId: s.chzzk_channel_id ?? undefined,
   }))
@@ -273,7 +317,10 @@ export async function fetchGameById(id: number): Promise<GameRow | null> {
     .eq("id", id)
     .limit(1)
   if (error || !data || data.length === 0) return null
-  return data[0]
+  const game = data[0] as GameRow & { discount_expiration?: number | null }
+  const mappings = await getGameMappings()
+  const mapping = resolveMapping(mappings, game.title ?? "", game.english_title ?? null, game.korean_title ?? null)
+  return applyMappingOverridesToGame(game, mapping) as GameRow
 }
 
 /* ── Fetch multiple games by IDs ── */
@@ -291,8 +338,13 @@ export async function fetchGamesByIds(ids: number[]): Promise<GameRow[]> {
     return []
   }
   
-  // Preserve the order of the input IDs
-  const gameMap = new Map(data?.map(game => [game.id, game]) ?? [])
+  const mappings = await getGameMappings()
+  const gameMap = new Map(
+    (data ?? []).map((game: GameRow & { discount_expiration?: number | null }) => {
+      const m = resolveMapping(mappings, game.title ?? "", game.english_title ?? null, game.korean_title ?? null)
+      return [game.id, applyMappingOverridesToGame(game, m) as GameRow]
+    })
+  )
   return ids.map(id => gameMap.get(id)).filter((game): game is GameRow => game !== undefined)
 }
 
@@ -353,20 +405,31 @@ export async function fetchStreamsByGameId(gameId: number) {
   
   // Sort by viewer count
   allStreams.sort((a, b) => (b.viewer_count ?? 0) - (a.viewer_count ?? 0))
-  
+
+  const mappings = await getGameMappings()
+  const mapping = resolveMapping(
+    mappings,
+    gameData.title ?? "",
+    (gameData as { english_title?: string | null }).english_title,
+    (gameData as { korean_title?: string | null }).korean_title
+  )
+  const mergedGame = applyMappingOverridesToGame(gameData, mapping)
+  const effectiveRate = getEffectiveDiscountRate(
+    mergedGame.discount_rate,
+    (mergedGame as { discount_expiration?: number | null }).discount_expiration
+  )
+
   return allStreams.map((s: StreamRow) => ({
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(gameData.header_image_url, gameData.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(gameData as { korean_title?: string | null; title?: string | null }),
+    gameCover: getBestGameImage(mergedGame.header_image_url, mergedGame.cover_image_url),
+    gameTitle: s.stream_category || getDisplayGameTitle(mergedGame as { korean_title?: string | null; title?: string | null }),
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
-    saleDiscount: gameData.discount_rate && gameData.discount_rate > 0
-      ? `-${gameData.discount_rate}%`
-      : undefined,
+    saleDiscount: effectiveRate > 0 ? `-${effectiveRate}%` : undefined,
     hasDrops: s.has_drops ?? false,
     gameId: gameId,
     channelId: s.chzzk_channel_id ?? undefined,
@@ -403,21 +466,25 @@ export async function fetchStreamsByTagId(tagId: number) {
     .eq("is_live", true)
     .order("viewer_count", { ascending: false })
   if (error) return []
-  return (streams ?? []).map((s: any) => ({
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0 ? `-${s.games.discount_rate}%` : undefined,
-    hasDrops: s.has_drops ?? false,
-    gameId: s.game_id ?? undefined,
-    channelId: s.chzzk_channel_id ?? undefined,
-  }))
+  const mappings = await getGameMappings()
+  return (streams ?? []).map((s: any) => {
+    const merged = buildStreamWithMergedGame(s, mappings)
+    return {
+      id: s.id,
+      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
+      gameCover: merged.gameCover,
+      gameTitle: merged.gameTitle,
+      streamTitle: s.title ?? "Untitled Stream",
+      streamerName: s.streamer_name ?? "Anonymous",
+      viewers: s.viewer_count ?? 0,
+      viewersFormatted: formatViewers(s.viewer_count),
+      isLive: s.is_live,
+      saleDiscount: merged.saleDiscount,
+      hasDrops: s.has_drops ?? false,
+      gameId: s.game_id ?? undefined,
+      channelId: s.chzzk_channel_id ?? undefined,
+    }
+  })
 }
 
 /* ── Fetch streams by tag name (using top_tags) ── */
@@ -442,21 +509,25 @@ export async function fetchStreamsByTopTag(tagName: string) {
     .order("viewer_count", { ascending: false })
   
   if (error) return []
-  return (streams ?? []).map((s: any) => ({
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0 ? `-${s.games.discount_rate}%` : undefined,
-    hasDrops: s.has_drops ?? false,
-    gameId: s.game_id ?? undefined,
-    channelId: s.chzzk_channel_id ?? undefined,
-  }))
+  const mappings = await getGameMappings()
+  return (streams ?? []).map((s: any) => {
+    const merged = buildStreamWithMergedGame(s, mappings)
+    return {
+      id: s.id,
+      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
+      gameCover: merged.gameCover,
+      gameTitle: merged.gameTitle,
+      streamTitle: s.title ?? "Untitled Stream",
+      streamerName: s.streamer_name ?? "Anonymous",
+      viewers: s.viewer_count ?? 0,
+      viewersFormatted: formatViewers(s.viewer_count),
+      isLive: s.is_live,
+      saleDiscount: merged.saleDiscount,
+      hasDrops: s.has_drops ?? false,
+      gameId: s.game_id ?? undefined,
+      channelId: s.chzzk_channel_id ?? undefined,
+    }
+  })
 }
 
 /* ── Fetch streams for followed tags ── */
@@ -486,22 +557,26 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
     console.error("fetchStreamsForFollowedTags error:", error.message)
     return []
   }
-  
-  return (streams ?? []).map((s: any) => ({
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0 ? `-${s.games.discount_rate}%` : undefined,
-    hasDrops: s.has_drops ?? false,
-    gameId: s.game_id ?? undefined,
-    channelId: s.chzzk_channel_id ?? undefined,
-  }))
+
+  const mappings = await getGameMappings()
+  return (streams ?? []).map((s: any) => {
+    const merged = buildStreamWithMergedGame(s, mappings)
+    return {
+      id: s.id,
+      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
+      gameCover: merged.gameCover,
+      gameTitle: merged.gameTitle,
+      streamTitle: s.title ?? "Untitled Stream",
+      streamerName: s.streamer_name ?? "Anonymous",
+      viewers: s.viewer_count ?? 0,
+      viewersFormatted: formatViewers(s.viewer_count),
+      isLive: s.is_live,
+      saleDiscount: merged.saleDiscount,
+      hasDrops: s.has_drops ?? false,
+      gameId: s.game_id ?? undefined,
+      channelId: s.chzzk_channel_id ?? undefined,
+    }
+  })
 }
 
 /* ── Fetch tag by name (slug) ── */
@@ -672,24 +747,23 @@ export async function searchStreams(
   }
   merged.sort((a, b) => (b.viewer_count ?? 0) - (a.viewer_count ?? 0))
 
-  return merged.map((s: any) => formatStreamForDisplay(s))
+  const mappings = await getGameMappings()
+  return merged.map((s: any) => formatStreamForDisplay(s, mappings))
 }
 
-function formatStreamForDisplay(s: any) {
+function formatStreamForDisplay(s: any, mappings: Record<string, GameMapping>) {
+  const merged = buildStreamWithMergedGame(s, mappings)
   return {
     id: s.id,
     thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
+    gameCover: merged.gameCover,
+    gameTitle: merged.gameTitle,
     streamTitle: s.title ?? "Untitled Stream",
     streamerName: s.streamer_name ?? "Anonymous",
     viewers: s.viewer_count ?? 0,
     viewersFormatted: formatViewers(s.viewer_count),
     isLive: s.is_live,
-    saleDiscount:
-      s.games?.discount_rate && s.games.discount_rate > 0
-        ? `-${s.games.discount_rate}%`
-        : undefined,
+    saleDiscount: merged.saleDiscount,
     hasDrops: s.has_drops ?? false,
     gameId: s.game_id ?? undefined,
   }
@@ -879,6 +953,7 @@ type GameWithPrice = {
   price_krw: number | null
   original_price_krw: number | null
   discount_rate: number | null
+  discount_expiration?: number | null
   is_free: boolean | null
   steam_appid: number | null
 }
@@ -915,26 +990,30 @@ async function fetchTrendingGamesListImpl(): Promise<TrendingGamesCachePayload> 
   ]
   const { data: games } = await supabase
     .from("games")
-    .select("id, title, korean_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
+    .select("id, title, korean_title, english_title, top_tags, price_krw, original_price_krw, discount_rate, discount_expiration, is_free, steam_appid")
     .in("korean_title", koreanTitles)
+  const mappings = await getGameMappings()
   const titleToGame = new Map<string, GameWithPrice>()
   const gamesWithTitle: { id: number; title: string; korean_title?: string | null }[] = []
   for (const g of games ?? []) {
     const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
     if (!key) continue
-    const gg = g as GameWithPrice
+    const gg = g as GameWithPrice & { english_title?: string | null }
+    const mapping = resolveMapping(mappings, gg.title ?? "", gg.english_title ?? null, gg.korean_title ?? null)
+    const merged = applyMappingOverridesToGame(gg, mapping) as GameWithPrice
     titleToGame.set(key, {
-      id: gg.id,
-      title: gg.title,
-      korean_title: gg.korean_title ?? null,
-      top_tags: gg.top_tags ?? null,
-      price_krw: gg.price_krw ?? null,
-      original_price_krw: gg.original_price_krw ?? null,
-      discount_rate: gg.discount_rate ?? null,
-      is_free: gg.is_free ?? null,
-      steam_appid: gg.steam_appid ?? null,
+      id: merged.id,
+      title: merged.title,
+      korean_title: merged.korean_title ?? null,
+      top_tags: merged.top_tags ?? null,
+      price_krw: merged.price_krw ?? null,
+      original_price_krw: merged.original_price_krw ?? null,
+      discount_rate: merged.discount_rate ?? null,
+      discount_expiration: (merged as { discount_expiration?: number | null }).discount_expiration ?? null,
+      is_free: merged.is_free ?? null,
+      steam_appid: merged.steam_appid ?? null,
     })
-    gamesWithTitle.push({ id: gg.id, title: gg.title, korean_title: gg.korean_title ?? null })
+    gamesWithTitle.push({ id: merged.id, title: merged.title, korean_title: merged.korean_title ?? null })
   }
 
   return { rows: rows as TrendingGamesViewRow[], gamesWithTitle, titleToGameEntries: [...titleToGame.entries()] }
@@ -966,13 +1045,14 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
       const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
       const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
       const displayTitle = getDisplayGameTitle({ korean_title: gameData.korean_title, title: gameData.title })
+      const effectiveRate = getEffectiveDiscountRate(gameData.discount_rate, gameData.discount_expiration)
       return {
         id: gameData.id,
         title: displayTitle,
         cover_image_url: row.cover_image_url,
         header_image_url: row.cover_image_url,
         steam_appid: gameData.steam_appid,
-        discount_rate: gameData.discount_rate,
+        discount_rate: effectiveRate > 0 ? effectiveRate : null,
         price_krw: gameData.price_krw,
         original_price_krw: gameData.original_price_krw,
         currency: null,
@@ -1019,7 +1099,7 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
   ]
   const { data: games } = await supabase
     .from("games")
-    .select("id, title, korean_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
+    .select("id, title, korean_title, english_title, top_tags, price_krw, original_price_krw, discount_rate, discount_expiration, is_free, steam_appid")
     .in("korean_title", koreanTitles)
   type GameWithPrice = {
     id: number
@@ -1029,17 +1109,24 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
     price_krw: number | null
     original_price_krw: number | null
     discount_rate: number | null
+    discount_expiration?: number | null
     is_free: boolean | null
     steam_appid: number | null
   }
+  const mappings = await getGameMappings()
   const titleToGame = new Map<string, GameWithPrice>()
   const gamesWithTitle: { id: number; title: string; korean_title?: string | null }[] = []
   for (const g of games ?? []) {
     const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
     if (!key) continue
-    const gg = g as GameWithPrice
-    titleToGame.set(key, gg)
-    gamesWithTitle.push({ id: gg.id, title: gg.title, korean_title: gg.korean_title ?? null })
+    const gg = g as GameWithPrice & { english_title?: string | null }
+    const mapping = resolveMapping(mappings, gg.title ?? "", gg.english_title ?? null, gg.korean_title ?? null)
+    const merged = applyMappingOverridesToGame(gg, mapping) as GameWithPrice
+    titleToGame.set(key, {
+      ...merged,
+      discount_expiration: (merged as { discount_expiration?: number | null }).discount_expiration ?? null,
+    })
+    gamesWithTitle.push({ id: merged.id, title: merged.title, korean_title: merged.korean_title ?? null })
   }
 
   const streamStats = await getStreamStatsFromFetchStreamsByGameId(gamesWithTitle.map((g) => g.id))
@@ -1056,13 +1143,14 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
       const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
       const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
       const displayTitle = getDisplayGameTitle({ korean_title: gameData.korean_title, title: gameData.title })
+      const effectiveRate = getEffectiveDiscountRate(gameData.discount_rate, gameData.discount_expiration)
       return {
         id: gameData.id,
         title: displayTitle,
         cover_image_url: row.cover_image_url,
         header_image_url: row.cover_image_url,
         steam_appid: gameData.steam_appid ?? undefined,
-        discount_rate: gameData.discount_rate ?? null,
+        discount_rate: effectiveRate > 0 ? effectiveRate : null,
         price_krw: gameData.price_krw ?? null,
         original_price_krw: gameData.original_price_krw ?? null,
         currency: null,
@@ -1110,24 +1198,26 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
     console.error("fetchStreamsForFollowedGames error:", error.message)
     return []
   }
-  
-  return (streams ?? []).map((s: any) => ({
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0
-      ? `-${s.games.discount_rate}%`
-      : undefined,
-    hasDrops: s.has_drops ?? false,
-    gameId: s.game_id,
-    channelId: s.chzzk_channel_id ?? undefined,
-  }))
+
+  const mappings = await getGameMappings()
+  return (streams ?? []).map((s: any) => {
+    const merged = buildStreamWithMergedGame(s, mappings)
+    return {
+      id: s.id,
+      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
+      gameCover: merged.gameCover,
+      gameTitle: merged.gameTitle,
+      streamTitle: s.title ?? "Untitled Stream",
+      streamerName: s.streamer_name ?? "Anonymous",
+      viewers: s.viewer_count ?? 0,
+      viewersFormatted: formatViewers(s.viewer_count),
+      isLive: s.is_live,
+      saleDiscount: merged.saleDiscount,
+      hasDrops: s.has_drops ?? false,
+      gameId: s.game_id,
+      channelId: s.chzzk_channel_id ?? undefined,
+    }
+  })
 }
 
 /* ── Get stream stats (viewer count, live count) for game IDs ── */
@@ -1687,23 +1777,25 @@ export async function getStreamsForGames(gameIds: number[]) {
     console.error("getStreamsForGames error:", error.message)
     return []
   }
-  
-  return (streams ?? []).map((s: any) => ({
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(s.games?.header_image_url, s.games?.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(s.games ?? {}),
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: s.games?.discount_rate && s.games.discount_rate > 0
-      ? `-${s.games.discount_rate}%`
-      : undefined,
-    hasDrops: s.has_drops ?? false,
-    gameId: s.game_id,
-    channelId: s.chzzk_channel_id ?? undefined,
-    rawData: { streamCategory: s.stream_category, gameData: s.games },
-  }))
+
+  const mappings = await getGameMappings()
+  return (streams ?? []).map((s: any) => {
+    const merged = buildStreamWithMergedGame(s, mappings)
+    return {
+      id: s.id,
+      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
+      gameCover: merged.gameCover,
+      gameTitle: merged.gameTitle,
+      streamTitle: s.title ?? "Untitled Stream",
+      streamerName: s.streamer_name ?? "Anonymous",
+      viewers: s.viewer_count ?? 0,
+      viewersFormatted: formatViewers(s.viewer_count),
+      isLive: s.is_live,
+      saleDiscount: merged.saleDiscount,
+      hasDrops: s.has_drops ?? false,
+      gameId: s.game_id,
+      channelId: s.chzzk_channel_id ?? undefined,
+      rawData: { streamCategory: s.stream_category, gameData: merged.mergedGame ?? s.games },
+    }
+  })
 }
