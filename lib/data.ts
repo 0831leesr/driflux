@@ -41,6 +41,8 @@ export interface GameRow {
   steam_review_desc?: string | null
   steam_positive_ratio?: number | null
   steam_total_reviews?: number | null
+  /** Game release date (from IGDB or Steam) */
+  release_date?: string | null
 }
 
 export interface StreamRow {
@@ -691,6 +693,165 @@ function formatStreamForDisplay(s: any) {
     hasDrops: s.has_drops ?? false,
     gameId: s.game_id ?? undefined,
   }
+}
+
+/* ── Fetch games with active drops (드롭스 활성화 방송이 있는 게임) ── */
+export interface GamesWithDropsRow {
+  id: number
+  title: string
+  cover_image_url: string | null
+  header_image_url: string | null
+  totalViewers: number
+}
+
+async function fetchGamesWithDropsImpl(): Promise<GamesWithDropsRow[]> {
+  const supabase = createClientForCache()
+
+  const { data, error } = await supabase
+    .from("games_with_drops")
+    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, total_viewers")
+    .order("total_viewers", { ascending: false })
+    .limit(8)
+
+  if (error) {
+    console.error("fetchGamesWithDrops error:", error.message)
+    return []
+  }
+
+  if (!data || data.length === 0) return []
+
+  return (data as Array<{
+    id: number
+    title: string
+    korean_title?: string | null
+    english_title?: string | null
+    cover_image_url: string | null
+    header_image_url: string | null
+    total_viewers: number | null
+  }>).map((row) => ({
+    id: row.id,
+    title: getDisplayGameTitle({ korean_title: row.korean_title, title: row.title }),
+    cover_image_url: row.cover_image_url,
+    header_image_url: row.header_image_url,
+    totalViewers: row.total_viewers ?? 0,
+  }))
+}
+
+export async function fetchGamesWithDrops(): Promise<GamesWithDropsRow[]> {
+  return unstable_cache(
+    fetchGamesWithDropsImpl,
+    ["games-with-drops"],
+    { revalidate: CACHE_REVALIDATE_STREAMS }
+  )()
+}
+
+/* ── Fetch hidden gems games (숨겨진 꿀잼 게임 - stream 5~29, viewers >= 100) ── */
+export interface HiddenGemsRow {
+  id: number
+  title: string
+  cover_image_url: string | null
+  header_image_url: string | null
+  totalViewers: number
+  liveStreamCount: number
+}
+
+async function fetchHiddenGemsGamesImpl(): Promise<HiddenGemsRow[]> {
+  const supabase = createClientForCache()
+
+  const { data, error } = await supabase
+    .from("hidden_gems_games")
+    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, stream_count, total_viewers")
+    .order("score", { ascending: false })
+    .limit(8)
+
+  if (error) {
+    console.error("fetchHiddenGemsGames error:", error.message)
+    return []
+  }
+
+  if (!data || data.length === 0) return []
+
+  return (data as Array<{
+    id: number
+    title: string
+    korean_title?: string | null
+    english_title?: string | null
+    cover_image_url: string | null
+    header_image_url: string | null
+    stream_count: number
+    total_viewers: number | null
+  }>).map((row) => ({
+    id: row.id,
+    title: getDisplayGameTitle({ korean_title: row.korean_title, title: row.title }),
+    cover_image_url: row.cover_image_url,
+    header_image_url: row.header_image_url,
+    totalViewers: row.total_viewers ?? 0,
+    liveStreamCount: row.stream_count ?? 0,
+  }))
+}
+
+export async function fetchHiddenGemsGames(): Promise<HiddenGemsRow[]> {
+  return unstable_cache(
+    fetchHiddenGemsGamesImpl,
+    ["hidden-gems-games"],
+    { revalidate: CACHE_REVALIDATE_STREAMS }
+  )()
+}
+
+/* ── Fetch new releases (따끈따끈 신작 - 30일 이내 출시, 치지직 화제) ── */
+export interface NewReleasesRow {
+  id: number
+  title: string
+  cover_image_url: string | null
+  header_image_url: string | null
+  totalViewers: number
+  liveStreamCount: number
+  daysSinceRelease: number
+}
+
+async function fetchNewReleasesGamesImpl(): Promise<NewReleasesRow[]> {
+  const supabase = createClientForCache()
+
+  const { data, error } = await supabase
+    .from("new_releases_games")
+    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, days_elapsed, stream_count, total_viewers")
+    .order("score", { ascending: false })
+    .limit(8)
+
+  if (error) {
+    console.error("fetchNewReleasesGames error:", error.message)
+    return []
+  }
+
+  if (!data || data.length === 0) return []
+
+  return (data as Array<{
+    id: number
+    title: string
+    korean_title?: string | null
+    english_title?: string | null
+    cover_image_url: string | null
+    header_image_url: string | null
+    days_elapsed: number
+    stream_count: number
+    total_viewers: number | null
+  }>).map((row) => ({
+    id: row.id,
+    title: getDisplayGameTitle({ korean_title: row.korean_title, title: row.title }),
+    cover_image_url: row.cover_image_url,
+    header_image_url: row.header_image_url,
+    totalViewers: row.total_viewers ?? 0,
+    liveStreamCount: row.stream_count ?? 0,
+    daysSinceRelease: row.days_elapsed ?? 0,
+  }))
+}
+
+export async function fetchNewReleasesGames(): Promise<NewReleasesRow[]> {
+  return unstable_cache(
+    fetchNewReleasesGamesImpl,
+    ["new-releases-games"],
+    { revalidate: CACHE_REVALIDATE_STREAMS }
+  )()
 }
 
 /* ── Fetch trending games (trending_games view - trend_score 알고리즘 적용) ── */

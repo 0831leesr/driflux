@@ -6,7 +6,16 @@ import { Gamepad2, Tags, Video, Bookmark, UserCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingGames } from "@/components/trending-games"
-import type { TrendingGameRow, EsportsChannel } from "@/lib/data"
+import { DropsSection } from "@/components/drops-section"
+import { HiddenGemsSection } from "@/components/hidden-gems-section"
+import { NewReleasesSection } from "@/components/new-releases-section"
+import type {
+  TrendingGameRow,
+  GamesWithDropsRow,
+  HiddenGemsRow,
+  NewReleasesRow,
+  EsportsChannel,
+} from "@/lib/data"
 import { FollowStreamGrid } from "@/components/follow-stream-grid"
 import { FollowReplayGrid } from "@/components/follow-replay-grid"
 import { SavedReplayGrid } from "@/components/saved-replay-grid"
@@ -21,11 +30,22 @@ import { formatViewerCountShort } from "@/lib/utils"
 interface HomeClientProps {
   liveStreams: StreamData[]
   trendingGames: TrendingGameRow[]
+  gamesWithDrops: GamesWithDropsRow[]
+  hiddenGemsGames: HiddenGemsRow[]
+  newReleasesGames: NewReleasesRow[]
   upcomingEvents: EventRow[]
   esportsChannels: EsportsChannel[]
 }
 
-export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esportsChannels }: HomeClientProps) {
+export function HomeClient({
+  liveStreams,
+  trendingGames,
+  gamesWithDrops,
+  hiddenGemsGames,
+  newReleasesGames,
+  upcomingEvents,
+  esportsChannels,
+}: HomeClientProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("main")
   const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved" | "streamers">("games")
@@ -194,6 +214,9 @@ export function HomeClient({ liveStreams, trendingGames, upcomingEvents, esports
         {activeTab === "main" ? (
           <div className="flex flex-col gap-8 p-4 lg:p-6">
             <TrendingGames games={trendingGames} />
+            <DropsSection games={gamesWithDrops} />
+            <HiddenGemsSection games={hiddenGemsGames} />
+            <NewReleasesSection games={newReleasesGames} />
           </div>
         ) : activeTab === "follow" ? (
           <div className="flex flex-col p-4 lg:p-6">

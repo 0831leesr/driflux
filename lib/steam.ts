@@ -64,6 +64,8 @@ export interface ProcessedSteamData {
   is_free: boolean
   currency: string
   tags: string[]
+  /** 발매일 (YYYY-MM-DD), 파싱 불가 시 null */
+  release_date: string | null
 }
 
 export interface SteamSearchResult {
@@ -429,6 +431,16 @@ export function processSteamData(steamData: SteamGameData): ProcessedSteamData {
     tags.push(...steamData.genres.map(genre => genre.description))
   }
 
+  // Parse release_date (e.g. "Mar 3, 2025", "3 Mar, 2025") to YYYY-MM-DD
+  let release_date: string | null = null
+  const rawDate = steamData.release_date?.date
+  if (rawDate && typeof rawDate === "string" && !steamData.release_date?.coming_soon) {
+    const parsed = new Date(rawDate.trim())
+    if (!Number.isNaN(parsed.getTime())) {
+      release_date = parsed.toISOString().slice(0, 10)
+    }
+  }
+
   return {
     steam_appid: steamData.steam_appid,
     title: steamData.name,
@@ -442,6 +454,7 @@ export function processSteamData(steamData: SteamGameData): ProcessedSteamData {
     is_free: steamData.is_free,
     currency,
     tags,
+    release_date,
   }
 }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { Heart, Users, Radio } from "lucide-react"
+import { Heart, Users, Radio, Gift } from "lucide-react"
 import { formatKRW, formatDiscountRate, formatViewerCountShort, getDisplayGameTitle } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
@@ -22,6 +22,10 @@ export interface GameCardData {
   totalViewers?: number
   liveStreamCount?: number
   topTag?: string
+  /** 드롭스 진행 중 뱃지 표시 (드롭스 섹션용) */
+  showDropsBadge?: boolean
+  /** 출시 N일차 (신작 섹션용, 0이면 NEW, 1이상이면 D-N) */
+  daysSinceRelease?: number
 }
 
 export function GameCard({ game, priority }: { game: GameCardData; priority?: boolean }) {
@@ -76,10 +80,27 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
         </div>
 
         {/* Discount Badge */}
-        {hasDiscount && (
+        {hasDiscount && !game.showDropsBadge && (
           <div className="absolute right-2 top-2">
             <Badge className="border-transparent bg-gradient-to-r from-amber-500 to-red-500 px-2 py-1 text-xs font-bold text-white">
               {formatDiscountRate(game.discount_rate)}
+            </Badge>
+          </div>
+        )}
+        {/* Drops Badge */}
+        {game.showDropsBadge && (
+          <div className="absolute right-2 top-2">
+            <Badge className="border-transparent bg-gradient-to-r from-amber-500 to-orange-600 px-2 py-1 text-xs font-bold text-white">
+              <Gift className="mr-1 inline h-3 w-3" />
+              드롭스 진행 중
+            </Badge>
+          </div>
+        )}
+        {/* New Release Badge (NEW or D-N) */}
+        {game.daysSinceRelease !== undefined && !game.showDropsBadge && !hasDiscount && (
+          <div className="absolute right-2 top-2">
+            <Badge className="border-transparent bg-gradient-to-r from-rose-500 to-pink-600 px-2 py-1 text-xs font-bold text-white">
+              {game.daysSinceRelease === 0 ? "NEW" : `D-${game.daysSinceRelease}`}
             </Badge>
           </div>
         )}

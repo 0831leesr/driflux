@@ -248,6 +248,15 @@ export async function GET(request: Request) {
         const st = steamData
         const priceFromSteam = st ? st.price_krw : null
         const priceFallback = searchPriceFallback?.price_krw != null ? searchPriceFallback : null
+
+        // release_date: IGDB(Unix) → YYYY-MM-DD, Steam은 processSteamData에서 이미 변환
+        let releaseDateStr: string | null = null
+        if (ig?.release_date != null && typeof ig.release_date === "number") {
+          const d = new Date(ig.release_date * 1000)
+          if (!Number.isNaN(d.getTime())) releaseDateStr = d.toISOString().slice(0, 10)
+        }
+        if (!releaseDateStr && st?.release_date) releaseDateStr = st.release_date
+
         const updatePayload: Record<string, string | number | boolean | null | string[]> = {
           cover_image_url: ig?.image_url ?? st?.cover_image_url ?? null,
           header_image_url: ig?.image_url ?? st?.header_image_url ?? null,
@@ -266,6 +275,7 @@ export async function GET(request: Request) {
           steam_review_desc: steamReviewSummary?.review_score_desc ?? null,
           steam_positive_ratio: steamReviewSummary?.steam_positive_ratio ?? null,
           steam_total_reviews: steamReviewSummary?.steam_total_reviews ?? null,
+          release_date: releaseDateStr,
         }
         if (st) {
           updatePayload.title = st.title
