@@ -80,12 +80,11 @@ function formatViewers(count: number | null): string {
   return String(count)
 }
 
-type StreamWithGames = { games?: { title?: string | null; korean_title?: string | null; english_title?: string | null; header_image_url?: string | null; cover_image_url?: string | null; discount_rate?: number | null; discount_expiration?: number | null } | null }
 
-function buildStreamWithMergedGame(s: StreamWithGames & Record<string, unknown>, mappings: Record<string, GameMapping>) {
+function buildStreamWithMergedGame(s: { games?: { title?: string | null; korean_title?: string | null; english_title?: string | null; header_image_url?: string | null; cover_image_url?: string | null; discount_rate?: number | null; discount_expiration?: number | null } | null; stream_category?: string | null }, mappings: Record<string, GameMapping>) {
   const g = s.games
   const m = g ? resolveMapping(mappings, g.title ?? "", g.english_title ?? null, g.korean_title ?? null) : null
-  const merged = g ? applyMappingOverridesToGame(g as Record<string, unknown>, m) : null
+  const merged = g ? applyMappingOverridesToGame(g, m) : null
   const effectiveRate = merged
     ? getEffectiveDiscountRate((merged as { discount_rate?: number | null }).discount_rate, (merged as { discount_expiration?: number | null }).discount_expiration)
     : 0
@@ -148,7 +147,7 @@ async function fetchLiveStreamsImpl(limit?: number, offset: number = 0) {
   }
   const mappings = await getGameMappings()
   return (data ?? []).map((s: StreamRow) => {
-    const merged = buildStreamWithMergedGame(s as StreamWithGames & Record<string, unknown>, mappings)
+    const merged = buildStreamWithMergedGame(s, mappings)
     return {
       id: s.id,
       thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",

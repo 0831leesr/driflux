@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence, getSteamReviewSummary } from "@/lib/steam"
+import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence, getSteamReviewSummary, type SteamSearchPriceInfo } from "@/lib/steam"
 import { getGameMappings, resolveMapping, type GameMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
 import { searchIGDBGame, fetchSteamAppIdFromIGDB } from "@/lib/igdb"
@@ -178,7 +178,7 @@ export async function GET(request: Request) {
         // --- 2. Steam 검색/조회 (skip_steam이 아니면) ---
         // 2-1. steam_appid 우선: mapping/game에 있으면 해당 ID로 직접 조회
         // 2-2. steam_appid가 NULL이면 steam_title로 이름 기반 검색
-        let searchPriceFallback: { price_krw: number | null; original_price_krw: number | null; discount_rate: number; currency: string } | null = null
+        let searchPriceFallback: SteamSearchPriceInfo | null = null
         let clearedBadSteamAppId = false
         if (!mapping?.skip_steam) {
           if (!steamAppId) {
