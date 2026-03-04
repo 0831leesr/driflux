@@ -172,7 +172,7 @@ export function HomeClient({
     const url = video?.videoId ? `${CHZZK_VIDEO_URL}/${video.videoId}` : null
     if (url) window.open(url, "_blank")
   }
-  const CHZZK_CLIP_URL = "https://chzzk.naver.com/clip"
+  const CHZZK_CLIP_URL = "https://chzzk.naver.com/clips"
   function handleClipClick(clip: ClipData) {
     const url = clip?.clipUID ? `${CHZZK_CLIP_URL}/${clip.clipUID}` : null
     if (url) window.open(url, "_blank")

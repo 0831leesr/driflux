@@ -14,7 +14,7 @@ interface GameDetailsPageProps {
 
 const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
 const CHZZK_VIDEO_URL = "https://chzzk.naver.com/video"
-const CHZZK_CLIP_URL = "https://chzzk.naver.com/clip"
+const CHZZK_CLIP_URL = "https://chzzk.naver.com/clips"
 
 export function GameDetailsPage({ game, streams }: GameDetailsPageProps) {
   const router = useRouter()
