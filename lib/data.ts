@@ -44,8 +44,6 @@ export interface GameRow {
   steam_total_reviews?: number | null
   /** Game release date (from IGDB or Steam) */
   release_date?: string | null
-  /** 할인 종료 시각 (Unix timestamp), 만료 시 discount_rate 무시 */
-  discount_expiration?: number | null
 }
 
 export interface StreamRow {
@@ -81,13 +79,11 @@ function formatViewers(count: number | null): string {
 }
 
 
-function buildStreamWithMergedGame(s: { games?: { title?: string | null; korean_title?: string | null; english_title?: string | null; header_image_url?: string | null; cover_image_url?: string | null; discount_rate?: number | null; discount_expiration?: number | null } | null; stream_category?: string | null }, mappings: Record<string, GameMapping>) {
+function buildStreamWithMergedGame(s: { games?: { title?: string | null; korean_title?: string | null; english_title?: string | null; header_image_url?: string | null; cover_image_url?: string | null; discount_rate?: number | null } | null; stream_category?: string | null }, mappings: Record<string, GameMapping>) {
   const g = s.games
   const m = g ? resolveMapping(mappings, g.title ?? "", g.english_title ?? null, g.korean_title ?? null) : null
   const merged = g ? applyMappingOverridesToGame(g, m) : null
-  const effectiveRate = merged
-    ? getEffectiveDiscountRate((merged as { discount_rate?: number | null }).discount_rate, (merged as { discount_expiration?: number | null }).discount_expiration)
-    : 0
+  const effectiveRate = merged ? getEffectiveDiscountRate((merged as { discount_rate?: number | null }).discount_rate) : 0
   return {
     gameCover: getBestGameImage((merged as { header_image_url?: string | null })?.header_image_url, (merged as { cover_image_url?: string | null })?.cover_image_url),
     gameTitle: (s as { stream_category?: string | null }).stream_category || getDisplayGameTitle(merged ?? {}),
@@ -205,10 +201,7 @@ export async function fetchSaleGames() {
     return applyMappingOverridesToGame(g, mapping)
   })
   const games = gamesWithMerged
-    .filter(
-      (g) =>
-        getEffectiveDiscountRate(g.discount_rate, (g as { discount_expiration?: number | null }).discount_expiration) > 0
-    )
+    .filter((g) => getEffectiveDiscountRate(g.discount_rate) > 0)
     .slice(0, 12)
 
   const gameIds = games.map((g) => g.id)
@@ -237,7 +230,7 @@ export async function fetchSaleGames() {
 
   const results = []
   for (const merged of games) {
-    const effectiveRate = getEffectiveDiscountRate(merged.discount_rate, (merged as { discount_expiration?: number | null }).discount_expiration)
+    const effectiveRate = getEffectiveDiscountRate(merged.discount_rate)
     const topStream = topStreamByGameId.get(merged.id)
     const topTags = Array.isArray(merged.top_tags) ? merged.top_tags : []
     const topTag = topTags.length > 0 ? topTags[0] : undefined
@@ -280,10 +273,7 @@ export async function fetchStreamsByGameTitle(gameTitle: string) {
     (rawGame as { korean_title?: string | null }).korean_title
   )
   const game = applyMappingOverridesToGame(rawGame, mapping)
-  const effectiveRate = getEffectiveDiscountRate(
-    game.discount_rate,
-    (game as { discount_expiration?: number | null }).discount_expiration
-  )
+  const effectiveRate = getEffectiveDiscountRate(game.discount_rate)
 
   const { data: streams, error } = await supabase
     .from("streams")
@@ -316,7 +306,7 @@ export async function fetchGameById(id: number): Promise<GameRow | null> {
     .eq("id", id)
     .limit(1)
   if (error || !data || data.length === 0) return null
-  const game = data[0] as GameRow & { discount_expiration?: number | null }
+  const game = data[0] as GameRow
   const mappings = await getGameMappings()
   const mapping = resolveMapping(mappings, game.title ?? "", game.english_title ?? null, game.korean_title ?? null)
   return applyMappingOverridesToGame(game, mapping) as GameRow
@@ -339,7 +329,7 @@ export async function fetchGamesByIds(ids: number[]): Promise<GameRow[]> {
   
   const mappings = await getGameMappings()
   const gameMap = new Map(
-    (data ?? []).map((game: GameRow & { discount_expiration?: number | null }) => {
+    (data ?? []).map((game: GameRow) => {
       const m = resolveMapping(mappings, game.title ?? "", game.english_title ?? null, game.korean_title ?? null)
       return [game.id, applyMappingOverridesToGame(game, m) as GameRow]
     })
@@ -413,10 +403,7 @@ export async function fetchStreamsByGameId(gameId: number) {
     (gameData as { korean_title?: string | null }).korean_title
   )
   const mergedGame = applyMappingOverridesToGame(gameData, mapping)
-  const effectiveRate = getEffectiveDiscountRate(
-    mergedGame.discount_rate,
-    (mergedGame as { discount_expiration?: number | null }).discount_expiration
-  )
+  const effectiveRate = getEffectiveDiscountRate(mergedGame.discount_rate)
 
   return allStreams.map((s: StreamRow) => ({
     id: s.id,
@@ -952,7 +939,6 @@ type GameWithPrice = {
   price_krw: number | null
   original_price_krw: number | null
   discount_rate: number | null
-  discount_expiration?: number | null
   is_free: boolean | null
   steam_appid: number | null
 }
@@ -989,7 +975,7 @@ async function fetchTrendingGamesListImpl(): Promise<TrendingGamesCachePayload> 
   ]
   const { data: games } = await supabase
     .from("games")
-    .select("id, title, korean_title, english_title, top_tags, price_krw, original_price_krw, discount_rate, discount_expiration, is_free, steam_appid")
+    .select("id, title, korean_title, english_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
     .in("korean_title", koreanTitles)
   const mappings = await getGameMappings()
   const titleToGame = new Map<string, GameWithPrice>()
@@ -1008,7 +994,6 @@ async function fetchTrendingGamesListImpl(): Promise<TrendingGamesCachePayload> 
       price_krw: merged.price_krw ?? null,
       original_price_krw: merged.original_price_krw ?? null,
       discount_rate: merged.discount_rate ?? null,
-      discount_expiration: (merged as { discount_expiration?: number | null }).discount_expiration ?? null,
       is_free: merged.is_free ?? null,
       steam_appid: merged.steam_appid ?? null,
     })
@@ -1044,7 +1029,7 @@ export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
       const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
       const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
       const displayTitle = getDisplayGameTitle({ korean_title: gameData.korean_title, title: gameData.title })
-      const effectiveRate = getEffectiveDiscountRate(gameData.discount_rate, gameData.discount_expiration)
+      const effectiveRate = getEffectiveDiscountRate(gameData.discount_rate)
       return {
         id: gameData.id,
         title: displayTitle,
@@ -1098,7 +1083,7 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
   ]
   const { data: games } = await supabase
     .from("games")
-    .select("id, title, korean_title, english_title, top_tags, price_krw, original_price_krw, discount_rate, discount_expiration, is_free, steam_appid")
+    .select("id, title, korean_title, english_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
     .in("korean_title", koreanTitles)
   type GameWithPrice = {
     id: number
@@ -1108,7 +1093,6 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
     price_krw: number | null
     original_price_krw: number | null
     discount_rate: number | null
-    discount_expiration?: number | null
     is_free: boolean | null
     steam_appid: number | null
   }
@@ -1121,10 +1105,7 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
     const gg = g as GameWithPrice & { english_title?: string | null }
     const mapping = resolveMapping(mappings, gg.title ?? "", gg.english_title ?? null, gg.korean_title ?? null)
     const merged = applyMappingOverridesToGame(gg, mapping) as GameWithPrice
-    titleToGame.set(key, {
-      ...merged,
-      discount_expiration: (merged as { discount_expiration?: number | null }).discount_expiration ?? null,
-    })
+    titleToGame.set(key, merged)
     gamesWithTitle.push({ id: merged.id, title: merged.title, korean_title: merged.korean_title ?? null })
   }
 
@@ -1142,7 +1123,7 @@ export async function fetchGamesByViewerCount(limit: number = 50, offset: number
       const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
       const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
       const displayTitle = getDisplayGameTitle({ korean_title: gameData.korean_title, title: gameData.title })
-      const effectiveRate = getEffectiveDiscountRate(gameData.discount_rate, gameData.discount_expiration)
+      const effectiveRate = getEffectiveDiscountRate(gameData.discount_rate)
       return {
         id: gameData.id,
         title: displayTitle,
