@@ -76,13 +76,20 @@ export async function GET(request: Request) {
 
     console.log("[Steam Update] ✓ Admin client initialized with Service Role Key")
 
-    // Fetch ALL games (Steam + non-Steam).
-    // 할인 중인 게임(discount_rate > 0) 우선 갱신하여 만료된 할인 정보 갱신, 그 다음 header_image_url NULL 우선
+    // 사전 로드: skip_steam & skip_igdb 필터링을 위해 mappings 먼저 조회
+    const mappings = await getGameMappings()
+    const uniqueMappings = new Set(Object.values(mappings).map((m) => m.chzzk_title)).size
+    console.log(`[Steam Update] Loaded ${uniqueMappings} game mappings from DB`)
+
+    // 갱신 대상 선정: last_data_update 오래된 순. skip_steam&skip_igdb 모두 TRUE인 게임은 선정에서 제외.
+    // 스팀/비스팀 모두 포함. fetchLimit만큼 조회 후 필터링해 limit개 사용.
+    const limit = limitParam ? parseInt(limitParam, 10) : 50
+    const fetchLimit = Math.max(limit + 30, 80) // 필터링 여유 확보
+
     let query = supabase
       .from("games")
-      .select("id, title, korean_title, english_title, steam_appid, header_image_url, discount_rate")
-      .order("discount_rate", { ascending: false, nullsFirst: false })
-      .order("header_image_url", { ascending: true, nullsFirst: true })
+      .select("id, title, korean_title, english_title, steam_appid, header_image_url, discount_rate, last_data_update")
+      .order("last_data_update", { ascending: true, nullsFirst: true })
 
     // Filter by specific app ID if provided (Steam games only)
     if (appIdParam) {
@@ -94,15 +101,12 @@ export async function GET(request: Request) {
         )
       }
       query = query.eq("steam_appid", appId)
+      // appid 지정 시 limit만 적용 (필터링 생략)
+    } else {
+      query = query.limit(fetchLimit)
     }
 
-    // Limit results (default 50 for cron to avoid Vercel timeout)
-    const limit = limitParam ? parseInt(limitParam, 10) : 50
-    if (!isNaN(limit) && limit > 0) {
-      query = query.limit(limit)
-    }
-
-    const { data: games, error: fetchError } = await query
+    const { data: rawGames, error: fetchError } = await query
 
     if (fetchError) {
       console.error("[Steam Update] Database fetch error:", fetchError)
@@ -110,6 +114,24 @@ export async function GET(request: Request) {
         { error: "Failed to fetch games from database", details: fetchError.message },
         { status: 500 }
       )
+    }
+
+    // skip_steam & skip_igdb 모두 TRUE인 게임 제외 후 limit개 선정
+    let games = rawGames ?? []
+    if (!appIdParam && games.length > 0) {
+      const filtered: typeof games = []
+      for (const g of games) {
+        const koreanTitle = (g as { korean_title?: string | null }).korean_title?.trim() || null
+        const englishTitle = (g as { english_title?: string | null }).english_title?.trim() || null
+        const fallbackTitle = g.title?.trim() || ""
+        const mapping = resolveMapping(mappings, fallbackTitle, englishTitle, koreanTitle)
+        if (mapping?.skip_steam && mapping?.skip_igdb) continue // 의도적 제외
+        filtered.push(g)
+        if (filtered.length >= limit) break
+      }
+      games = filtered
+    } else if (appIdParam && games.length > 1) {
+      games = games.slice(0, 1) // appid 지정 시 1건만
     }
 
     if (!games || games.length === 0) {
@@ -126,11 +148,7 @@ export async function GET(request: Request) {
       })
     }
 
-    console.log(`[Steam Update] Found ${games.length} games to update (Steam + non-Steam)`)
-
-    const mappings = await getGameMappings()
-    const uniqueMappings = new Set(Object.values(mappings).map((m) => m.chzzk_title)).size
-    console.log(`[Steam Update] Loaded ${uniqueMappings} game mappings from DB`)
+    console.log(`[Steam Update] Found ${games.length} games to update (last_data_update 오래된 순)`)
 
     const results = {
       total: games.length,
@@ -279,13 +297,10 @@ export async function GET(request: Request) {
           steam_total_reviews: steamReviewSummary?.steam_total_reviews ?? null,
           release_date: releaseDateStr,
         }
-        if (st) {
-          updatePayload.title = st.title
-          updatePayload.last_steam_update = new Date().toISOString()
-        }
-        if (clearedBadSteamAppId) {
-          updatePayload.last_steam_update = null
-        }
+        if (st) updatePayload.title = st.title
+
+        // 메타데이터 갱신 시마다 last_data_update 기록 (update-evaluations는 갱신하지 않음)
+        updatePayload.last_data_update = new Date().toISOString()
 
         // [오버라이드] 매핑 테이블 값이 있으면 최우선 덮어쓰기
         if (mapping) {
@@ -305,7 +320,6 @@ export async function GET(request: Request) {
           if (mapping.skip_steam) {
             updatePayload.steam_appid = null
             updatePayload.platform = "non-steam"
-            updatePayload.last_steam_update = null
             updatePayload.price_krw = mapping.override_price ?? null
             updatePayload.original_price_krw = mapping.override_price ?? null
             updatePayload.discount_rate = mapping.override_price != null ? 0 : null

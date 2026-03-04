@@ -47,7 +47,7 @@ export interface GameRow {
   original_price_krw: number | null // ← 추가
   currency: string | null
   is_free: boolean | null
-  last_steam_update: string | null
+  last_data_update: string | null
 }
 
 export interface StreamRow {

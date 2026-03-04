@@ -31,7 +31,7 @@ ADD COLUMN price_krw INTEGER,
 ADD COLUMN original_price_krw INTEGER,
 ADD COLUMN currency VARCHAR(10) DEFAULT 'KRW',
 ADD COLUMN is_free BOOLEAN DEFAULT FALSE,
-ADD COLUMN last_steam_update TIMESTAMP WITH TIME ZONE,
+ADD COLUMN last_data_update TIMESTAMP WITH TIME ZONE,
 ADD COLUMN header_image_url TEXT,
 ADD COLUMN background_image_url TEXT;
 
@@ -220,7 +220,7 @@ STEAM_LANGUAGE=korean                   # 기본값: korean
   discount_rate: 20,                      // 할인율 (%)
   is_free: false,                         // 무료 게임 여부
   currency: "KRW",                        // 통화
-  last_steam_update: "2024-01-15T10:30:00Z"  // 마지막 업데이트 시간
+  last_data_update: "2024-01-15T10:30:00Z"  // 마지막 메타데이터 갱신 시간
 }
 ```
 

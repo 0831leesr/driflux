@@ -12,7 +12,7 @@ export interface GameRow {
   original_price_krw: number | null
   currency: string | null
   is_free: boolean | null
-  last_steam_update: string | null
+  last_data_update: string | null
   short_description?: string | null
   developer?: string | null
   publisher?: string | null
