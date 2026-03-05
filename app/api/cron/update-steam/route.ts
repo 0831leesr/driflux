@@ -277,6 +277,7 @@ export async function GET(request: Request) {
         const priceFallback = searchPriceFallback?.price_krw != null ? searchPriceFallback : null
 
         // cover_image_url: IGDB → Steam → (없으면) Chzzk poster → null(기본 이미지)
+        // header_image_url: 동일 우선순위. Chzzk 폴백 시 cover와 header 모두 동일 이미지 저장
         let coverImageUrl = ig?.image_url ?? st?.cover_image_url ?? null
         if (!coverImageUrl?.trim()) {
           const chzzkCategoryId = (englishTitle || fallbackTitle)?.trim()?.replace(/\s+/g, "_") || null
@@ -284,7 +285,7 @@ export async function GET(request: Request) {
             const chzzkPoster = await fetchChzzkGamePosterImage(chzzkCategoryId)
             if (chzzkPoster) {
               coverImageUrl = chzzkPoster
-              console.log(`[Steam Update] Chzzk poster fallback for cover: ${game.title}`)
+              console.log(`[Steam Update] Chzzk poster fallback for cover/header: ${game.title}`)
             }
             await delay(300)
           }
@@ -304,7 +305,7 @@ export async function GET(request: Request) {
 
         const updatePayload: Record<string, string | number | boolean | null | string[]> = {
           cover_image_url: coverImageUrl,
-          header_image_url: ig?.image_url ?? st?.header_image_url ?? null,
+          header_image_url: ig?.image_url ?? st?.header_image_url ?? coverImageUrl ?? null,
           background_image_url: ig?.backdrop_url ?? st?.background_image_url ?? null,
           short_description: ig?.summary ?? st?.short_description ?? null,
           developer: ig?.developer ?? null,
