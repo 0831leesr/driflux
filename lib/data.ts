@@ -34,6 +34,7 @@ export interface GameRow {
   currency?: string | null
   is_free?: boolean | null
   last_data_update?: string | null
+  game_data_update?: string | null
   top_tags?: string[] | null
   short_description?: string | null
   developer?: string | null

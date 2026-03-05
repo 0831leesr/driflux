@@ -82,14 +82,15 @@ export async function GET(request: Request) {
     const uniqueMappings = new Set(Object.values(mappings).map((m) => m.chzzk_title)).size
     console.log(`[Steam Update] Loaded ${uniqueMappings} game mappings from DB`)
 
-    // 갱신 대상 선정: last_data_update 오래된 순. skip_steam&skip_igdb 모두 TRUE인 게임은 선정에서 제외.
-    // 스팀/비스팀 모두 포함. fetchLimit만큼 조회 후 필터링해 limit개 사용.
+    // 갱신 대상 선정: game_data_update 오래된 순 → last_data_update 오래된 순.
+    // game_data_update=성공 시각, last_data_update=시도 시각. skip_steam&skip_igdb 모두 TRUE인 게임 제외.
     const limit = limitParam ? parseInt(limitParam, 10) : 50
     const fetchLimit = Math.max(limit + 30, 80) // 필터링 여유 확보
 
     let query = supabase
       .from("games")
-      .select("id, title, korean_title, english_title, steam_appid, header_image_url, discount_rate, last_data_update")
+      .select("id, title, korean_title, english_title, steam_appid, header_image_url, discount_rate, last_data_update, game_data_update")
+      .order("game_data_update", { ascending: true, nullsFirst: true })
       .order("last_data_update", { ascending: true, nullsFirst: true })
 
     // Filter by specific app ID if provided (Steam games only)
@@ -149,7 +150,7 @@ export async function GET(request: Request) {
       })
     }
 
-    console.log(`[Steam Update] Found ${games.length} games to update (last_data_update 오래된 순)`)
+    console.log(`[Steam Update] Found ${games.length} games to update (game_data_update → last_data_update 오래된 순)`)
 
     const results = {
       total: games.length,
@@ -259,6 +260,11 @@ export async function GET(request: Request) {
         )
         if (!igdbData && !steamData && !hasMappingOverrides && !clearedBadSteamAppId) {
           console.log(`[Discovery] Failed to find data for: ${game.title}`)
+          // 실패해도 last_data_update(시도 시각) 갱신하여 우선순위 회전
+          await adminSupabase
+            .from("games")
+            .update({ last_data_update: new Date().toISOString() })
+            .eq("id", game.id)
           results.skipped++
           results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "skipped", message: "No Steam/IGDB data" })
           continue
@@ -318,8 +324,10 @@ export async function GET(request: Request) {
         }
         if (st) updatePayload.title = st.title
 
-        // 메타데이터 갱신 시마다 last_data_update 기록 (update-evaluations는 갱신하지 않음)
-        updatePayload.last_data_update = new Date().toISOString()
+        // last_data_update: 시도 시각. game_data_update: 성공 시각 (update-evaluations는 갱신하지 않음)
+        const now = new Date().toISOString()
+        updatePayload.last_data_update = now
+        updatePayload.game_data_update = now
 
         // [오버라이드] 매핑 테이블 값이 있으면 최우선 덮어쓰기
         if (mapping) {

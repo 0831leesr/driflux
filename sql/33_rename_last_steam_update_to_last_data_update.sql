@@ -1,5 +1,5 @@
 -- last_steam_update → last_data_update 컬럼 변경
--- 게임 메타데이터(Steam/IGDB) 갱신일 기록용. 선정 기준(last_data_update 오래된 순)에 사용.
+-- last_data_update: 갱신 시도 시각 (성공/실패 무관). game_data_update와 함께 선정에 사용.
 -- update-evaluations는 이 컬럼을 갱신하지 않음 (평가 갱신은 데이터 갱신으로 보지 않음)
 
 DO $$
