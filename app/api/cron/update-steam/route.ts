@@ -5,6 +5,7 @@ import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence, ge
 import { getGameMappings, resolveMapping, type GameMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
 import { searchIGDBGame, fetchSteamAppIdFromIGDB } from "@/lib/igdb"
+import { fetchChzzkGamePosterImage } from "@/lib/chzzk"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
 
 /** Steam API에서 "not found" 반환하는 알려진 잘못된 app ID (스킵하여 API 호출 절약) */
@@ -263,11 +264,25 @@ export async function GET(request: Request) {
           continue
         }
 
-        // --- 3. 데이터 병합 (Merge) - IGDB 우선, Steam 차선 ---
+        // --- 3. 데이터 병합 (Merge) - IGDB 우선, Steam 차선, 커버만 Chzzk 포스터 폴백 ---
         const ig = igdbData
         const st = steamData
         const priceFromSteam = st ? st.price_krw : null
         const priceFallback = searchPriceFallback?.price_krw != null ? searchPriceFallback : null
+
+        // cover_image_url: IGDB → Steam → (없으면) Chzzk poster → null(기본 이미지)
+        let coverImageUrl = ig?.image_url ?? st?.cover_image_url ?? null
+        if (!coverImageUrl?.trim()) {
+          const chzzkCategoryId = (englishTitle || fallbackTitle)?.trim()?.replace(/\s+/g, "_") || null
+          if (chzzkCategoryId) {
+            const chzzkPoster = await fetchChzzkGamePosterImage(chzzkCategoryId)
+            if (chzzkPoster) {
+              coverImageUrl = chzzkPoster
+              console.log(`[Steam Update] Chzzk poster fallback for cover: ${game.title}`)
+            }
+            await delay(300)
+          }
+        }
 
         // release_date: IGDB(Unix) → YYYY-MM-DD, Steam은 processSteamData에서 이미 변환
         let releaseDateStr: string | null = null
@@ -278,7 +293,7 @@ export async function GET(request: Request) {
         if (!releaseDateStr && st?.release_date) releaseDateStr = st.release_date
 
         const updatePayload: Record<string, string | number | boolean | null | string[]> = {
-          cover_image_url: ig?.image_url ?? st?.cover_image_url ?? null,
+          cover_image_url: coverImageUrl,
           header_image_url: ig?.image_url ?? st?.header_image_url ?? null,
           background_image_url: ig?.backdrop_url ?? st?.background_image_url ?? null,
           short_description: ig?.summary ?? st?.short_description ?? null,

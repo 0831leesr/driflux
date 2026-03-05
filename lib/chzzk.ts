@@ -150,6 +150,8 @@ export const CHZZK_CATEGORY_VIDEOS_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V2}/categories/GAME/${encodeURIComponent(categoryId)}/videos`
 const CHZZK_CATEGORY_CLIPS_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V1}/categories/GAME/${encodeURIComponent(categoryId)}/clips`
+const CHZZK_CATEGORY_INFO_URL = (categoryId: string) =>
+  `${CHZZK_SERVICE_V1}/categories/GAME/${encodeURIComponent(categoryId)}/info`
 const RATE_LIMIT_DELAY = 1000 // 1초 (치지직 API Rate Limit 고려)
 const DEFAULT_THUMBNAIL_SIZE = "720" // 썸네일 해상도 (480, 720, 1080 등)
 const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/1280x720/1a1a1a/ffffff?text=No+Thumbnail" // Fallback thumbnail
@@ -420,6 +422,49 @@ export async function getPopularCategories(
   } catch (error) {
     console.error("[Chzzk] Failed to fetch categories:", error)
     return []
+  }
+}
+
+/**
+ * 치지직 게임 정보 API - posterImageUrl(포스터 이미지) 조회
+ *
+ * API: GET https://api.chzzk.naver.com/service/v1/categories/GAME/{slug}/info
+ *
+ * @param categoryId - Chzzk category ID (e.g., "Minecraft", "League_of_Legends", "BIOHAZARD_requiem")
+ * @returns posterImageUrl or null
+ */
+export async function fetchChzzkGamePosterImage(categoryId: string): Promise<string | null> {
+  if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+    return null
+  }
+
+  const trimmedId = categoryId.trim()
+  const url = CHZZK_CATEGORY_INFO_URL(trimmedId)
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": BROWSER_USER_AGENT,
+        "Accept": "application/json",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://chzzk.naver.com/",
+      },
+      cache: "no-store",
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null
+      }
+      return null
+    }
+
+    const data = await response.json()
+    const posterUrl = (data?.content?.posterImageUrl ?? data?.posterImageUrl)?.trim()
+    return posterUrl || null
+  } catch {
+    return null
   }
 }
 
