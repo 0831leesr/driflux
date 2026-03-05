@@ -14,6 +14,7 @@ const IGDB_GAMES_URL = `${IGDB_BASE}/games`
 const IGDB_ALT_NAMES_URL = `${IGDB_BASE}/alternative_names`
 const IGDB_GAME_LOCALIZATIONS_URL = `${IGDB_BASE}/game_localizations`
 const IGDB_EXTERNAL_GAMES_URL = `${IGDB_BASE}/external_games`
+const IGDB_RELEASE_DATES_URL = `${IGDB_BASE}/release_dates`
 
 const FIELDS =
   "name, cover.url, first_release_date, screenshots.url, artworks.url, category, total_rating_count, summary, aggregated_rating, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
@@ -293,6 +294,23 @@ export async function searchIGDBGame(
 
 /** external_game_source: 1 = Steam */
 const IGDB_EXTERNAL_SOURCE_STEAM = 1
+
+/**
+ * IGDB release_dates에서 여러 플랫폼 출시일 중 가장 빠른 날짜 조회
+ * @param igdbGameId - IGDB game id
+ * @returns Unix timestamp (초) 또는 null. date=0(TBA/미정)은 제외.
+ */
+export async function fetchEarliestReleaseDateFromIGDB(igdbGameId: number): Promise<number | null> {
+  try {
+    const body = `fields date; where game = ${igdbGameId} & date > 0; sort date asc; limit 1;`
+    const res = await igdbFetch<{ date?: number }>(IGDB_RELEASE_DATES_URL, body)
+    const date = res[0]?.date
+    if (date == null || date <= 0) return null
+    return date
+  } catch {
+    return null
+  }
+}
 
 /**
  * IGDB 게임 ID로 Steam App ID 조회 (external_games)

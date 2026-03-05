@@ -4,7 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence, getSteamReviewSummary } from "@/lib/steam"
 import { getGameMappings, resolveMapping, type GameMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
-import { searchIGDBGame, fetchSteamAppIdFromIGDB } from "@/lib/igdb"
+import { searchIGDBGame, fetchSteamAppIdFromIGDB, fetchEarliestReleaseDateFromIGDB } from "@/lib/igdb"
 import { fetchChzzkGamePosterImage } from "@/lib/chzzk"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
 
@@ -284,13 +284,17 @@ export async function GET(request: Request) {
           }
         }
 
-        // release_date: IGDB(Unix) → YYYY-MM-DD, Steam은 processSteamData에서 이미 변환
+        // release_date: IGDB only. release_dates 플랫폼별 최초 출시일 → first_release_date fallback
         let releaseDateStr: string | null = null
-        if (ig?.release_date != null && typeof ig.release_date === "number") {
-          const d = new Date(ig.release_date * 1000)
-          if (!Number.isNaN(d.getTime())) releaseDateStr = d.toISOString().slice(0, 10)
+        if (ig?.igdb_game_id) {
+          const earliestTs = await fetchEarliestReleaseDateFromIGDB(ig.igdb_game_id)
+          await delay(300)
+          const ts = earliestTs ?? (ig.release_date && typeof ig.release_date === "number" ? ig.release_date : null)
+          if (ts != null && ts > 0) {
+            const d = new Date(ts * 1000)
+            if (!Number.isNaN(d.getTime())) releaseDateStr = d.toISOString().slice(0, 10)
+          }
         }
-        if (!releaseDateStr && st?.release_date) releaseDateStr = st.release_date
 
         const updatePayload: Record<string, string | number | boolean | null | string[]> = {
           cover_image_url: coverImageUrl,
