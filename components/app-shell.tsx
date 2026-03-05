@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { LeftSidebar } from "@/components/left-sidebar"
+import { Footer } from "@/components/footer"
+
 interface AppShellProps {
   children: React.ReactNode
 }
@@ -37,7 +39,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Top Navigation */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
         <div className="flex h-14 items-center justify-between px-4 lg:px-6">
@@ -110,7 +112,10 @@ export function AppShell({ children }: AppShellProps) {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <LeftSidebar isCollapsed={sidebarCollapsed} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto transition-[margin] duration-300 ease-in-out">
-          {children}
+          <main className="flex min-h-full flex-1 flex-col">
+            {children}
+            <Footer />
+          </main>
         </div>
       </div>
     </div>

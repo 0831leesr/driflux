@@ -47,19 +47,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full overflow-hidden" suppressHydrationWarning>
+    <html lang="en" className="h-full" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} h-screen overflow-hidden antialiased bg-background`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen flex flex-col antialiased bg-background`}
         suppressHydrationWarning
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <FavoritesProvider>
-            <CalendarSettingsProvider>
-              <CustomEventsProvider>
-                <AppShell>{children}</AppShell>
-              </CustomEventsProvider>
-            </CalendarSettingsProvider>
-          </FavoritesProvider>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <FavoritesProvider>
+              <CalendarSettingsProvider>
+                <CustomEventsProvider>
+                  <AppShell>{children}</AppShell>
+                </CustomEventsProvider>
+              </CalendarSettingsProvider>
+            </FavoritesProvider>
+          </div>
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />
