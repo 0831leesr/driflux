@@ -2,7 +2,7 @@ name: Daily Game Metadata
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 UTC 00:00 (한국 시간 09:00)
+    - cron: '0 */2 * * *'  # 매일 UTC 00:00 (한국 시간 09:00)
   workflow_dispatch:      # 수동 실행 가능
 
 jobs:
