@@ -40,7 +40,6 @@ export default function GameImage({ src, type, alt, priority, ...props }: GameIm
     }
   }
 
-  const isLocal = imgSrc.startsWith("/") && !imgSrc.startsWith("//")
   return (
     <Image
       {...props}
@@ -49,7 +48,7 @@ export default function GameImage({ src, type, alt, priority, ...props }: GameIm
       priority={priority}
       placeholder={isLocalDefault ? "empty" : "blur"}
       blurDataURL={isLocalDefault ? undefined : BLUR_DATA_URL}
-      unoptimized={!isLocal}
+      unoptimized
       onError={handleError}
     />
   )

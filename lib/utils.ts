@@ -143,7 +143,7 @@ export const DEFAULT_STREAMING_IMAGE = "/defaults/streaming.png"
  */
 export const DEFAULT_IMAGES = {
   cover: {
-    local: "/defaults/cover.png",
+    local: "/defaults/general_cover_blue.png",
     remote: "https://placehold.co/600x900/333/FFF?text=No+Cover",
   },
   header: {
@@ -151,7 +151,7 @@ export const DEFAULT_IMAGES = {
     remote: "https://placehold.co/460x215/333/FFF?text=No+Header",
   },
   background: {
-    local: "/defaults/background.png",
+    local: "/defaults/general_background_blue.png",
     remote: "https://placehold.co/1920x1080/1a1a1a/FFF?text=Background",
   },
 } as const
