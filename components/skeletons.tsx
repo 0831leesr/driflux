@@ -7,19 +7,19 @@ import { Gamepad2, Tags } from "lucide-react"
 
 export function GameCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card">
-      {/* Image skeleton */}
-      <Skeleton className="aspect-[16/9] w-full" />
-      
+    <div className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
+      {/* Image skeleton - 3:4 aspect */}
+      <Skeleton className="aspect-[3/4] w-full" />
+
       {/* Content skeleton */}
       <div className="p-3">
         {/* Title skeleton */}
-        <Skeleton className="mb-2 h-5 w-3/4" />
-        
-        {/* Price skeleton */}
-        <div className="flex items-center gap-2">
+        <Skeleton className="h-5 w-3/4" />
+
+        {/* Genre + Price row */}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <Skeleton className="h-4 w-14 rounded-md" />
           <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-4 w-20" />
         </div>
       </div>
     </div>

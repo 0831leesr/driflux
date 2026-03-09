@@ -17,6 +17,7 @@ function toCardData(games: TrendingGameRow[]): GameCardData[] {
     totalViewers: game.totalViewers,
     liveStreamCount: game.liveStreamCount,
     topTag: game.topTag,
+    topTags: (game as { top_tags?: string[] | null }).top_tags?.slice(0, 2),
   }))
 }
 

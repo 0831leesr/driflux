@@ -10,7 +10,8 @@ function toGameCardData(
   game: GameWithTags,
   stats?: { totalViewers: number; liveStreamCount: number }
 ): GameCardData {
-  const topTag = game.top_tags?.[0] ?? game.tags?.[0]?.name
+  const topTags =
+    game.top_tags?.slice(0, 2) ?? game.tags?.slice(0, 2).map((t) => t.name)
   return {
     id: game.id,
     title: game.title,
@@ -21,7 +22,8 @@ function toGameCardData(
     original_price_krw: game.original_price_krw ?? null,
     discount_rate: game.discount_rate ?? null,
     is_free: game.is_free ?? null,
-    topTag,
+    topTag: topTags?.[0],
+    topTags: topTags?.length ? topTags : undefined,
     totalViewers: stats?.totalViewers,
     liveStreamCount: stats?.liveStreamCount,
   }

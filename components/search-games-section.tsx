@@ -15,13 +15,14 @@ interface SearchGamesSectionProps {
   query: string
 }
 
-function getTopTag(game: GameWithTags): string | undefined {
+function getTopTags(game: GameWithTags): string[] | undefined {
   const fromTopTags =
-    game.top_tags && Array.isArray(game.top_tags) && game.top_tags.length > 0
-      ? game.top_tags[0]
+    game.top_tags && Array.isArray(game.top_tags)
+      ? game.top_tags.slice(0, 2)
       : undefined
-  const fromTags = game.tags?.[0]?.name
-  return fromTopTags ?? fromTags
+  const fromTags = game.tags?.slice(0, 2).map((t) => t.name)
+  const tags = fromTopTags ?? fromTags
+  return tags?.length ? tags : undefined
 }
 
 function toGameCardData(
@@ -29,6 +30,7 @@ function toGameCardData(
   streamStats: Record<number, StreamStats>
 ): GameCardData {
   const stats = streamStats[game.id]
+  const topTags = getTopTags(game)
   return {
     id: game.id,
     title: game.title,
@@ -41,7 +43,8 @@ function toGameCardData(
     is_free: game.is_free ?? null,
     totalViewers: stats?.totalViewers,
     liveStreamCount: stats?.liveStreamCount,
-    topTag: getTopTag(game),
+    topTag: topTags?.[0],
+    topTags,
   }
 }
 
