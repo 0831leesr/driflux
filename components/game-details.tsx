@@ -55,6 +55,29 @@ const CLIP_ORDER_OPTIONS = [
   { value: "RECENT", label: "최신순" },
 ] as const
 
+/* ── Skeleton: 메인/탐색 화면처럼 고스트 로딩 카드 ── */
+function CardGridSkeleton({ count = 16 }: { count?: number }) {
+  return (
+    <div className="card-grid-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="overflow-hidden rounded-xl border border-border bg-card animate-pulse">
+          <div className="aspect-video w-full bg-muted" />
+          <div className="p-3">
+            <div className="mb-2 h-4 w-3/4 rounded bg-muted" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 shrink-0 rounded-full bg-muted" />
+              <div className="flex-1">
+                <div className="mb-1 h-3 w-24 rounded bg-muted" />
+                <div className="h-3 w-16 rounded bg-muted" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /* ── Main Game Details Component ── */
 type TabType = "live" | "video" | "clip"
 
@@ -87,6 +110,7 @@ export function GameDetailsClient({
   const [clipFilterType, setClipFilterType] = useState<"WITHIN_THIRTY_DAYS" | "WITHIN_SEVEN_DAYS" | "WITHIN_ONE_DAY" | "ALL">("WITHIN_THIRTY_DAYS")
   const [clipOrderType, setClipOrderType] = useState<"POPULAR" | "RECENT">("POPULAR")
   const [displayClipCount, setDisplayClipCount] = useState(16) // 4 rows × 4 cols
+  const [displayStreamCount, setDisplayStreamCount] = useState(16) // 4 rows × 4 cols (시청자 기준 16개 우선 로딩)
 
   const liveStreams = streams
   const categoryId = game.english_title?.trim()
@@ -190,6 +214,13 @@ export function GameDetailsClient({
 
   const displayedClips = clips.slice(0, displayClipCount)
   const hasMoreClips = clips.length > displayClipCount
+
+  const displayedStreams = liveStreams.slice(0, displayStreamCount)
+  const hasMoreStreams = liveStreams.length > displayStreamCount
+
+  const handleLoadMoreStreams = () => {
+    setDisplayStreamCount((prev) => prev + 16) // 4 rows × 4 cols
+  }
 
   // Calculate total viewers
   const totalViewers = liveStreams.reduce((sum, stream) => sum + (stream.viewers || 0), 0)
@@ -423,7 +454,7 @@ export function GameDetailsClient({
             onClick={() => setActiveTab("live")}
           >
             <Radio className="mr-1.5 h-4 w-4" />
-            Live
+            라이브
           </Button>
           <Button
             variant={activeTab === "video" ? "default" : "ghost"}
@@ -436,7 +467,7 @@ export function GameDetailsClient({
             onClick={() => setActiveTab("video")}
           >
             <Video className="mr-1.5 h-4 w-4" />
-            Video
+            다시보기
           </Button>
           <Button
             variant={activeTab === "clip" ? "default" : "ghost"}
@@ -454,16 +485,31 @@ export function GameDetailsClient({
         </div>
 
         {activeTab === "live" && (
-          <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
-            <div className="card-grid-4">
-              {liveStreams.map((stream, i) => (
-                <StreamCard
-                  key={`${stream.streamerName}-${i}`}
-                  stream={stream}
-                  onStreamClick={onStreamClick}
-                />
-              ))}
+          <div className="space-y-6">
+            <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
+              <div className="card-grid-4">
+                {displayedStreams.map((stream, i) => (
+                  <StreamCard
+                    key={`${stream.streamerName}-${i}`}
+                    stream={stream}
+                    onStreamClick={onStreamClick}
+                    priority={i < 4}
+                  />
+                ))}
+              </div>
             </div>
+            {hasMoreStreams && liveStreams.length > 0 && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleLoadMoreStreams}
+                  className="min-w-[140px] border-border"
+                >
+                  더 보기
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -475,9 +521,7 @@ export function GameDetailsClient({
                   이 게임의 다시보기 영상 정보를 불러올 수 없습니다.
                 </p>
               ) : videosLoading ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  영상 목록을 불러오는 중...
-                </p>
+                <CardGridSkeleton count={16} />
               ) : videos.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   아직 등록된 다시보기 영상이 없습니다.
@@ -561,9 +605,7 @@ export function GameDetailsClient({
                   이 게임의 클립 정보를 불러올 수 없습니다.
                 </p>
               ) : clipsLoading ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  클립 목록을 불러오는 중...
-                </p>
+                <CardGridSkeleton count={16} />
               ) : clips.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   아직 등록된 인기 클립이 없습니다.

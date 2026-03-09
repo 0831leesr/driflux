@@ -28,4 +28,5 @@ JOIN streams s ON s.game_id = g.id
 WHERE s.is_live = true
   AND g.release_date IS NOT NULL
   AND g.release_date >= CURRENT_DATE - INTERVAL '30 days'
+  AND g.release_date <= CURRENT_DATE
 GROUP BY g.id, g.title, g.korean_title, g.english_title, g.cover_image_url, g.header_image_url, g.release_date;
