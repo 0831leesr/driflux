@@ -55,6 +55,18 @@ export function formatViewerCountShort(count: number | null | undefined): string
 }
 
 /**
+ * Format count in compact Korean for clips (e.g. "5.4천", "1.2만")
+ * @param count - View/read count
+ * @returns Formatted string
+ */
+export function formatCountCompactKorean(count: number | null | undefined): string {
+  if (count === null || count === undefined || count === 0) return "0"
+  if (count >= 10000) return `${(count / 10000).toFixed(1)}만`
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}천`
+  return count.toLocaleString("ko-KR")
+}
+
+/**
  * Format read/view count in Korean style for VOD (e.g. "1.2만회")
  * @param count - Read/view count
  * @returns Formatted string (e.g., "1,234회" or "1.2만회")
