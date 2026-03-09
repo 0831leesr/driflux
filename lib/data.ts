@@ -79,6 +79,12 @@ function formatViewers(count: number | null): string {
   return String(count)
 }
 
+/** PostgREST .or() 필터 값 이스케이프 (쉼표, 따옴표 등 특수문자 처리) */
+function escapePostgrestOrValue(val: string): string {
+  const escaped = val.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+  return `"${escaped}"`
+}
+
 
 function buildStreamWithMergedGame(s: { games?: { title?: string | null; korean_title?: string | null; english_title?: string | null; header_image_url?: string | null; cover_image_url?: string | null; discount_rate?: number | null } | null; stream_category?: string | null }, mappings: Record<string, GameMapping>) {
   const g = s.games
@@ -368,10 +374,13 @@ export async function fetchStreamsByGameId(gameId: number) {
   let streamsByCategory: StreamRow[] = []
   let error2: { message: string } | null = null
   if (matchTerms.length > 0) {
+    const orFilter = matchTerms
+      .map((t) => `stream_category.ilike.${escapePostgrestOrValue(t)}`)
+      .join(",")
     const res = await supabase
       .from("streams")
       .select("*")
-      .or(matchTerms.map((t) => `stream_category.ilike.${t}`).join(","))
+      .or(orFilter)
       .order("viewer_count", { ascending: false })
     streamsByCategory = (res.data ?? []) as StreamRow[]
     error2 = res.error
@@ -1641,8 +1650,8 @@ async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
 
   /* game_category로 games 조회 (korean_title 또는 title 매칭) */
   const orTerms = categories.flatMap((c) => [
-    `korean_title.ilike.${c}`,
-    `title.ilike.${c}`,
+    `korean_title.ilike.${escapePostgrestOrValue(c)}`,
+    `title.ilike.${escapePostgrestOrValue(c)}`,
   ])
   const { data: gamesData } = await supabase
     .from("games")
