@@ -89,7 +89,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from("games")
-      .select("id, title, korean_title, english_title, steam_appid, header_image_url, discount_rate, last_data_update, game_data_update")
+      .select("id, title, korean_title, english_title, slug, steam_appid, header_image_url, discount_rate, last_data_update, game_data_update")
       .order("game_data_update", { ascending: true, nullsFirst: true })
       .order("last_data_update", { ascending: true, nullsFirst: true })
 
@@ -259,14 +259,46 @@ export async function GET(request: Request) {
           mapping.skip_steam // skip_steam: Steam 필드 초기화를 위해 업데이트 수행
         )
         if (!igdbData && !steamData && !hasMappingOverrides && !clearedBadSteamAppId) {
-          console.log(`[Discovery] Failed to find data for: ${game.title}`)
-          // 실패해도 last_data_update(시도 시각) 갱신하여 우선순위 회전
-          await adminSupabase
-            .from("games")
-            .update({ last_data_update: new Date().toISOString() })
-            .eq("id", game.id)
-          results.skipped++
-          results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "skipped", message: "No Steam/IGDB data" })
+          // Steam/IGDB 실패 시 이미지만 Chzzk API 시도 (유일한 이미지 소스)
+          let chzzkPosterOnly: string | null = null
+          const slugsToTry = [
+            (englishTitle || fallbackTitle)?.trim()?.replace(/\s+/g, "_"),
+            (game as { slug?: string | null }).slug?.trim()?.replace(/-/g, "_"),
+          ].filter((s): s is string => !!s?.length)
+          for (const slug of [...new Set(slugsToTry)]) {
+            chzzkPosterOnly = await fetchChzzkGamePosterImage(slug)
+            if (chzzkPosterOnly) break
+            await delay(300)
+          }
+          if (chzzkPosterOnly) {
+            const now = new Date().toISOString()
+            const { error: chzzkUpdateErr } = await adminSupabase
+              .from("games")
+              .update({
+                cover_image_url: chzzkPosterOnly,
+                header_image_url: chzzkPosterOnly,
+                last_data_update: now,
+                game_data_update: now,
+              })
+              .eq("id", game.id)
+            if (!chzzkUpdateErr) {
+              console.log(`[Steam Update] Chzzk-only update for cover/header: ${game.title}`)
+              results.updated++
+              results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "updated" })
+            } else {
+              console.error(`[Steam Update] Chzzk update failed for ${game.title}:`, chzzkUpdateErr.message)
+              results.failed++
+              results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "failed", message: chzzkUpdateErr.message })
+            }
+          } else {
+            console.log(`[Discovery] Failed to find data for: ${game.title}`)
+            await adminSupabase
+              .from("games")
+              .update({ last_data_update: new Date().toISOString() })
+              .eq("id", game.id)
+            results.skipped++
+            results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "skipped", message: "No Steam/IGDB/Chzzk data" })
+          }
           continue
         }
 
