@@ -20,7 +20,7 @@ function getTopTags(game: GameWithTags): string[] | undefined {
     game.top_tags && Array.isArray(game.top_tags)
       ? game.top_tags.slice(0, 2)
       : undefined
-  const fromTags = game.tags?.slice(0, 2).map((t) => t.name)
+  const fromTags = game.tags?.slice(0, 2).map((t: { name: string }) => t.name)
   const tags = fromTopTags ?? fromTags
   return tags?.length ? tags : undefined
 }

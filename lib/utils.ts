@@ -55,6 +55,37 @@ export function formatViewerCountShort(count: number | null | undefined): string
 }
 
 /**
+ * Format read/view count in Korean style for VOD (e.g. "1.2만회")
+ * @param count - Read/view count
+ * @returns Formatted string (e.g., "1,234회" or "1.2만회")
+ */
+export function formatReadCountKorean(count: number | null | undefined): string {
+  if (count === null || count === undefined || count === 0) return "0회"
+
+  if (count < 10000) {
+    return `${count.toLocaleString("ko-KR")}회`
+  }
+  return `${(count / 10000).toFixed(1)}만회`
+}
+
+/**
+ * Format duration in seconds to HH:MM:SS or MM:SS
+ * @param seconds - Duration in seconds
+ * @returns Formatted string (e.g., "04:20:15" or "05:30")
+ */
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || seconds < 0) return "00:00"
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  if (h > 0) {
+    return `${pad(h)}:${pad(m)}:${pad(s)}`
+  }
+  return `${pad(m)}:${pad(s)}`
+}
+
+/**
  * Calculate discount percentage
  * @param original - Original price
  * @param discounted - Discounted price

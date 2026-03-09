@@ -11,7 +11,7 @@ function toGameCardData(
   stats?: { totalViewers: number; liveStreamCount: number }
 ): GameCardData {
   const topTags =
-    game.top_tags?.slice(0, 2) ?? game.tags?.slice(0, 2).map((t) => t.name)
+    game.top_tags?.slice(0, 2) ?? game.tags?.slice(0, 2).map((t: { name: string }) => t.name)
   return {
     id: game.id,
     title: game.title,

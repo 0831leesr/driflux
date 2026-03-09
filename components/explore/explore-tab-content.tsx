@@ -335,7 +335,7 @@ export function ExploreTabContent({ onStreamClick }: ExploreTabContentProps) {
                         topTag: game.top_tags?.[0] ?? game.tags?.[0]?.name,
                         topTags:
                           game.top_tags?.slice(0, 2) ??
-                          game.tags?.slice(0, 2).map((t) => t.name),
+                          game.tags?.slice(0, 2).map((t: TagRow) => t.name),
                         totalViewers: game.totalViewers,
                         liveStreamCount: game.liveStreamCount,
                       }}
