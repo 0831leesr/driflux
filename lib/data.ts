@@ -5,6 +5,8 @@ import { createClient, createClientForCache } from "@/lib/supabase/server"
 import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { getGameMappings, resolveMapping, applyMappingOverridesToGame, type GameMapping } from "@/lib/mappings"
+import type { TopLiveGame } from "@/lib/chzzk"
+import { getChzzkStreamsByCategory, searchChzzkLives, getTopLiveGames } from "@/lib/chzzk"
 
 /* ── Cache config (revalidate in seconds) ── */
 const CACHE_REVALIDATE_TRENDING = 30
@@ -47,21 +49,6 @@ export interface GameRow {
   release_date?: string | null
 }
 
-export interface StreamRow {
-  id: number
-  game_id: number | null
-  title: string | null
-  streamer_name: string | null
-  viewer_count: number | null
-  thumbnail_url: string | null
-  is_live: boolean
-  stream_category: string | null
-  chzzk_channel_id: string | null
-  last_chzzk_update: string | null
-  has_drops?: boolean
-  games?: GameRow
-}
-
 export interface TagRow {
   id: number
   name: string
@@ -85,19 +72,6 @@ function escapePostgrestOrValue(val: string): string {
   return `"${escaped}"`
 }
 
-
-function buildStreamWithMergedGame(s: { games?: { title?: string | null; korean_title?: string | null; english_title?: string | null; header_image_url?: string | null; cover_image_url?: string | null; discount_rate?: number | null } | null; stream_category?: string | null }, mappings: Record<string, GameMapping>) {
-  const g = s.games
-  const m = g ? resolveMapping(mappings, g.title ?? "", g.english_title ?? null, g.korean_title ?? null) : null
-  const merged = g ? applyMappingOverridesToGame(g, m) : null
-  const effectiveRate = merged ? getEffectiveDiscountRate((merged as { discount_rate?: number | null }).discount_rate) : 0
-  return {
-    gameCover: getBestGameImage((merged as { header_image_url?: string | null })?.header_image_url, (merged as { cover_image_url?: string | null })?.cover_image_url),
-    gameTitle: (s as { stream_category?: string | null }).stream_category || getDisplayGameTitle(merged ?? {}),
-    saleDiscount: effectiveRate > 0 ? `-${effectiveRate}%` : undefined,
-    mergedGame: merged,
-  }
-}
 
 /* ── Fetch all games ── */
 export async function fetchGames(): Promise<GameRow[]> {
@@ -125,183 +99,6 @@ export async function fetchTags(): Promise<TagRow[]> {
     return []
   }
   return data ?? []
-}
-
-/* ── Fetch live streams with game info ── */
-/** @param limit - 개수 (undefined면 전체) */
-/** @param offset - 건너뛸 개수 (기본 0), pagination용 */
-async function fetchLiveStreamsImpl(limit?: number, offset: number = 0) {
-  const supabase = createClientForCache()
-  let query = supabase
-    .from("streams")
-    .select(`
-      *,
-      games(*)
-    `)
-    .eq("is_live", true)
-    .order("viewer_count", { ascending: false })
-  if (limit != null) {
-    query = query.range(offset, offset + limit - 1)
-  }
-  const { data, error } = await query
-  if (error) {
-    console.error("fetchLiveStreams error:", error.message)
-    return []
-  }
-  const mappings = await getGameMappings()
-  return (data ?? []).map((s: StreamRow) => {
-    const merged = buildStreamWithMergedGame(s, mappings)
-    return {
-      id: s.id,
-      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: merged.gameCover,
-      gameTitle: merged.gameTitle,
-      streamTitle: s.title ?? "Untitled Stream",
-      streamerName: s.streamer_name ?? "Anonymous",
-      viewers: s.viewer_count ?? 0,
-      viewersFormatted: formatViewers(s.viewer_count),
-      isLive: s.is_live,
-      saleDiscount: merged.saleDiscount,
-      hasDrops: s.has_drops ?? false,
-      gameId: s.game_id ?? undefined,
-      channelId: s.chzzk_channel_id ?? undefined,
-      rawData: {
-        streamCategory: s.stream_category,
-        gameData: merged.mergedGame ?? s.games,
-      },
-    }
-  })
-}
-
-export async function fetchLiveStreams(limit?: number, offset: number = 0) {
-  const cacheKey = `live-streams-${limit ?? "all"}-${offset}`
-  return unstable_cache(
-    () => fetchLiveStreamsImpl(limit, offset),
-    [cacheKey],
-    { revalidate: CACHE_REVALIDATE_STREAMS }
-  )()
-}
-
-/* ── Fetch games that are on sale with their top stream ── */
-export async function fetchSaleGames() {
-  const supabase = await createClient()
-  const mappings = await getGameMappings()
-  const { data: allSaleGames, error } = await supabase
-    .from("games")
-    .select("*")
-    .gt("discount_rate", 0)
-    .order("discount_rate", { ascending: false })
-    .limit(50)
-  if (error) {
-    console.error("fetchSaleGames error:", error.message)
-    return []
-  }
-  if (!allSaleGames || allSaleGames.length === 0) return []
-
-  const gamesWithMerged = allSaleGames.map((g) => {
-    const mapping = resolveMapping(
-      mappings,
-      g.title ?? "",
-      (g as { english_title?: string | null }).english_title,
-      (g as { korean_title?: string | null }).korean_title
-    )
-    return applyMappingOverridesToGame(g, mapping)
-  })
-  const games = gamesWithMerged
-    .filter((g) => getEffectiveDiscountRate(g.discount_rate) > 0)
-    .slice(0, 12)
-
-  const gameIds = games.map((g) => g.id)
-
-  const { data: streams, error: streamsError } = await supabase
-    .from("streams")
-    .select("id, game_id, thumbnail_url, streamer_name, viewer_count")
-    .in("game_id", gameIds)
-    .eq("is_live", true)
-    .order("viewer_count", { ascending: false })
-
-  if (streamsError) {
-    console.error("fetchSaleGames streams error:", streamsError.message)
-  }
-
-  const topStreamByGameId = new Map<number, { thumbnail_url: string | null; streamer_name: string | null; viewer_count: number | null }>()
-  for (const s of streams ?? []) {
-    if (s.game_id && !topStreamByGameId.has(s.game_id)) {
-      topStreamByGameId.set(s.game_id, {
-        thumbnail_url: s.thumbnail_url,
-        streamer_name: s.streamer_name,
-        viewer_count: s.viewer_count,
-      })
-    }
-  }
-
-  const results = []
-  for (const merged of games) {
-    const effectiveRate = getEffectiveDiscountRate(merged.discount_rate)
-    const topStream = topStreamByGameId.get(merged.id)
-    const topTags = Array.isArray(merged.top_tags) ? merged.top_tags : []
-    const topTag = topTags.length > 0 ? topTags[0] : undefined
-    results.push({
-      thumbnail: topStream?.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: getBestGameImage(merged.header_image_url, merged.cover_image_url),
-      gameTitle: getDisplayGameTitle(merged),
-      streamerName: topStream?.streamer_name ?? "N/A",
-      viewers: formatViewers(topStream?.viewer_count ?? 0),
-      discount: effectiveRate > 0 ? `-${effectiveRate}% OFF` : "",
-      id: merged.id,
-      title: getDisplayGameTitle(merged),
-      cover_image_url: merged.cover_image_url,
-      header_image_url: merged.header_image_url,
-      price_krw: merged.price_krw,
-      original_price_krw: merged.original_price_krw,
-      discount_rate: effectiveRate > 0 ? effectiveRate : null,
-      is_free: merged.is_free ?? false,
-      topTag,
-    })
-  }
-  return results
-}
-
-/* ── Fetch streams for a specific game (by title) ── */
-export async function fetchStreamsByGameTitle(gameTitle: string) {
-  const supabase = await createClient()
-  const { data: games } = await supabase
-    .from("games")
-    .select("*")
-    .ilike("title", gameTitle)
-    .limit(1)
-  if (!games || games.length === 0) return []
-  const rawGame = games[0]
-  const mappings = await getGameMappings()
-  const mapping = resolveMapping(
-    mappings,
-    rawGame.title ?? "",
-    (rawGame as { english_title?: string | null }).english_title,
-    (rawGame as { korean_title?: string | null }).korean_title
-  )
-  const game = applyMappingOverridesToGame(rawGame, mapping)
-  const effectiveRate = getEffectiveDiscountRate(game.discount_rate)
-
-  const { data: streams, error } = await supabase
-    .from("streams")
-    .select("*")
-    .eq("game_id", game.id)
-    .order("viewer_count", { ascending: false })
-  if (error) return []
-  return (streams ?? []).map((s: StreamRow) => ({
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(game.header_image_url, game.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(game),
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: effectiveRate > 0 ? `-${effectiveRate}%` : undefined,
-    hasDrops: s.has_drops ?? false,
-    channelId: s.chzzk_channel_id ?? undefined,
-  }))
 }
 
 /* ── Fetch game by ID ── */
@@ -344,94 +141,6 @@ export async function fetchGamesByIds(ids: number[]): Promise<GameRow[]> {
   return ids.map(id => gameMap.get(id)).filter((game): game is GameRow => game !== undefined)
 }
 
-/* ── Fetch streams by game ID ── */
-export async function fetchStreamsByGameId(gameId: number) {
-  const supabase = await createClient()
-  const { data: game, error: gameError } = await supabase
-    .from("games")
-    .select("*")
-    .eq("id", gameId)
-    .limit(1)
-  
-  if (gameError || !game || game.length === 0) {
-    return []
-  }
-  const gameData = game[0]
-
-  // First, try to fetch streams with matching game_id
-  const { data: streamsByGameId, error: error1 } = await supabase
-    .from("streams")
-    .select("*")
-    .eq("game_id", gameId)
-    .order("viewer_count", { ascending: false })
-  
-  // Also fetch streams where stream_category matches game (korean_title 우선, 치지직은 한글)
-  // Fallback for CHZZK streams that might not have game_id set
-  const matchTerms = [
-    (gameData as { korean_title?: string | null }).korean_title?.trim(),
-    gameData.title?.trim(),
-  ].filter((t): t is string => !!t)
-  let streamsByCategory: StreamRow[] = []
-  let error2: { message: string } | null = null
-  if (matchTerms.length > 0) {
-    const orFilter = matchTerms
-      .map((t) => `stream_category.ilike.${escapePostgrestOrValue(t)}`)
-      .join(",")
-    const res = await supabase
-      .from("streams")
-      .select("*")
-      .or(orFilter)
-      .order("viewer_count", { ascending: false })
-    streamsByCategory = (res.data ?? []) as StreamRow[]
-    error2 = res.error
-  }
-
-  if (error1 || error2) {
-    console.error('[fetchStreamsByGameId] Error fetching streams:', error1?.message || error2?.message)
-    return []
-  }
-  
-  // Merge results, avoiding duplicates
-  const streamIds = new Set<number>()
-  const allStreams: StreamRow[] = []
-  
-  for (const stream of [...(streamsByGameId ?? []), ...(streamsByCategory ?? [])]) {
-    if (!streamIds.has(stream.id)) {
-      streamIds.add(stream.id)
-      allStreams.push(stream)
-    }
-  }
-  
-  // Sort by viewer count
-  allStreams.sort((a, b) => (b.viewer_count ?? 0) - (a.viewer_count ?? 0))
-
-  const mappings = await getGameMappings()
-  const mapping = resolveMapping(
-    mappings,
-    gameData.title ?? "",
-    (gameData as { english_title?: string | null }).english_title,
-    (gameData as { korean_title?: string | null }).korean_title
-  )
-  const mergedGame = applyMappingOverridesToGame(gameData, mapping)
-  const effectiveRate = getEffectiveDiscountRate(mergedGame.discount_rate)
-
-  return allStreams.map((s: StreamRow) => ({
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: getBestGameImage(mergedGame.header_image_url, mergedGame.cover_image_url),
-    gameTitle: s.stream_category || getDisplayGameTitle(mergedGame as { korean_title?: string | null; title?: string | null }),
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: effectiveRate > 0 ? `-${effectiveRate}%` : undefined,
-    hasDrops: s.has_drops ?? false,
-    gameId: gameId,
-    channelId: s.chzzk_channel_id ?? undefined,
-  }))
-}
-
 /* ── Fetch games by tag ID ── */
 export async function fetchGamesByTagId(tagId: number): Promise<GameRow[]> {
   const supabase = await createClient()
@@ -445,134 +154,69 @@ export async function fetchGamesByTagId(tagId: number): Promise<GameRow[]> {
     .filter((g: any) => g !== null)
 }
 
-/* ── Fetch streams by tag ID ── */
-export async function fetchStreamsByTagId(tagId: number) {
-  const supabase = await createClient()
-  const { data: gameTagData, error: tagError } = await supabase
-    .from("game_tags")
-    .select("game_id")
-    .eq("tag_id", tagId)
-  if (tagError || !gameTagData || gameTagData.length === 0) return []
-  const gameIds = gameTagData.map((gt: any) => gt.game_id)
-
-  const { data: streams, error } = await supabase
-    .from("streams")
-    .select("*, games(*)")
-    .in("game_id", gameIds)
-    .eq("is_live", true)
-    .order("viewer_count", { ascending: false })
-  if (error) return []
-  const mappings = await getGameMappings()
-  return (streams ?? []).map((s: any) => {
-    const merged = buildStreamWithMergedGame(s, mappings)
-    return {
-      id: s.id,
-      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: merged.gameCover,
-      gameTitle: merged.gameTitle,
-      streamTitle: s.title ?? "Untitled Stream",
-      streamerName: s.streamer_name ?? "Anonymous",
-      viewers: s.viewer_count ?? 0,
-      viewersFormatted: formatViewers(s.viewer_count),
-      isLive: s.is_live,
-      saleDiscount: merged.saleDiscount,
-      hasDrops: s.has_drops ?? false,
-      gameId: s.game_id ?? undefined,
-      channelId: s.chzzk_channel_id ?? undefined,
-    }
-  })
-}
-
-/* ── Fetch streams by tag name (using top_tags) ── */
-export async function fetchStreamsByTopTag(tagName: string) {
-  const supabase = await createClient()
-  
-  // Find games with this tag in top_tags array
-  const { data: games, error: gamesError } = await supabase
-    .from("games")
-    .select("id")
-    .contains("top_tags", [tagName])
-  
-  if (gamesError || !games || games.length === 0) return []
-  const gameIds = games.map(g => g.id)
-  
-  // Fetch live streams for these games
-  const { data: streams, error } = await supabase
-    .from("streams")
-    .select("*, games(*)")
-    .in("game_id", gameIds)
-    .eq("is_live", true)
-    .order("viewer_count", { ascending: false })
-  
-  if (error) return []
-  const mappings = await getGameMappings()
-  return (streams ?? []).map((s: any) => {
-    const merged = buildStreamWithMergedGame(s, mappings)
-    return {
-      id: s.id,
-      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: merged.gameCover,
-      gameTitle: merged.gameTitle,
-      streamTitle: s.title ?? "Untitled Stream",
-      streamerName: s.streamer_name ?? "Anonymous",
-      viewers: s.viewer_count ?? 0,
-      viewersFormatted: formatViewers(s.viewer_count),
-      isLive: s.is_live,
-      saleDiscount: merged.saleDiscount,
-      hasDrops: s.has_drops ?? false,
-      gameId: s.game_id ?? undefined,
-      channelId: s.chzzk_channel_id ?? undefined,
-    }
-  })
-}
-
-/* ── Fetch streams for followed tags ── */
+/* ── Fetch streams for followed tags (Chzzk API) ── */
 export async function fetchStreamsForFollowedTags(tagNames: string[]) {
   if (tagNames.length === 0) return []
-  
+
   const supabase = await createClient()
-  
-  // Find all games that have any of the followed tags
-  const { data: games, error: gamesError } = await supabase
+
+  // 팔로우 태그를 포함한 게임 목록 조회 (태그당 최대 5개, 전체 최대 10개)
+  const { data: games } = await supabase
     .from("games")
-    .select("id")
-    .or(tagNames.map(tag => `top_tags.cs.{${tag}}`).join(','))
-  
-  if (gamesError || !games || games.length === 0) return []
-  const gameIds = games.map(g => g.id)
-  
-  // Fetch live streams for these games
-  const { data: streams, error } = await supabase
-    .from("streams")
-    .select("*, games(*)")
-    .in("game_id", gameIds)
-    .eq("is_live", true)
-    .order("viewer_count", { ascending: false })
-  
-  if (error) {
-    console.error("fetchStreamsForFollowedTags error:", error.message)
-    return []
-  }
+    .select("id, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate")
+    .or(tagNames.map((tag) => `top_tags.cs.{${tag}}`).join(","))
+    .limit(10)
+
+  if (!games?.length) return []
 
   const mappings = await getGameMappings()
-  return (streams ?? []).map((s: any) => {
-    const merged = buildStreamWithMergedGame(s, mappings)
-    return {
-      id: s.id,
-      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: merged.gameCover,
-      gameTitle: merged.gameTitle,
-      streamTitle: s.title ?? "Untitled Stream",
-      streamerName: s.streamer_name ?? "Anonymous",
-      viewers: s.viewer_count ?? 0,
-      viewersFormatted: formatViewers(s.viewer_count),
-      isLive: s.is_live,
-      saleDiscount: merged.saleDiscount,
-      hasDrops: s.has_drops ?? false,
-      gameId: s.game_id ?? undefined,
-      channelId: s.chzzk_channel_id ?? undefined,
+  const eligible = games.filter((g: any) => g.english_title?.trim())
+
+  const results = await Promise.allSettled(
+    eligible.map((g: any) => getChzzkStreamsByCategory(g.english_title.trim()))
+  )
+
+  const allStreams: any[] = []
+  const seen = new Set<string>()
+
+  results.forEach((result, idx) => {
+    if (result.status !== "fulfilled") return
+    const game = eligible[idx] as any
+    const mapping = resolveMapping(mappings, game.title, game.english_title, game.korean_title)
+    const overrides = applyMappingOverridesToGame(game, mapping)
+    const gameCover = getBestGameImage(
+      overrides.header_image_url ?? game.header_image_url,
+      overrides.cover_image_url ?? game.cover_image_url
+    )
+    const gameTitle =
+      getDisplayGameTitle(overrides) ?? game.korean_title ?? game.title
+    const discount = getEffectiveDiscountRate(
+      overrides.discount_rate ?? game.discount_rate
+    )
+    const saleDiscount = discount > 0 ? `-${discount}%` : undefined
+
+    for (const s of result.value) {
+      if (seen.has(s.channelId)) continue
+      seen.add(s.channelId)
+      allStreams.push({
+        id: hashChannelId(s.channelId),
+        thumbnail: s.liveImageUrl || gameCover,
+        gameCover,
+        gameTitle,
+        streamTitle: s.liveTitle,
+        streamerName: s.channelName,
+        viewers: s.concurrentUserCount,
+        viewersFormatted: formatViewers(s.concurrentUserCount),
+        isLive: true,
+        saleDiscount,
+        hasDrops: s.hasDrops ?? false,
+        gameId: game.id,
+        channelId: s.channelId,
+      })
     }
   })
+
+  return allStreams.sort((a: any, b: any) => b.viewers - a.viewers)
 }
 
 /* ── Fetch tag by name (slug) ── */
@@ -592,13 +236,6 @@ export async function fetchGamesByTagName(tagName: string): Promise<GameRow[]> {
   const tag = await fetchTagByName(tagName)
   if (!tag) return []
   return fetchGamesByTagId(tag.id)
-}
-
-/* ── Fetch streams by tag name ── */
-export async function fetchStreamsByTagName(tagName: string) {
-  const tag = await fetchTagByName(tagName)
-  if (!tag) return []
-  return fetchStreamsByTagId(tag.id)
 }
 
 /* ── Search: Games by query (title OR tag name) ── */
@@ -688,81 +325,91 @@ export async function searchGames(query: string): Promise<GameWithTags[]> {
   })
 }
 
-/* ── Search: Streams by query and/or found game IDs ── */
+/* ── Search: Streams by query and/or found game IDs (Chzzk API) ── */
 /**
- * Search live streams where:
- * 1) streamer_name contains query, OR
- * 2) game_id is in foundGameIds (playing a matching game)
+ * Search live streams via Chzzk API:
+ * 1) searchChzzkLives(query) — 스트리머명/방송 제목/카테고리 검색
+ * 2) foundGameIds가 있으면 해당 게임의 english_title로 getChzzkStreamsByCategory 추가 조회
  */
 export async function searchStreams(
   query: string,
   foundGameIds: number[]
-): Promise<ReturnType<typeof formatStreamForDisplay>[]> {
-  const supabase = await createClient()
+): Promise<any[]> {
   const trimmed = query?.trim()
   const hasQuery = !!trimmed
   const hasGameIds = foundGameIds.length > 0
 
   if (!hasQuery && !hasGameIds) return []
 
-  let streamsByStreamer: any[] = []
-  let streamsByGame: any[] = []
+  const seen = new Set<string>()
+  const allStreams: any[] = []
 
-  // 1) Streams where streamer_name contains query
+  function addStream(s: any, gameId?: number, gameMeta?: { gameCover: string; gameTitle: string; saleDiscount?: string }) {
+    if (seen.has(s.channelId)) return
+    seen.add(s.channelId)
+    allStreams.push({
+      id: hashChannelId(s.channelId),
+      thumbnail: s.liveImageUrl || gameMeta?.gameCover || "",
+      gameCover: gameMeta?.gameCover || "",
+      gameTitle: gameMeta?.gameTitle || s.category || "",
+      streamTitle: s.liveTitle,
+      streamerName: s.channelName,
+      viewers: s.concurrentUserCount,
+      viewersFormatted: formatViewers(s.concurrentUserCount),
+      isLive: true,
+      saleDiscount: gameMeta?.saleDiscount,
+      hasDrops: s.hasDrops ?? false,
+      gameId,
+      channelId: s.channelId,
+    })
+  }
+
+  // 1) 키워드 기반 검색 (스트리머명, 방송 제목, 카테고리)
   if (hasQuery) {
-    const { data, error } = await supabase
-      .from("streams")
-      .select("*, games(*)")
-      .ilike("streamer_name", `%${trimmed}%`)
-      .eq("is_live", true)
-      .order("viewer_count", { ascending: false })
-
-    if (!error && data) streamsByStreamer = data
+    const results = await searchChzzkLives(trimmed, 30)
+    for (const s of results) addStream(s)
   }
 
-  // 2) Streams where game_id is in foundGameIds
+  // 2) foundGameIds의 게임 카테고리로 추가 조회 (최대 3개 게임)
   if (hasGameIds) {
-    const { data, error } = await supabase
-      .from("streams")
-      .select("*, games(*)")
-      .in("game_id", foundGameIds)
-      .eq("is_live", true)
-      .order("viewer_count", { ascending: false })
+    const supabase = await createClient()
+    const { data: games } = await supabase
+      .from("games")
+      .select("id, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate")
+      .in("id", foundGameIds)
+      .limit(3)
 
-    if (!error && data) streamsByGame = data
-  }
+    if (games?.length) {
+      const mappings = await getGameMappings()
+      const eligible = games.filter((g: any) => g.english_title?.trim())
+      const categoryResults = await Promise.allSettled(
+        eligible.map((g: any) => getChzzkStreamsByCategory(g.english_title.trim()))
+      )
 
-  // Merge and deduplicate by stream id
-  const seen = new Set<number>()
-  const merged: any[] = []
-  for (const s of [...streamsByStreamer, ...streamsByGame]) {
-    if (!seen.has(s.id)) {
-      seen.add(s.id)
-      merged.push(s)
+      categoryResults.forEach((result, idx) => {
+        if (result.status !== "fulfilled") return
+        const game = eligible[idx] as any
+        const mapping = resolveMapping(mappings, game.title, game.english_title, game.korean_title)
+        const overrides = applyMappingOverridesToGame(game, mapping)
+        const gameCover = getBestGameImage(
+          overrides.header_image_url ?? game.header_image_url,
+          overrides.cover_image_url ?? game.cover_image_url
+        )
+        const gameTitle =
+          getDisplayGameTitle(overrides) ?? game.korean_title ?? game.title
+        const discount = getEffectiveDiscountRate(
+          overrides.discount_rate ?? game.discount_rate
+        )
+        const saleDiscount = discount > 0 ? `-${discount}%` : undefined
+
+        for (const s of result.value) {
+          addStream(s, game.id, { gameCover, gameTitle, saleDiscount })
+        }
+      })
     }
   }
-  merged.sort((a, b) => (b.viewer_count ?? 0) - (a.viewer_count ?? 0))
 
-  const mappings = await getGameMappings()
-  return merged.map((s: any) => formatStreamForDisplay(s, mappings))
-}
-
-function formatStreamForDisplay(s: any, mappings: Record<string, GameMapping>) {
-  const merged = buildStreamWithMergedGame(s, mappings)
-  return {
-    id: s.id,
-    thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-    gameCover: merged.gameCover,
-    gameTitle: merged.gameTitle,
-    streamTitle: s.title ?? "Untitled Stream",
-    streamerName: s.streamer_name ?? "Anonymous",
-    viewers: s.viewer_count ?? 0,
-    viewersFormatted: formatViewers(s.viewer_count),
-    isLive: s.is_live,
-    saleDiscount: merged.saleDiscount,
-    hasDrops: s.has_drops ?? false,
-    gameId: s.game_id ?? undefined,
-  }
+  return allStreams.sort((a: any, b: any) => b.viewers - a.viewers)
 }
 
 /* ── Fetch games with active drops (드롭스 활성화 방송이 있는 게임) ── */
@@ -932,231 +579,40 @@ export interface TrendingGameRow extends GameRow {
   topTag?: string
 }
 
-export interface TrendingGamesViewRow {
-  title: string
-  korean_title?: string | null
-  cover_image_url: string | null
-  stream_count: number
-  total_viewers: number
-  trend_score: number
-}
+/* ── V2: 기간별 과거 트렌딩 (daily_game_stats 기반) ── */
+export type TrendingPeriod = "yesterday" | "week" | "month"
 
-type GameWithPrice = {
+export interface HistoricalTrendingRow {
   id: number
   title: string
-  korean_title: string | null
-  top_tags: string[] | null
+  cover_image_url: string | null
+  header_image_url: string | null
+  peak_viewers: number
+  trend_score: number
   price_krw: number | null
   original_price_krw: number | null
   discount_rate: number | null
   is_free: boolean | null
+  top_tags: string[] | null
+}
+
+/* ── V2: 홈 서버 컨퓨테이션용 게임 DB 데이터 ── */
+export interface HomeGameRow {
+  id: number
+  title: string
+  korean_title: string | null
+  english_title: string | null
+  cover_image_url: string | null
+  header_image_url: string | null
+  price_krw: number | null
+  original_price_krw: number | null
+  discount_rate: number | null
+  is_free: boolean | null
+  top_tags: string[] | null
+  release_date: string | null
   steam_appid: number | null
 }
 
-/** 캐시용 페이로드 (Map 대신 Record 사용 - JSON 직렬화 가능) */
-type TrendingGamesCachePayload = {
-  rows: TrendingGamesViewRow[]
-  gamesWithTitle: { id: number; title: string; korean_title?: string | null }[]
-  titleToGameEntries: [string, GameWithPrice][]
-}
-
-async function fetchTrendingGamesListImpl(): Promise<TrendingGamesCachePayload> {
-  const supabase = createClientForCache()
-
-  const { data: rows, error } = await supabase
-    .from("trending_games")
-    .select("title, korean_title, cover_image_url, stream_count, total_viewers, trend_score")
-    .order("trend_score", { ascending: false })
-    .limit(8)
-
-  if (error) {
-    console.error("fetchTrendingGames error:", error.message)
-    return { rows: [], gamesWithTitle: [], titleToGameEntries: [] }
-  }
-
-  if (!rows || rows.length === 0) return { rows: [], gamesWithTitle: [], titleToGameEntries: [] }
-
-  const koreanTitles = [
-    ...new Set(
-      (rows as TrendingGamesViewRow[])
-        .map((r) => (r.korean_title ?? r.title)?.trim())
-        .filter((t): t is string => !!t)
-    ),
-  ]
-  const { data: games } = await supabase
-    .from("games")
-    .select("id, title, korean_title, english_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
-    .in("korean_title", koreanTitles)
-  const mappings = await getGameMappings()
-  const titleToGame = new Map<string, GameWithPrice>()
-  const gamesWithTitle: { id: number; title: string; korean_title?: string | null }[] = []
-  for (const g of games ?? []) {
-    const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
-    if (!key) continue
-    const gg = g as GameWithPrice & { english_title?: string | null }
-    const mapping = resolveMapping(mappings, gg.title ?? "", gg.english_title ?? null, gg.korean_title ?? null)
-    const merged = applyMappingOverridesToGame(gg, mapping) as GameWithPrice
-    titleToGame.set(key, {
-      id: merged.id,
-      title: merged.title,
-      korean_title: merged.korean_title ?? null,
-      top_tags: merged.top_tags ?? null,
-      price_krw: merged.price_krw ?? null,
-      original_price_krw: merged.original_price_krw ?? null,
-      discount_rate: merged.discount_rate ?? null,
-      is_free: merged.is_free ?? null,
-      steam_appid: merged.steam_appid ?? null,
-    })
-    gamesWithTitle.push({ id: merged.id, title: merged.title, korean_title: merged.korean_title ?? null })
-  }
-
-  return { rows: rows as TrendingGamesViewRow[], gamesWithTitle, titleToGameEntries: [...titleToGame.entries()] }
-}
-
-export async function fetchTrendingGames(): Promise<TrendingGameRow[]> {
-  const { rows, gamesWithTitle, titleToGameEntries } = await unstable_cache(
-    fetchTrendingGamesListImpl,
-    ["trending-games"],
-    { revalidate: CACHE_REVALIDATE_TRENDING }
-  )()
-
-  if (rows.length === 0 || gamesWithTitle.length === 0) return []
-
-  const titleToGame = new Map<string, GameWithPrice>(titleToGameEntries)
-
-  // 게임 상세 페이지(fetchStreamsByGameId)와 완전 동일한 로직으로 스트림 통계 조회
-  const streamStats = await getStreamStatsFromFetchStreamsByGameId(gamesWithTitle.map((g) => g.id))
-
-  return rows
-    .filter((row) => {
-      const key = (row.korean_title ?? row.title)?.trim()
-      return key ? titleToGame.has(key) : false
-    })
-    .map((row) => {
-      const key = (row.korean_title ?? row.title)?.trim()!
-      const gameData = titleToGame.get(key)!
-      const stats = streamStats.get(gameData.id) ?? { totalViewers: 0, liveStreamCount: 0 }
-      const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
-      const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
-      const displayTitle = getDisplayGameTitle({ korean_title: gameData.korean_title, title: gameData.title })
-      const effectiveRate = getEffectiveDiscountRate(gameData.discount_rate)
-      return {
-        id: gameData.id,
-        title: displayTitle,
-        cover_image_url: row.cover_image_url,
-        header_image_url: row.cover_image_url,
-        steam_appid: gameData.steam_appid,
-        discount_rate: effectiveRate > 0 ? effectiveRate : null,
-        price_krw: gameData.price_krw,
-        original_price_krw: gameData.original_price_krw,
-        currency: null,
-        is_free: gameData.is_free,
-        top_tags: topTags,
-        short_description: null,
-        developer: null,
-        publisher: null,
-        background_image_url: null,
-        totalViewers: stats.totalViewers,
-        viewersFormatted: formatViewers(stats.totalViewers),
-        liveStreamCount: stats.liveStreamCount,
-        topTag,
-      }
-    }) as TrendingGameRow[]
-}
-
-/* ── Fetch games by viewer count (시청자 수 순, trend_score 아님) ── */
-/** @param limit - 개수 (기본 50) */
-/** @param offset - 건너뛸 개수 (기본 0), pagination용 */
-export async function fetchGamesByViewerCount(limit: number = 50, offset: number = 0): Promise<TrendingGameRow[]> {
-  const supabase = await createClient()
-
-  const selectCols = "title, korean_title, cover_image_url, stream_count, total_viewers, trend_score"
-  const { data: rows, error } = await supabase
-    .from("trending_games")
-    .select(selectCols)
-    .order("total_viewers", { ascending: false })
-    .range(offset, offset + limit - 1)
-
-  if (error) {
-    console.error("fetchGamesByViewerCount error:", error.message)
-    return []
-  }
-
-  if (!rows || rows.length === 0) return []
-
-  const koreanTitles = [
-    ...new Set(
-      (rows as TrendingGamesViewRow[])
-        .map((r) => (r.korean_title ?? r.title)?.trim())
-        .filter((t): t is string => !!t)
-    ),
-  ]
-  const { data: games } = await supabase
-    .from("games")
-    .select("id, title, korean_title, english_title, top_tags, price_krw, original_price_krw, discount_rate, is_free, steam_appid")
-    .in("korean_title", koreanTitles)
-  type GameWithPrice = {
-    id: number
-    title: string
-    korean_title: string | null
-    top_tags: string[] | null
-    price_krw: number | null
-    original_price_krw: number | null
-    discount_rate: number | null
-    is_free: boolean | null
-    steam_appid: number | null
-  }
-  const mappings = await getGameMappings()
-  const titleToGame = new Map<string, GameWithPrice>()
-  const gamesWithTitle: { id: number; title: string; korean_title?: string | null }[] = []
-  for (const g of games ?? []) {
-    const key = String((g as { korean_title?: string | null }).korean_title ?? g.title).trim()
-    if (!key) continue
-    const gg = g as GameWithPrice & { english_title?: string | null }
-    const mapping = resolveMapping(mappings, gg.title ?? "", gg.english_title ?? null, gg.korean_title ?? null)
-    const merged = applyMappingOverridesToGame(gg, mapping) as GameWithPrice
-    titleToGame.set(key, merged)
-    gamesWithTitle.push({ id: merged.id, title: merged.title, korean_title: merged.korean_title ?? null })
-  }
-
-  const streamStats = await getStreamStatsFromFetchStreamsByGameId(gamesWithTitle.map((g) => g.id))
-
-  return (rows as TrendingGamesViewRow[])
-    .filter((row) => {
-      const key = (row.korean_title ?? row.title)?.trim()
-      return key ? titleToGame.has(key) : false
-    })
-    .map((row) => {
-      const key = (row.korean_title ?? row.title)?.trim()!
-      const gameData = titleToGame.get(key)!
-      const stats = streamStats.get(gameData.id) ?? { totalViewers: 0, liveStreamCount: 0 }
-      const topTags = Array.isArray(gameData.top_tags) ? gameData.top_tags : null
-      const topTag = topTags && topTags.length > 0 ? topTags[0] : undefined
-      const displayTitle = getDisplayGameTitle({ korean_title: gameData.korean_title, title: gameData.title })
-      const effectiveRate = getEffectiveDiscountRate(gameData.discount_rate)
-      return {
-        id: gameData.id,
-        title: displayTitle,
-        cover_image_url: row.cover_image_url,
-        header_image_url: row.cover_image_url,
-        steam_appid: gameData.steam_appid ?? undefined,
-        discount_rate: effectiveRate > 0 ? effectiveRate : null,
-        price_krw: gameData.price_krw ?? null,
-        original_price_krw: gameData.original_price_krw ?? null,
-        currency: null,
-        is_free: gameData.is_free ?? null,
-        top_tags: topTags,
-        short_description: null,
-        developer: null,
-        publisher: null,
-        background_image_url: null,
-        totalViewers: stats.totalViewers,
-        viewersFormatted: formatViewers(stats.totalViewers),
-        liveStreamCount: stats.liveStreamCount,
-        topTag,
-      }
-    }) as TrendingGameRow[]
-}
 
 /* ── Fetch tags by game ID ── */
 export async function fetchTagsByGameId(gameId: number): Promise<TagRow[]> {
@@ -1172,100 +628,117 @@ export async function fetchTagsByGameId(gameId: number): Promise<TagRow[]> {
     .filter((tag: any) => tag !== null)
 }
 
-/* ── Fetch streams for followed games ── */
+/* ── Fetch streams for followed games (Chzzk API) ── */
 export async function fetchStreamsForFollowedGames(gameIds: number[]) {
   if (gameIds.length === 0) return []
-  
+
   const supabase = await createClient()
-  const { data: streams, error } = await supabase
-    .from("streams")
-    .select("*, games(*)")
-    .in("game_id", gameIds)
-    .eq("is_live", true)
-    .order("viewer_count", { ascending: false })
-  
-  if (error) {
-    console.error("fetchStreamsForFollowedGames error:", error.message)
-    return []
-  }
+  const { data: games } = await supabase
+    .from("games")
+    .select("id, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate")
+    .in("id", gameIds)
+
+  if (!games?.length) return []
 
   const mappings = await getGameMappings()
-  return (streams ?? []).map((s: any) => {
-    const merged = buildStreamWithMergedGame(s, mappings)
-    return {
-      id: s.id,
-      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: merged.gameCover,
-      gameTitle: merged.gameTitle,
-      streamTitle: s.title ?? "Untitled Stream",
-      streamerName: s.streamer_name ?? "Anonymous",
-      viewers: s.viewer_count ?? 0,
-      viewersFormatted: formatViewers(s.viewer_count),
-      isLive: s.is_live,
-      saleDiscount: merged.saleDiscount,
-      hasDrops: s.has_drops ?? false,
-      gameId: s.game_id,
-      channelId: s.chzzk_channel_id ?? undefined,
+
+  // 영문 카테고리 ID가 있는 게임만 대상 (최대 10개, API 부하 제한)
+  const eligible = games.filter((g: any) => g.english_title?.trim()).slice(0, 10)
+
+  const results = await Promise.allSettled(
+    eligible.map((g: any) => getChzzkStreamsByCategory(g.english_title.trim()))
+  )
+
+  const allStreams: any[] = []
+
+  results.forEach((result, idx) => {
+    if (result.status !== "fulfilled") return
+    const game = eligible[idx] as any
+    const mapping = resolveMapping(mappings, game.title, game.english_title, game.korean_title)
+    const overrides = applyMappingOverridesToGame(game, mapping)
+    const gameCover = getBestGameImage(
+      overrides.header_image_url ?? game.header_image_url,
+      overrides.cover_image_url ?? game.cover_image_url
+    )
+    const gameTitle =
+      getDisplayGameTitle(overrides) ?? game.korean_title ?? game.title
+    const discount = getEffectiveDiscountRate(
+      overrides.discount_rate ?? game.discount_rate
+    )
+    const saleDiscount = discount > 0 ? `-${discount}%` : undefined
+
+    for (const s of result.value) {
+      allStreams.push({
+        id: hashChannelId(s.channelId),
+        thumbnail: s.liveImageUrl || gameCover,
+        gameCover,
+        gameTitle,
+        streamTitle: s.liveTitle,
+        streamerName: s.channelName,
+        viewers: s.concurrentUserCount,
+        viewersFormatted: formatViewers(s.concurrentUserCount),
+        isLive: true,
+        saleDiscount,
+        hasDrops: s.hasDrops ?? false,
+        gameId: game.id,
+        channelId: s.channelId,
+      } as any)
     }
   })
+
+  return allStreams.sort((a: any, b: any) => b.viewers - a.viewers)
 }
 
-/* ── Get stream stats (viewer count, live count) for game IDs ── */
-export async function getStreamStatsForGameIds(
-  gameIds: number[]
-): Promise<Map<number, { totalViewers: number; liveStreamCount: number }>> {
-  if (gameIds.length === 0) return new Map()
-
-  const supabase = await createClient()
-  const { data: streams, error } = await supabase
-    .from("streams")
-    .select("game_id, viewer_count")
-    .in("game_id", gameIds)
-    .eq("is_live", true)
-
-  if (error) return new Map()
-
-  const stats = new Map<number, { totalViewers: number; liveStreamCount: number }>()
-  for (const s of streams ?? []) {
-    if (!s.game_id) continue
-    const cur = stats.get(s.game_id) || { totalViewers: 0, liveStreamCount: 0 }
-    stats.set(s.game_id, {
-      totalViewers: cur.totalViewers + (s.viewer_count || 0),
-      liveStreamCount: cur.liveStreamCount + 1,
-    })
+function hashChannelId(channelId: string): number {
+  let hash = 0
+  for (let i = 0; i < channelId.length; i++) {
+    hash = ((hash << 5) - hash + channelId.charCodeAt(i)) | 0
   }
-  return stats
+  return Math.abs(hash)
 }
 
 /**
- * 게임 상세 페이지(fetchStreamsByGameId)와 완전 동일한 로직으로 스트림 통계 계산.
- * 각 게임별로 fetchStreamsByGameId를 호출하여 game_id + stream_category 매칭 결과를 그대로 사용.
- * 게임 카드에서 게임 상세 페이지와 정확히 일치하는 스트리밍 수/시청자 수를 표시하기 위함.
- */
-export async function getStreamStatsFromFetchStreamsByGameId(
-  gameIds: number[]
-): Promise<Map<number, { totalViewers: number; liveStreamCount: number }>> {
-  const result = new Map<number, { totalViewers: number; liveStreamCount: number }>()
-  for (const id of gameIds) result.set(id, { totalViewers: 0, liveStreamCount: 0 })
-  if (gameIds.length === 0) return result
-
-  const streamsArrays = await Promise.all(gameIds.map((id) => fetchStreamsByGameId(id)))
-  for (let i = 0; i < gameIds.length; i++) {
-    const streams = streamsArrays[i]
-    const gameId = gameIds[i]
-    const totalViewers = streams.reduce((sum, s) => sum + (s.viewers ?? 0), 0)
-    result.set(gameId, { totalViewers, liveStreamCount: streams.length })
-  }
-  return result
-}
-
-/**
- * @deprecated getStreamStatsFromFetchStreamsByGameId 사용 권장. 게임 상세 페이지와 동일한 수치를 보장.
+ * 검색 결과 게임 카드용 실시간 스트림 통계.
+ * getTopLiveGames() API 캐시를 활용하여 현재 방송 중인 게임의 시청자 수/방송 수를 반환합니다.
+ * 방송 중이 아닌 게임은 { totalViewers: 0, liveStreamCount: 0 }을 반환합니다.
  */
 export async function getStreamStatsMatchingGameDetails(
-  games: { id: number; title: string; korean_title?: string | null }[]
+  games: { id: number; title: string; korean_title?: string | null; english_title?: string | null }[]
 ): Promise<Map<number, { totalViewers: number; liveStreamCount: number }>> {
-  return getStreamStatsFromFetchStreamsByGameId(games.map((g) => g.id))
+  const result = new Map<number, { totalViewers: number; liveStreamCount: number }>()
+  for (const g of games) result.set(g.id, { totalViewers: 0, liveStreamCount: 0 })
+  if (games.length === 0) return result
+
+  const topLive = await getTopLiveGames(100)
+
+  function norm(s: string) {
+    return s.toLowerCase().replace(/_/g, " ").trim()
+  }
+
+  // categoryId(영문) 및 title(한글) 기준 룩업 맵
+  const liveByEnglish = new Map<string, typeof topLive[0]>()
+  const liveByKorean = new Map<string, typeof topLive[0]>()
+  for (const live of topLive) {
+    liveByEnglish.set(norm(live.categoryId), live)
+    liveByKorean.set(norm(live.title), live)
+  }
+
+  for (const game of games) {
+    const matched =
+      (game.korean_title ? liveByKorean.get(norm(game.korean_title)) : undefined) ??
+      (game.english_title ? liveByEnglish.get(norm(game.english_title)) : undefined) ??
+      liveByKorean.get(norm(game.title)) ??
+      liveByEnglish.get(norm(game.title))
+
+    if (matched) {
+      result.set(game.id, {
+        totalViewers: matched.concurrentUserCount,
+        liveStreamCount: matched.openLiveCount,
+      })
+    }
+  }
+
+  return result
 }
 
 /* ── Get all tags (for Explore page filter) ── */
@@ -1357,52 +830,13 @@ async function getTopTagsFromGamesTable(limit: number): Promise<TagRow[]> {
   return topTags
 }
 
-/* ── Get top tags from trending games (for Explore filter) ── */
-/* Uses top_tags from games table - same source as game detail (Korean) */
+/* ── Get top tags from games table (for Explore filter) ── */
 export async function getTopGameTags(limit: number = 10): Promise<TagRow[]> {
   try {
-    const trendingGames = await fetchTrendingGames()
-    
-    if (trendingGames.length === 0) {
-      return (await getTopTagsFromGamesTable(limit)).slice(0, limit)
-    }
-    
-    const seenKeys = new Set<string>()
-    const topTags: TagRow[] = []
-    
-    for (const game of trendingGames) {
-      if (topTags.length >= limit) break
-      
-      const topTagsArr = (game as any).top_tags as string[] | null | undefined
-      if (!Array.isArray(topTagsArr)) continue
-      
-      for (const tagName of topTagsArr) {
-        if (topTags.length >= limit) break
-        
-        const name = String(tagName).trim()
-        if (!name) continue
-        
-        const lowerName = name.toLowerCase()
-        const slugBase = lowerName.replace(/\s+/g, "-")
-        const slug = slugBase.replace(/[#?&=/\\]/g, "")
-        const key = slug || lowerName
-        if (seenKeys.has(key)) continue
-        
-        seenKeys.add(key)
-        topTags.push({
-          id: -(topTags.length + 1),
-          name,
-          slug: slug || lowerName.replace(/\s+/g, "-")
-        })
-      }
-    }
-    
-    if (topTags.length > 0) return topTags
-    
     return (await getTopTagsFromGamesTable(limit)).slice(0, limit)
   } catch (error) {
     console.error("getTopGameTags error:", error)
-    return (await getTopTagsFromGamesTable(limit)).slice(0, limit)
+    return []
   }
 }
 
@@ -1751,41 +1185,268 @@ export async function fetchEsportsChannels(): Promise<EsportsChannel[]> {
   )()
 }
 
-/* ── Get streams for specific games ── */
-export async function getStreamsForGames(gameIds: number[]) {
-  if (gameIds.length === 0) return []
-  
-  const supabase = await createClient()
-  const { data: streams, error } = await supabase
-    .from("streams")
-    .select("*, games(*)")
-    .in("game_id", gameIds)
-    .eq("is_live", true)
-    .order("viewer_count", { ascending: false })
-  
-  if (error) {
-    console.error("getStreamsForGames error:", error.message)
-    return []
+/* ── V2: getHistoricalTrending — daily_game_stats 기반 기간별 트렌딩 ── */
+async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<HistoricalTrendingRow[]> {
+  const supabase = createClientForCache()
+
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayStr = yesterday.toISOString().slice(0, 10)
+
+  let startDateStr: string
+  if (period === "yesterday") {
+    startDateStr = yesterdayStr
+  } else if (period === "week") {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    startDateStr = d.toISOString().slice(0, 10)
+  } else {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    startDateStr = d.toISOString().slice(0, 10)
   }
 
-  const mappings = await getGameMappings()
-  return (streams ?? []).map((s: any) => {
-    const merged = buildStreamWithMergedGame(s, mappings)
-    return {
-      id: s.id,
-      thumbnail: s.thumbnail_url ?? "/streams/stream-1.jpg",
-      gameCover: merged.gameCover,
-      gameTitle: merged.gameTitle,
-      streamTitle: s.title ?? "Untitled Stream",
-      streamerName: s.streamer_name ?? "Anonymous",
-      viewers: s.viewer_count ?? 0,
-      viewersFormatted: formatViewers(s.viewer_count),
-      isLive: s.is_live,
-      saleDiscount: merged.saleDiscount,
-      hasDrops: s.has_drops ?? false,
-      gameId: s.game_id,
-      channelId: s.chzzk_channel_id ?? undefined,
-      rawData: { streamCategory: s.stream_category, gameData: merged.mergedGame ?? s.games },
+  const { data: stats, error: statsErr } = await supabase
+    .from("daily_game_stats")
+    .select("game_id, peak_viewers, trend_score")
+    .gte("record_date", startDateStr)
+    .lte("record_date", yesterdayStr)
+
+  if (statsErr || !stats || stats.length === 0) return []
+
+  // game_id별 최댓값 집계 (TypeScript)
+  const gameStats = new Map<number, { peak_viewers: number; trend_score: number }>()
+  for (const row of stats) {
+    const gid = row.game_id as number
+    const ts = (row.trend_score as number) ?? 0
+    const pv = (row.peak_viewers as number) ?? 0
+    const prev = gameStats.get(gid)
+    if (!prev || ts > prev.trend_score) {
+      gameStats.set(gid, { peak_viewers: pv, trend_score: ts })
     }
-  })
+  }
+
+  const topIds = Array.from(gameStats.entries())
+    .sort((a, b) => b[1].trend_score - a[1].trend_score)
+    .slice(0, 8)
+    .map(([id]) => id)
+
+  if (topIds.length === 0) return []
+
+  const { data: games, error: gErr } = await supabase
+    .from("games")
+    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
+    .in("id", topIds)
+
+  if (gErr || !games) return []
+
+  const mappings = await getGameMappings()
+  const gamesMap = new Map<number, any>()
+  for (const g of games) {
+    const m = resolveMapping(
+      mappings,
+      g.title ?? "",
+      (g as any).english_title ?? null,
+      (g as any).korean_title ?? null
+    )
+    gamesMap.set(g.id, applyMappingOverridesToGame(g, m))
+  }
+
+  return topIds
+    .map((gameId) => {
+      const g = gamesMap.get(gameId)
+      if (!g) return null
+      const s = gameStats.get(gameId)!
+      const effectiveDiscount = getEffectiveDiscountRate(g.discount_rate)
+      return {
+        id: g.id,
+        title: getDisplayGameTitle({ korean_title: (g as any).korean_title, title: g.title }),
+        cover_image_url: g.cover_image_url,
+        header_image_url: g.header_image_url ?? g.cover_image_url,
+        peak_viewers: s.peak_viewers,
+        trend_score: s.trend_score,
+        price_krw: g.price_krw ?? null,
+        original_price_krw: g.original_price_krw ?? null,
+        discount_rate: effectiveDiscount > 0 ? effectiveDiscount : null,
+        is_free: g.is_free ?? null,
+        top_tags: Array.isArray(g.top_tags) ? g.top_tags : null,
+      } as HistoricalTrendingRow
+    })
+    .filter((r): r is HistoricalTrendingRow => r !== null)
+}
+
+/**
+ * 기간별 과거 트렌딩 게임 조회 (daily_game_stats 기반)
+ * - yesterday: 어제 peak 기준
+ * - week: 최근 7일 MAX(trend_score)
+ * - month: 최근 30일 MAX(trend_score)
+ */
+export async function getHistoricalTrending(period: TrendingPeriod): Promise<HistoricalTrendingRow[]> {
+  return unstable_cache(
+    () => getHistoricalTrendingImpl(period),
+    [`historical-trending-${period}`],
+    { revalidate: 3600 } // 1시간 캐시 (과거 데이터는 하루 1회만 갱신)
+  )()
+}
+
+/* ── V2: fetchAllGamesForHome — 홈 서버 컨퓨테이션용 게임 데이터 ── */
+async function fetchAllGamesForHomeImpl(): Promise<HomeGameRow[]> {
+  const supabase = createClientForCache()
+  const { data, error } = await supabase
+    .from("games")
+    .select(
+      "id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags, release_date, steam_appid"
+    )
+    .limit(500)
+
+  if (error || !data) {
+    console.error("fetchAllGamesForHome error:", error?.message)
+    return []
+  }
+  return data as HomeGameRow[]
+}
+
+/**
+ * 홈 페이지 서버 컨퓨테이션용 게임 데이터 일괄 조회
+ * - 실시간 트렌딩 DB 매칭, 숨겨진 꿀잼, 신작 계산에 사용
+ * - 5분 캐시 (게임 메타데이터 변경 빈도 낮음)
+ */
+export async function fetchAllGamesForHome(): Promise<HomeGameRow[]> {
+  return unstable_cache(
+    fetchAllGamesForHomeImpl,
+    ["all-games-for-home"],
+    { revalidate: 300 }
+  )()
+}
+
+/* ── V2: getGamesByTrendScore — 태그 필터 지원 트렌드 점수 순 게임 조회 ── */
+async function getGamesByTrendScoreImpl(tagName?: string): Promise<HistoricalTrendingRow[]> {
+  const supabase = createClientForCache()
+
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const startDate = sevenDaysAgo.toISOString().slice(0, 10)
+
+  const { data: stats } = await supabase
+    .from("daily_game_stats")
+    .select("game_id, trend_score, peak_viewers")
+    .gte("record_date", startDate)
+
+  const trendMap = new Map<number, { trend_score: number; peak_viewers: number }>()
+  for (const row of stats ?? []) {
+    const id = row.game_id as number
+    const ts = (row.trend_score as number) ?? 0
+    const pv = (row.peak_viewers as number) ?? 0
+    const prev = trendMap.get(id)
+    if (!prev || ts > prev.trend_score) trendMap.set(id, { trend_score: ts, peak_viewers: pv })
+  }
+
+  const baseQuery = supabase
+    .from("games")
+    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
+    .limit(500)
+
+  const { data: games } = tagName
+    ? await baseQuery.contains("top_tags", [tagName])
+    : await baseQuery
+
+  if (!games) return []
+
+  const mappings = await getGameMappings()
+
+  return games
+    .map((g: any) => {
+      const s = trendMap.get(g.id as number)
+      const m = resolveMapping(mappings, g.title ?? "", g.english_title ?? null, g.korean_title ?? null)
+      const mg = applyMappingOverridesToGame(g, m) as any
+      const effectiveDiscount = getEffectiveDiscountRate(mg.discount_rate)
+      return {
+        id: mg.id,
+        title: getDisplayGameTitle({ korean_title: mg.korean_title, title: mg.title }),
+        cover_image_url: mg.cover_image_url,
+        header_image_url: mg.header_image_url ?? mg.cover_image_url,
+        peak_viewers: s?.peak_viewers ?? 0,
+        trend_score: s?.trend_score ?? 0,
+        price_krw: mg.price_krw ?? null,
+        original_price_krw: mg.original_price_krw ?? null,
+        discount_rate: effectiveDiscount > 0 ? effectiveDiscount : null,
+        is_free: mg.is_free ?? null,
+        top_tags: Array.isArray(mg.top_tags) ? mg.top_tags : null,
+      } as HistoricalTrendingRow
+    })
+    .sort((a, b) => b.trend_score - a.trend_score)
+}
+
+/**
+ * 트렌드 점수 기준 게임 목록 조회 (선택적 태그 필터)
+ * - tagName 지정 시 해당 태그를 가진 게임만 반환
+ * - 최근 7일 daily_game_stats 기반 trend_score 내림차순 정렬
+ * - trend_score 없는 게임도 포함 (score=0으로 후순위 배치)
+ */
+export async function getGamesByTrendScore(tagName?: string): Promise<HistoricalTrendingRow[]> {
+  return unstable_cache(
+    () => getGamesByTrendScoreImpl(tagName),
+    [`games-by-trend-score-${tagName ?? "all"}`],
+    { revalidate: 300 }
+  )()
+}
+
+/* ── V2: matchTopLiveGamesToTrendingRows — Chzzk API + DB 매칭 공용 유틸리티 ── */
+/**
+ * TopLiveGame(Chzzk API) 배열을 DB HomeGameRow와 매칭하여 TrendingGameRow 배열로 변환.
+ * 홈 페이지, 탐색 페이지, 태그 상세 페이지에서 공통으로 사용.
+ * 매칭 키: 한글 title (소문자) → english_title (소문자, 공백→_) → title (소문자)
+ */
+export function matchTopLiveGamesToTrendingRows(
+  topLive: TopLiveGame[],
+  dbGames: HomeGameRow[]
+): TrendingGameRow[] {
+  const byKorean = new Map<string, HomeGameRow>()
+  const byEnglish = new Map<string, HomeGameRow>()
+
+  for (const g of dbGames) {
+    if (g.korean_title) byKorean.set(g.korean_title.toLowerCase().trim(), g)
+    if (g.english_title) {
+      byEnglish.set(g.english_title.toLowerCase().replace(/\s+/g, "_"), g)
+      byEnglish.set(g.english_title.toLowerCase(), g)
+    }
+    byKorean.set(g.title.toLowerCase().trim(), g)
+  }
+
+  const result: TrendingGameRow[] = []
+  for (const live of topLive) {
+    const db =
+      byKorean.get(live.title.toLowerCase().trim()) ??
+      byEnglish.get(live.categoryId.toLowerCase()) ??
+      null
+    if (!db) continue
+
+    const effectiveDiscount = getEffectiveDiscountRate(db.discount_rate)
+    result.push({
+      id: db.id,
+      title: getDisplayGameTitle({ korean_title: db.korean_title, title: db.title }),
+      korean_title: db.korean_title,
+      english_title: db.english_title,
+      steam_appid: db.steam_appid,
+      cover_image_url: db.cover_image_url,
+      header_image_url: db.header_image_url ?? db.cover_image_url,
+      background_image_url: null,
+      discount_rate: effectiveDiscount > 0 ? effectiveDiscount : null,
+      price_krw: db.price_krw,
+      original_price_krw: db.original_price_krw,
+      currency: null,
+      is_free: db.is_free,
+      top_tags: db.top_tags,
+      short_description: null,
+      developer: null,
+      publisher: null,
+      last_data_update: null,
+      totalViewers: live.concurrentUserCount,
+      viewersFormatted: formatViewers(live.concurrentUserCount),
+      liveStreamCount: live.openLiveCount,
+      topTag: db.top_tags?.[0],
+    })
+  }
+
+  return result.sort((a, b) => b.totalViewers - a.totalViewers)
 }

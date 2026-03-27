@@ -1,110 +1,60 @@
-import { Suspense } from "react"
-import { getTopGameTags, getGamesByTopTagsAND, getStreamStatsMatchingGameDetails } from "@/lib/data"
-import { VibeFilter } from "@/components/explore/vibe-filter"
-import { GameCard, type GameCardData } from "@/components/game-card"
-import type { GameWithTags } from "@/lib/data"
+import type { Metadata } from "next"
+import {
+  getTopGameTags,
+  getGamesByTrendScore,
+  fetchAllGamesForHome,
+  matchTopLiveGamesToTrendingRows,
+  type TrendingGameRow,
+  type HistoricalTrendingRow,
+  type TagRow,
+} from "@/lib/data"
+import { getTopLiveGames } from "@/lib/chzzk"
+import { ExploreClient } from "@/components/explore/explore-client"
+
+export const metadata: Metadata = {
+  title: "게임 탐색 | Driflux",
+  description: "실시간 라이브와 주간 트렌드로 게임을 발견하세요.",
+}
 
 export const dynamic = "force-dynamic"
 
-function toGameCardData(
-  game: GameWithTags,
-  stats?: { totalViewers: number; liveStreamCount: number }
-): GameCardData {
-  const topTags =
-    game.top_tags?.slice(0, 2) ?? game.tags?.slice(0, 2).map((t: { name: string }) => t.name)
-  return {
-    id: game.id,
-    title: game.title,
-    korean_title: game.korean_title ?? undefined,
-    cover_image_url: game.cover_image_url ?? null,
-    header_image_url: game.header_image_url ?? undefined,
-    price_krw: game.price_krw ?? null,
-    original_price_krw: game.original_price_krw ?? null,
-    discount_rate: game.discount_rate ?? null,
-    is_free: game.is_free ?? null,
-    topTag: topTags?.[0],
-    topTags: topTags?.length ? topTags : undefined,
-    totalViewers: stats?.totalViewers,
-    liveStreamCount: stats?.liveStreamCount,
-  }
-}
-
 interface ExplorePageProps {
-  searchParams: { tags?: string }
+  searchParams: { mode?: string; tags?: string }
 }
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
-  // Parse selected tags from URL (names, may be encoded)
-  const tagsParam = searchParams.tags || ""
-  const selectedTagNames = tagsParam
-    ? tagsParam.split(",").map(t => decodeURIComponent(t.trim())).filter(Boolean)
-    : []
+  const mode = searchParams.mode === "trend" ? "trend" : "live"
+  const rawTag = searchParams.tags
+    ? decodeURIComponent(searchParams.tags.split(",")[0].trim())
+    : undefined
+  const selectedTagName = rawTag || undefined
 
-  // Fetch top tags from trending games for the filter UI
-  const allTags = await getTopGameTags(10)
+  let liveGames: TrendingGameRow[] = []
+  let trendGames: HistoricalTrendingRow[] = []
+  let allTags: TagRow[] = []
 
-  const games = selectedTagNames.length > 0
-    ? await getGamesByTopTagsAND(selectedTagNames)
-    : []
-  const streamStats = games.length > 0
-    ? await getStreamStatsMatchingGameDetails(games.map((g) => ({ id: g.id, title: g.title, korean_title: g.korean_title })))
-    : new Map<number, { totalViewers: number; liveStreamCount: number }>()
+  if (mode === "live") {
+    const [topLive, dbGames] = await Promise.all([
+      getTopLiveGames(50),
+      fetchAllGamesForHome(),
+    ])
+    liveGames = matchTopLiveGamesToTrendingRows(topLive, dbGames)
+  } else {
+    const [trendData, tags] = await Promise.all([
+      getGamesByTrendScore(selectedTagName),
+      getTopGameTags(16),
+    ])
+    trendGames = trendData
+    allTags = tags
+  }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold text-foreground sm:text-4xl">
-            Explore Games
-          </h1>
-          <p className="text-base text-muted-foreground sm:text-lg">
-            Find your next favorite game by vibe
-          </p>
-        </div>
-
-        {/* Filter Section */}
-        <div className="mb-8 rounded-xl border border-border bg-card p-6">
-          <Suspense fallback={<div className="text-muted-foreground">Loading filters...</div>}>
-            <VibeFilter allTags={allTags} selectedTags={selectedTagNames} />
-          </Suspense>
-        </div>
-
-        {/* Results Section */}
-        <div className="mb-4">
-          {selectedTagNames.length > 0 ? (
-            <h2 className="text-lg font-semibold text-foreground">
-              {games.length} game{games.length !== 1 ? "s" : ""} found
-            </h2>
-          ) : (
-            <p className="text-muted-foreground">
-              Select tags above to discover games
-            </p>
-          )}
-        </div>
-
-        {/* Game Grid */}
-        {selectedTagNames.length > 0 && (
-          <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-            <div className="card-grid-4">
-            {games.length > 0 ? (
-              games.map((game) => (
-                <GameCard key={game.id} game={toGameCardData(game, streamStats.get(game.id))} />
-              ))
-            ) : (
-              <div className="col-span-full py-12 text-center">
-                <p className="text-lg text-muted-foreground">
-                  No games found matching these vibes.
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Try selecting different tags or clear your filters.
-                </p>
-              </div>
-            )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    <ExploreClient
+      initialMode={mode}
+      liveGames={liveGames}
+      trendGames={trendGames}
+      allTags={allTags}
+      selectedTagName={selectedTagName}
+    />
   )
 }

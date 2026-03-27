@@ -45,7 +45,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
   const games = await searchGames(query)
   const gameIds = games.map((g) => g.id)
   const [streamStatsMap, streams] = await Promise.all([
-    getStreamStatsMatchingGameDetails(games.map((g) => ({ id: g.id, title: g.title }))),
+    getStreamStatsMatchingGameDetails(games.map((g) => ({ id: g.id, title: g.title, korean_title: g.korean_title, english_title: g.english_title }))),
     searchStreams(query, gameIds),
   ])
   // Convert Map to plain object for client component (Map is not JSON-serializable)

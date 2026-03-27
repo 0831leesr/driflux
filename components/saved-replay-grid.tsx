@@ -81,8 +81,8 @@ export function SavedReplayGrid({
         </h2>
       </div>
       <div className="space-y-6">
-        <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-          <div className="card-grid-4">
+        <div className="card-grid-6-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="card-grid-6">
             {videosToShow.map((video, index) => (
               <VideoCard
                 key={video.videoId}

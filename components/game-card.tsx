@@ -23,7 +23,7 @@ export interface GameCardData {
   original_price_krw: number | null
   discount_rate: number | null
   is_free?: boolean | null
-  // Optional streaming stats (for trending games)
+  /** Optional streaming stats (for trending games) */
   totalViewers?: number
   liveStreamCount?: number
   topTag?: string
@@ -60,7 +60,7 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
       href={`/game/${game.id}`}
       className="group block overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 transition-all duration-300 hover:border-[hsl(var(--neon-purple))]/50 hover:shadow-[0_0_20px_hsl(var(--neon-purple)_/_0.2)]"
     >
-      {/* Image Area - 3:4 aspect ratio */}
+      {/* 3:4 poster — all info overlaid on gradient */}
       <div className="relative aspect-[3/4] w-full overflow-hidden">
         <GameImage
           src={game.cover_image_url ?? game.header_image_url}
@@ -72,13 +72,13 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
           sizes="(min-width: 872px) 25vw, 200px"
         />
 
-        {/* Bottom gradient for text readability */}
+        {/* Deep gradient — covers bottom 60% for overlaid text */}
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-black/95 via-black/60 to-transparent"
           aria-hidden
         />
 
-        {/* Top-left: Conditional badge (드롭스 or 신작) */}
+        {/* Top-left: contextual badge */}
         {game.showDropsBadge && (
           <div className="absolute left-2 top-2">
             <Badge className="border-0 bg-violet-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-md">
@@ -96,7 +96,7 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
           </div>
         )}
 
-        {/* Top-right: Follow (Heart) button - glassmorphism */}
+        {/* Top-right: Follow (Heart) button — glassmorphism */}
         <div className="absolute right-2 top-2">
           <Button
             size="icon"
@@ -109,82 +109,75 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
             }`}
             aria-label={isGameFavorite ? "팔로우 해제" : "팔로우"}
           >
-            <Heart
-              className={`h-4 w-4 ${isGameFavorite ? "fill-current" : ""}`}
-            />
+            <Heart className={`h-4 w-4 ${isGameFavorite ? "fill-current" : ""}`} />
           </Button>
         </div>
 
-        {/* Bottom-left (on gradient): Stream count | Viewer count */}
-        {hasStreamStats && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-2 text-xs font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-            {game.liveStreamCount !== undefined && game.liveStreamCount > 0 && (
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-                {game.liveStreamCount}
-              </span>
-            )}
-            {game.liveStreamCount !== undefined &&
-              game.liveStreamCount > 0 &&
-              game.totalViewers !== undefined &&
-              game.totalViewers > 0 && (
-                <span className="text-white/60">|</span>
+        {/* Bottom overlay: stream stats + tags + title + price */}
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          {/* Live stream stats */}
+          {hasStreamStats && (
+            <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-white/90 drop-shadow">
+              {game.liveStreamCount !== undefined && game.liveStreamCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                  {game.liveStreamCount}
+                </span>
               )}
-            {game.totalViewers !== undefined && game.totalViewers > 0 && (
-              <span className="flex items-center gap-1">
-                <Eye className="h-3 w-3" />
-                {formatViewerCountShort(game.totalViewers)}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Info Area */}
-      <div className="p-3">
-        {/* Game name - bold, truncate */}
-        <h3 className="truncate text-base font-bold text-white">
-          {getDisplayGameTitle(game)}
-        </h3>
-
-        {/* Second line: tags (left, max 2) | price overlay (right, on top with gradient) */}
-        <div className="relative mt-2 h-6 overflow-hidden">
-          {/* Tags - behind, no wrap, get clipped when overlapping price */}
-          <div className="flex min-w-0 items-center gap-1 overflow-hidden">
-            {displayTags.map((tag) => (
-              <Badge
-                key={tag}
-                className="max-w-[72px] shrink-0 truncate rounded-md border-0 bg-neutral-700 px-2 py-0.5 text-[10px] font-medium text-neutral-200"
-              >
-                {tag}
-              </Badge>
-            ))}
-          </div>
-
-          {/* Price overlay - on top, gradient fades tags naturally */}
-          <div className="absolute inset-y-0 right-0 z-10 flex min-w-0 items-center justify-end bg-gradient-to-r from-transparent via-neutral-900/90 to-neutral-900 pl-16">
-            <div className="shrink-0 text-right">
-              {isFree ? (
-                <span className="text-xs font-bold text-emerald-400">무료</span>
-              ) : hasDiscount ? (
-                <span className="flex items-center justify-end gap-1">
-                  <span className="text-[10px] font-medium text-red-400">
-                    {formatDiscountRate(game.discount_rate)}
-                  </span>
-                  <span className="text-xs font-bold text-emerald-400">
-                    {formatKRW(game.price_krw)}
-                  </span>
-                </span>
-              ) : game.price_krw !== null ? (
-                <span className="text-xs font-semibold text-neutral-300">
-                  {formatKRW(game.price_krw)}
-                </span>
-              ) : (
-                <span className="text-[10px] text-neutral-500">
-                  가격 정보 없음
+              {game.liveStreamCount !== undefined &&
+                game.liveStreamCount > 0 &&
+                game.totalViewers !== undefined &&
+                game.totalViewers > 0 && (
+                  <span className="text-white/50">·</span>
+                )}
+              {game.totalViewers !== undefined && game.totalViewers > 0 && (
+                <span className="flex items-center gap-1">
+                  <Eye className="h-3 w-3" />
+                  {formatViewerCountShort(game.totalViewers)}
                 </span>
               )}
             </div>
+          )}
+
+          {/* Genre tags */}
+          {displayTags.length > 0 && (
+            <div className="mb-1.5 flex flex-wrap gap-1">
+              {displayTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="max-w-[80px] truncate rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Game title */}
+          <h3 className="truncate text-sm font-bold leading-snug text-white drop-shadow">
+            {getDisplayGameTitle(game)}
+          </h3>
+
+          {/* Price */}
+          <div className="mt-1">
+            {isFree ? (
+              <span className="text-xs font-bold text-emerald-400">무료</span>
+            ) : hasDiscount ? (
+              <span className="flex items-center gap-1.5">
+                <span className="text-[10px] font-medium text-red-400">
+                  {formatDiscountRate(game.discount_rate)}
+                </span>
+                <span className="text-xs font-bold text-emerald-400">
+                  {formatKRW(game.price_krw)}
+                </span>
+              </span>
+            ) : game.price_krw !== null ? (
+              <span className="text-xs font-semibold text-white/80">
+                {formatKRW(game.price_krw)}
+              </span>
+            ) : (
+              <span className="text-[10px] text-white/40">가격 정보 없음</span>
+            )}
           </div>
         </div>
       </div>

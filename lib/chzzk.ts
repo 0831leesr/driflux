@@ -119,6 +119,40 @@ export interface ChzzkPopularCategory {
   imageUrl: string | null
 }
 
+/**
+ * categories/live API 원본 응답 아이템
+ * GET /service/v1/categories/live?categoryType=GAME
+ */
+export interface ChzzkLiveCategoryItem {
+  /** 카테고리 영문 ID (e.g. "League_of_Legends") */
+  categoryId: string
+  /** 카테고리 표시 이름 한글 (e.g. "리그 오브 레전드") */
+  categoryValue: string
+  /** 현재 동시 시청자 수 합산 */
+  concurrentUserCount: number
+  /** 현재 라이브 방송 수 */
+  openLiveCount: number
+  /** 포스터/커버 이미지 URL (null 가능) */
+  posterImageUrl: string | null
+}
+
+/**
+ * getTopLiveGames 반환 타입
+ * 실시간 트렌딩·라이브 탐색 컴포넌트에서 사용
+ */
+export interface TopLiveGame {
+  /** Chzzk 카테고리 ID (영문, fetch 파라미터로 사용) */
+  categoryId: string
+  /** 게임 표시 이름 (한글 우선) */
+  title: string
+  /** 현재 동시 시청자 수 */
+  concurrentUserCount: number
+  /** 현재 라이브 방송 수 */
+  openLiveCount: number
+  /** 포스터 이미지 URL */
+  posterImageUrl: string | null
+}
+
 /** 특정 게임 클립 API 응답 아이템 */
 export interface ChzzkClipItem {
   clipUID: string
@@ -152,9 +186,16 @@ const CHZZK_CATEGORY_CLIPS_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V1}/categories/GAME/${encodeURIComponent(categoryId)}/clips`
 const CHZZK_CATEGORY_INFO_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V1}/categories/GAME/${encodeURIComponent(categoryId)}/info`
+export const CHZZK_TOP_LIVE_GAMES_URL =
+  `${CHZZK_SERVICE_V1}/categories/live?categoryType=GAME&size=50&sort=POPULAR`
 const RATE_LIMIT_DELAY = 1000 // 1초 (치지직 API Rate Limit 고려)
 const DEFAULT_THUMBNAIL_SIZE = "720" // 썸네일 해상도 (480, 720, 1080 등)
 const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/1280x720/1a1a1a/ffffff?text=No+Thumbnail" // Fallback thumbnail
+
+/* ── ISR Revalidate Intervals (seconds) ── */
+const REVALIDATE_LIVE = 60    // 라이브 스트림/트렌딩 — 60초
+const REVALIDATE_VOD  = 300   // VOD / 클립 — 5분
+const REVALIDATE_META = 300   // 게임 포스터 등 메타 — 5분
 
 // Polling API는 봇 차단이 덜하므로 service/v1 대신 polling/v2 사용
 // User-Agent는 여전히 최신 Chrome으로 유지
@@ -395,8 +436,8 @@ export async function getPopularCategories(
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://chzzk.naver.com/",
       },
-      cache: "no-store", // No Cache
-    })
+      next: { revalidate: REVALIDATE_LIVE },
+    } as NextFetchOptions)
 
     if (!response.ok) {
       console.error(`[Chzzk Categories] ✗ HTTP Error: ${response.status}`)
@@ -426,6 +467,72 @@ export async function getPopularCategories(
 }
 
 /**
+ * 실시간 라이브 게임 Top 50 가져오기
+ *
+ * [라이브 탐색] 탭과 [실시간 트렌딩] 섹션에서 사용.
+ * 치지직 categories/live API를 직접 호출하여 현재 시청자 수·방송 수 포함.
+ *
+ * API: GET /service/v1/categories/live?categoryType=GAME&size=50&sort=POPULAR
+ * 캐싱: Next.js ISR 60초 (Vercel Edge Cache 활용)
+ *
+ * @param size - 반환할 게임 수 (기본: 50, 최대: 50)
+ * @returns 시청자 수 내림차순 정렬된 TopLiveGame 배열
+ */
+export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]> {
+  try {
+    console.log("[Chzzk Request] Fetching top live games:", CHZZK_TOP_LIVE_GAMES_URL)
+
+    const response = await fetch(CHZZK_TOP_LIVE_GAMES_URL, {
+      method: "GET",
+      headers: {
+        "User-Agent": BROWSER_USER_AGENT,
+        "Accept": "application/json",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://chzzk.naver.com/",
+      },
+      next: { revalidate: REVALIDATE_LIVE },
+    } as NextFetchOptions)
+
+    if (!response.ok) {
+      console.error(`[Chzzk TopLiveGames] ✗ HTTP Error: ${response.status}`)
+      return []
+    }
+
+    const json = await response.json()
+
+    if (!json || json.code !== 200) {
+      console.error(`[Chzzk TopLiveGames] ✗ API Error: code=${json?.code}`)
+      return []
+    }
+
+    const items: ChzzkLiveCategoryItem[] = json.content?.data ?? []
+
+    if (!Array.isArray(items) || items.length === 0) {
+      console.warn("[Chzzk TopLiveGames] Empty response")
+      return []
+    }
+
+    const result: TopLiveGame[] = items
+      .filter((item) => item.categoryId && item.categoryValue)
+      .map((item) => ({
+        categoryId: item.categoryId,
+        title: item.categoryValue,
+        concurrentUserCount: Number(item.concurrentUserCount ?? 0),
+        openLiveCount: Number(item.openLiveCount ?? 0),
+        posterImageUrl: item.posterImageUrl ?? null,
+      }))
+      .sort((a, b) => b.concurrentUserCount - a.concurrentUserCount)
+      .slice(0, Math.min(size, 50))
+
+    console.log(`[Chzzk] getTopLiveGames: returning ${result.length} games (top by viewers).`)
+    return result
+  } catch (error) {
+    console.error("[Chzzk TopLiveGames] ✗ Exception:", error instanceof Error ? error.message : String(error))
+    return []
+  }
+}
+
+/**
  * 치지직 게임 정보 API - posterImageUrl(포스터 이미지) 조회
  *
  * API: GET https://api.chzzk.naver.com/service/v1/categories/GAME/{slug}/info
@@ -450,8 +557,8 @@ export async function fetchChzzkGamePosterImage(categoryId: string): Promise<str
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://chzzk.naver.com/",
       },
-      cache: "no-store",
-    })
+      next: { revalidate: REVALIDATE_META },
+    } as NextFetchOptions)
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -498,8 +605,8 @@ export async function getChzzkStreamsByCategory(
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://chzzk.naver.com/",
       },
-      cache: "no-store",
-    })
+      next: { revalidate: REVALIDATE_LIVE },
+    } as NextFetchOptions)
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -589,8 +696,8 @@ export async function getChzzkVideosByCategory(
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://chzzk.naver.com/",
       },
-      cache: "no-store",
-    })
+      next: { revalidate: REVALIDATE_VOD },
+    } as NextFetchOptions)
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -680,8 +787,8 @@ export async function getChzzkClipsByCategory(
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://chzzk.naver.com/",
       },
-      cache: "no-store",
-    })
+      next: { revalidate: REVALIDATE_VOD },
+    } as NextFetchOptions)
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -761,8 +868,8 @@ export async function searchChzzkLives(
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://chzzk.naver.com/",
       },
-      cache: "no-store",
-    })
+      next: { revalidate: REVALIDATE_LIVE },
+    } as NextFetchOptions)
 
     if (!response.ok) {
       if (response.status === 404) {

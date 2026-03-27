@@ -11,6 +11,7 @@ import { HiddenGemsSection } from "@/components/hidden-gems-section"
 import { NewReleasesSection } from "@/components/new-releases-section"
 import type {
   TrendingGameRow,
+  HistoricalTrendingRow,
   GamesWithDropsRow,
   HiddenGemsRow,
   NewReleasesRow,
@@ -25,13 +26,14 @@ import type { VideoData } from "@/components/video-card"
 import type { ClipData } from "@/components/clip-card"
 import { CalendarContent } from "@/components/calendar-content"
 import type { EventRow } from "@/lib/types"
-import { ExploreTabContent } from "@/components/explore/explore-tab-content"
 import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers } from "@/contexts/favorites-context"
 import { fetchStreamsForFollowedGames, fetchStreamsForFollowedTags } from "@/lib/data"
 import { formatViewerCountShort } from "@/lib/utils"
 interface HomeClientProps {
-  liveStreams: StreamData[]
-  trendingGames: TrendingGameRow[]
+  trendingLive: TrendingGameRow[]
+  yesterdayTrending: HistoricalTrendingRow[]
+  weekTrending: HistoricalTrendingRow[]
+  monthTrending: HistoricalTrendingRow[]
   gamesWithDrops: GamesWithDropsRow[]
   hiddenGemsGames: HiddenGemsRow[]
   newReleasesGames: NewReleasesRow[]
@@ -40,8 +42,10 @@ interface HomeClientProps {
 }
 
 export function HomeClient({
-  liveStreams,
-  trendingGames,
+  trendingLive,
+  yesterdayTrending,
+  weekTrending,
+  monthTrending,
   gamesWithDrops,
   hiddenGemsGames,
   newReleasesGames,
@@ -187,7 +191,17 @@ export function HomeClient({
     <>
       {/* Tab Navigation */}
       <div className="flex items-center gap-2 border-b border-border/50 bg-card/80 backdrop-blur-xl px-4 lg:px-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(val) => {
+            if (val === "explore") {
+              router.push("/explore")
+            } else {
+              setActiveTab(val)
+            }
+          }}
+          className="w-full"
+        >
           <TabsList className="h-10 bg-transparent p-0">
             <TabsTrigger
               value="main"
@@ -221,7 +235,12 @@ export function HomeClient({
       <main className="flex-1 overflow-y-auto">
         {activeTab === "main" ? (
           <div className="flex flex-col gap-8 p-4 lg:p-6">
-            <TrendingGames games={trendingGames} />
+            <TrendingGames
+              liveGames={trendingLive}
+              yesterdayGames={yesterdayTrending}
+              weekGames={weekTrending}
+              monthGames={monthTrending}
+            />
             <DropsSection games={gamesWithDrops} />
             <HiddenGemsSection games={hiddenGemsGames} />
             <NewReleasesSection games={newReleasesGames} />
@@ -327,8 +346,6 @@ export function HomeClient({
               </div>
             </Tabs>
           </div>
-        ) : activeTab === "explore" ? (
-          <ExploreTabContent onStreamClick={handleStreamClick} />
         ) : activeTab === "calendar" ? (
           <CalendarContent events={upcomingEvents} esportsChannels={esportsChannels} />
         ) : null}

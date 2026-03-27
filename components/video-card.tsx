@@ -5,7 +5,12 @@ import Image from "next/image"
 import Link from "next/link"
 import { Play, Bookmark } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { formatViewerCountShort, getGameImageSrc, DEFAULT_STREAMING_IMAGE } from "@/lib/utils"
+import {
+  formatViewerCountShort,
+  formatDuration,
+  getGameImageSrc,
+  DEFAULT_STREAMING_IMAGE,
+} from "@/lib/utils"
 import { useFavoriteVideos } from "@/contexts/favorites-context"
 
 export interface VideoData {
@@ -13,13 +18,12 @@ export interface VideoData {
   videoTitle: string
   thumbnailImageUrl: string
   readCount: number
+  /** Video duration in seconds (optional — shows badge when present) */
+  duration?: number
   channelName: string
   channelId: string
-  /** Game cover for overlay (from parent game) */
   gameCover: string
-  /** Game title for display */
   gameTitle: string
-  /** Game ID for link (optional) */
   gameId?: number
 }
 
@@ -32,7 +36,6 @@ export function VideoCard({
   video: VideoData
   onVideoClick?: (video: VideoData) => void
   priority?: boolean
-  /** Hide save button (e.g. in Saved tab when removing is preferred) */
   showSaveButton?: boolean
 }) {
   const { isSaved, toggleSavedVideo } = useFavoriteVideos()
@@ -40,6 +43,7 @@ export function VideoCard({
   const initialThumbnail = video.thumbnailImageUrl || gameCoverSrc
   const [thumbnailSrc, setThumbnailSrc] = useState(initialThumbnail)
   const readCountDisplay = formatViewerCountShort(video.readCount)
+  const durationDisplay = video.duration && video.duration > 0 ? formatDuration(video.duration) : null
   const isVideoSaved = isSaved(video.videoId)
 
   const handleSaveClick = (e: React.MouseEvent) => {
@@ -77,7 +81,7 @@ export function VideoCard({
         if (e.key === "Enter" || e.key === " ") onVideoClick?.(video)
       }}
     >
-      {/* Thumbnail */}
+      {/* Thumbnail — 16:9 */}
       <div className="relative aspect-video w-full overflow-hidden">
         <Image
           src={thumbnailSrc}
@@ -91,17 +95,20 @@ export function VideoCard({
           onError={handleThumbnailError}
         />
 
-        {/* No LIVE badge - Video cards don't show LIVE */}
-
-        {/* Read count badge (top left, like viewer count) */}
-        <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 backdrop-blur-sm">
-          <Play className="h-3 w-3 text-white" />
-          <span className="text-[11px] font-semibold text-white">
-            {readCountDisplay}
-          </span>
+        {/* Hover play overlay */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/30">
+          <div className="flex h-10 w-10 scale-75 items-center justify-center rounded-full bg-white/80 opacity-0 shadow-lg transition-all duration-200 group-hover:scale-100 group-hover:opacity-100">
+            <Play className="ml-0.5 h-5 w-5 fill-neutral-900 text-neutral-900" />
+          </div>
         </div>
 
-        {/* Save button (top right) */}
+        {/* Top-left: view count */}
+        <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 backdrop-blur-sm">
+          <Play className="h-3 w-3 fill-white text-white" />
+          <span className="text-[11px] font-semibold text-white">{readCountDisplay}</span>
+        </div>
+
+        {/* Top-right: save button */}
         {showSaveButton && (
           <div className="absolute right-2 top-2">
             <Button
@@ -116,15 +123,20 @@ export function VideoCard({
               aria-label={isVideoSaved ? "저장 취소" : "저장"}
             >
               <Bookmark
-                className={`h-4 w-4 transition-all ${
-                  isVideoSaved ? "fill-current" : ""
-                }`}
+                className={`h-4 w-4 transition-all ${isVideoSaved ? "fill-current" : ""}`}
               />
             </Button>
           </div>
         )}
 
-        {/* Game cover overlay - clickable to game details */}
+        {/* Bottom-RIGHT: duration badge */}
+        {durationDisplay && (
+          <div className="absolute bottom-2 right-2 rounded bg-black/80 px-1.5 py-0.5">
+            <span className="text-[11px] font-semibold text-white">{durationDisplay}</span>
+          </div>
+        )}
+
+        {/* Bottom-LEFT: game cover mini thumbnail */}
         {video.gameId ? (
           <Link
             href={`/game/${video.gameId}`}
@@ -162,21 +174,17 @@ export function VideoCard({
           {video.gameId ? (
             <Link
               href={`/game/${video.gameId}`}
-              className="game-link truncate text-base font-bold text-foreground hover:text-[hsl(var(--neon-purple))] transition-colors"
+              className="game-link truncate text-sm font-bold text-foreground transition-colors hover:text-[hsl(var(--neon-purple))]"
               onClick={(e) => e.stopPropagation()}
             >
               {video.gameTitle}
             </Link>
           ) : (
-            <h3 className="truncate text-base font-bold text-foreground">
-              {video.gameTitle}
-            </h3>
+            <h3 className="truncate text-sm font-bold text-foreground">{video.gameTitle}</h3>
           )}
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {video.channelName}
-          </span>
+          <span className="shrink-0 text-xs text-muted-foreground">{video.channelName}</span>
         </div>
-        <p className="truncate text-sm leading-snug text-secondary-foreground/70">
+        <p className="truncate text-xs leading-snug text-secondary-foreground/70">
           {video.videoTitle}
         </p>
       </div>

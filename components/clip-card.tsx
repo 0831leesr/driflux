@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { Bookmark } from "lucide-react"
+import { Bookmark, Play } from "lucide-react"
 import {
   formatDuration,
   formatCountCompactKorean,
@@ -91,6 +91,13 @@ export function ClipCard({
           unoptimized
           onError={handleThumbnailError}
         />
+
+        {/* Hover play overlay */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/30">
+          <div className="flex h-10 w-10 scale-75 items-center justify-center rounded-full bg-white/80 opacity-0 shadow-lg transition-all duration-200 group-hover:scale-100 group-hover:opacity-100">
+            <Play className="ml-0.5 h-5 w-5 fill-neutral-900 text-neutral-900" />
+          </div>
+        </div>
 
         {/* Top-right: Bookmark */}
         {showSaveButton && (

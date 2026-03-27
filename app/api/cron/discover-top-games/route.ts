@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getPopularCategories, CHZZK_SEARCH_LIVES_URL } from "@/lib/chzzk"
 import { delay } from "@/lib/utils"
@@ -57,8 +56,6 @@ export async function GET(request: Request) {
         persistSession: false,
       },
     })
-
-    const supabase = await createClient()
 
     // Fetch popular GAME categories from Chzzk (categories/live API returns GAME only)
     console.log(`[Top Games Discovery] Fetching real-time popular categories from Chzzk...`)
@@ -176,15 +173,11 @@ export async function GET(request: Request) {
       console.log(`  ${i + 1}. ${s.channelName} - ${s.liveTitle} (${s.viewerCount} viewers)`)
     })
 
-    // Track active channel IDs
-    const activeChannelIds = new Set<string>()
-
     // Stats
     const stats = {
       totalFetched: rawStreams.length,
       gameStreams: gameStreams.length,
-      created: 0,
-      updated: 0,
+      saved: 0,
       failed: 0,
     }
 
@@ -291,105 +284,7 @@ export async function GET(request: Request) {
     }
 
     console.log(`[Top Games Discovery] Saved ${categoryToGameId.size} games (Chzzk-only; Steam/IGDB via daily-metadata)`)
-
-    // STEP B: Save streams with mapped game_id
-    console.log(`\n[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-    console.log(`[Top Games Discovery] STEP B: Saving streams to database`)
-    console.log(`[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-
-    // Upsert each stream
-    for (const stream of gameStreams) {
-      activeChannelIds.add(stream.channelId)
-
-      try {
-        // Get mapped game_id
-        const gameId = stream.category ? categoryToGameId.get(stream.category) || null : null
-
-        const streamData = {
-          title: stream.liveTitle,
-          streamer_name: stream.channelName,
-          chzzk_channel_id: stream.channelId,
-          stream_url: `https://chzzk.naver.com/live/${stream.channelId}`,
-          thumbnail_url: stream.thumbnailUrl,
-          is_live: true,
-          viewer_count: Number(stream.viewerCount),
-          stream_category: stream.category || null,
-          game_id: gameId,
-          has_drops: !!stream.hasDrops,
-          last_chzzk_update: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-
-        const { error: upsertError } = await adminSupabase
-          .from("streams")
-          .upsert(streamData, {
-            onConflict: 'chzzk_channel_id',
-            ignoreDuplicates: false,
-          })
-
-        if (upsertError) {
-          console.error(`[Top Games Discovery] ✗ Stream write error: ${upsertError.message}`)
-          stats.failed++
-        } else {
-          stats.created++
-        }
-
-        await delay(100) // Small delay between inserts
-      } catch (err) {
-        console.error(`[Top Games Discovery] ✗✗✗ EXCEPTION ✗✗✗`)
-        console.error(`[Top Games Discovery] Exception:`, err)
-        console.error(`[Top Games Discovery] Stack:`, err instanceof Error ? err.stack : 'N/A')
-        stats.failed++
-      }
-    }
-
-    // Delete offline streams
-    // Grace period: only delete if last_chzzk_update is older than 30 min (or null).
-    // Prevents "Time Window Gap" - streams from update-streams that we didn't fetch
-    // in this run should remain visible until next cron cycle.
-    const GRACE_PERIOD_MS = 30 * 60 * 1000 // 30 minutes
-    const graceCutoff = new Date(Date.now() - GRACE_PERIOD_MS).toISOString()
-
-    console.log(`\n[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-    console.log(`[Top Games Discovery] STEP C: Cleaning up offline streams`)
-    console.log(`[Top Games Discovery] Grace period: only delete if last_chzzk_update < ${graceCutoff}`)
-    console.log(`[Top Games Discovery] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-    
-    const activeArray = Array.from(activeChannelIds)
-    console.log(`[Top Games Discovery] Active channels in this run: ${activeArray.length}`)
-    console.log(`[Top Games Discovery] Sample active channels:`, activeArray.slice(0, 5))
-
-    if (activeArray.length === 0) {
-      console.warn(`[Top Games Discovery] ⚠ No active channels found, skipping cleanup`)
-    } else {
-      // Find streams that are marked as live but not in our active list AND outside grace period
-      const { data: offlineStreams, error: selectError } = await adminSupabase
-        .from("streams")
-        .select("id, chzzk_channel_id, streamer_name")
-        .eq("is_live", true)
-        .not("chzzk_channel_id", "in", `(${activeArray.map(id => `'${id}'`).join(',')})`)
-        .or(`last_chzzk_update.lt.${graceCutoff},last_chzzk_update.is.null`)
-
-      if (selectError) {
-        console.error(`[Top Games Discovery] ✗ Failed to query offline streams:`, selectError.message)
-      } else if (offlineStreams && offlineStreams.length > 0) {
-        console.log(`[Top Games Discovery] Found ${offlineStreams.length} streams to delete (outside 30-min grace period)`)
-        console.log(`[Top Games Discovery] Offline streams:`, offlineStreams.map(s => s.streamer_name))
-
-        const { error: deleteError } = await adminSupabase
-          .from("streams")
-          .delete()
-          .in("id", offlineStreams.map(s => s.id))
-
-        if (deleteError) {
-          console.error(`[Top Games Discovery] ✗ Delete failed:`, deleteError.message)
-        } else {
-          console.log(`[Top Games Discovery] ✓ Deleted ${offlineStreams.length} offline streams`)
-        }
-      } else {
-        console.log(`[Top Games Discovery] ✓ No offline streams to delete (all within 30-min grace period)`)
-      }
-    }
+    stats.saved = categoryToGameId.size
 
     const duration = Date.now() - startTime
     console.timeEnd("[Top Games Discovery] Total duration")
@@ -397,7 +292,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Fetched ${stats.gameStreams} game streams (${stats.created} new, ${stats.updated} updated)`,
+      message: `Discovered ${stats.gameStreams} game streams, saved ${stats.saved} unique games to DB`,
       stats,
       duration,
     })

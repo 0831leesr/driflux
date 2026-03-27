@@ -1,8 +1,13 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import { fetchGameById, fetchStreamsByGameId } from "@/lib/data"
-import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
+import { fetchGameById } from "@/lib/data"
+import { getChzzkStreamsByCategory } from "@/lib/chzzk"
+import { getBestGameImage, getDisplayGameTitle, formatViewerCountShort } from "@/lib/utils"
 import { GameDetailsPage } from "@/components/game-details-page"
+import type { StreamData } from "@/components/stream-card"
+
+// Revalidate every 60s — aligned with Chzzk live stream ISR cache
+export const revalidate = 60
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -13,22 +18,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const gameId = parseInt(id, 10)
 
   if (isNaN(gameId) || gameId <= 0) {
-    return {
-      title: "Game Not Found",
-    }
+    return { title: "Game Not Found" }
   }
 
   const game = await fetchGameById(gameId)
-
   if (!game) {
-    return {
-      title: "Game Not Found",
-    }
+    return { title: "Game Not Found" }
   }
 
   const displayTitle = getDisplayGameTitle(game)
   const title = `${displayTitle} - Live on Driflux`
-  const description = `Watch live streams of ${displayTitle}. Find the best streamers and gameplay content.`
+  const description = `Driflux에서 ${displayTitle}의 실시간 방송, 다시보기, 클립을 확인하세요.`
   const ogImage = getBestGameImage(game.header_image_url, game.cover_image_url, "header")
 
   return {
@@ -51,21 +51,35 @@ export default async function GamePage({ params }: PageProps) {
   const { id } = await params
   const gameId = parseInt(id, 10)
 
-  // Validate ID
-  if (isNaN(gameId) || gameId <= 0) {
-    notFound()
-  }
+  if (isNaN(gameId) || gameId <= 0) notFound()
 
-  // Fetch game data and streams
-  const [game, streams] = await Promise.all([
-    fetchGameById(gameId),
-    fetchStreamsByGameId(gameId),
-  ])
+  const game = await fetchGameById(gameId)
+  if (!game) notFound()
 
-  // If game not found, show 404
-  if (!game) {
-    notFound()
-  }
+  const gameCover = getBestGameImage(game.header_image_url, game.cover_image_url)
+  const gameTitle = getDisplayGameTitle(game)
+  const categoryId = game.english_title?.trim() ?? ""
+
+  // Chzzk API에서 실시간 방송 목록 가져오기 (english_title = Chzzk 카테고리 ID)
+  const chzzkStreams = categoryId
+    ? await getChzzkStreamsByCategory(categoryId)
+    : []
+
+  const streams: StreamData[] = chzzkStreams.map((s, i) => ({
+    id: i + 1,
+    thumbnail: s.liveImageUrl || gameCover,
+    gameCover,
+    gameTitle,
+    streamTitle: s.liveTitle,
+    streamerName: s.channelName,
+    viewers: s.concurrentUserCount,
+    viewersFormatted: formatViewerCountShort(s.concurrentUserCount),
+    isLive: true,
+    hasDrops: s.hasDrops,
+    gameId: game.id,
+    channelId: s.channelId,
+    channelImageUrl: null,
+  }))
 
   return <GameDetailsPage game={game} streams={streams} />
 }
