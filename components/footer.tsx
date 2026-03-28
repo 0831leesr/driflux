@@ -1,3 +1,5 @@
+import Link from "next/link"
+
 export function Footer() {
   return (
     <footer className="mt-auto shrink-0 border-t border-border bg-card/30 py-8 text-center text-xs text-muted-foreground">
@@ -17,26 +19,24 @@ export function Footer() {
         </div>
 
         {/* Navigation links */}
-        <div className="mt-4 flex items-center justify-center gap-4">
-          <a
-            href="#"
-            className="transition-colors hover:text-foreground"
-          >
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+          <Link href="/about" className="transition-colors hover:text-foreground">
+            About Driflux
+          </Link>
+          <span className="text-border">·</span>
+          <Link href="/terms" className="transition-colors hover:text-foreground">
             Terms of Service
-          </a>
+          </Link>
           <span className="text-border">·</span>
-          <a
-            href="#"
-            className="transition-colors hover:text-foreground"
-          >
+          <Link href="/privacy" className="transition-colors hover:text-foreground">
             Privacy Policy
-          </a>
+          </Link>
           <span className="text-border">·</span>
           <a
-            href="#"
+            href="mailto:admin@driflux.com"
             className="transition-colors hover:text-foreground"
           >
-            Contact
+            Contact / Bug Report
           </a>
         </div>
 
