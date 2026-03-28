@@ -323,8 +323,8 @@ https://api.chzzk.naver.com/service/v1/home/videos?size=100&sortType=POPULAR
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |----------|------|------|------|
-| filterType | string | O | `WITHIN_THIRTY_DAYS` (최근 30일) |
-| orderType | string | O | `POPULAR` (시청자순) |
+| filterType | string | O | `WITHIN_THIRTY_DAYS` (최근 30일), `WITHIN_SEVEN_DAYS` (최근 7일), `WITHIN_ONE_DAY` (최근 24시간), 'ALL' (전체) |
+| orderType | string | O | `POPULAR` (시청자순), 'RECENT' (최신순) |
 | size | number | O | 반환할 클립 개수 (최대 50) |
 
 ### 예시 URL

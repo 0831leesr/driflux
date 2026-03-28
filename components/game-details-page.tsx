@@ -10,13 +10,17 @@ import type { ClipData } from "@/components/clip-card"
 interface GameDetailsPageProps {
   game: GameRow
   streams: StreamData[]
+  /** 헤더에 표시할 전체 시청자 수 (Top Live API 집계값) */
+  totalViewers?: number
+  /** 헤더에 표시할 전체 방송 수 (Top Live API 집계값) */
+  liveStreamCount?: number
 }
 
 const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
 const CHZZK_VIDEO_URL = "https://chzzk.naver.com/video"
 const CHZZK_CLIP_URL = "https://chzzk.naver.com/clips"
 
-export function GameDetailsPage({ game, streams }: GameDetailsPageProps) {
+export function GameDetailsPage({ game, streams, totalViewers, liveStreamCount }: GameDetailsPageProps) {
   const router = useRouter()
 
   function handleBack() {
@@ -45,6 +49,8 @@ export function GameDetailsPage({ game, streams }: GameDetailsPageProps) {
         <GameDetailsClient
           game={game}
           streams={streams}
+          totalViewers={totalViewers}
+          liveStreamCount={liveStreamCount}
           onBack={handleBack}
           onStreamClick={handleStreamClick}
           onVideoClick={handleVideoClick}

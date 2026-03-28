@@ -84,6 +84,8 @@ type TabType = "live" | "video" | "clip"
 export function GameDetailsClient({
   game,
   streams,
+  totalViewers: totalViewersProp,
+  liveStreamCount: liveStreamCountProp,
   onBack,
   onStreamClick,
   onVideoClick,
@@ -91,6 +93,10 @@ export function GameDetailsClient({
 }: {
   game: GameRow
   streams: StreamData[]
+  /** Top Live API 집계 시청자 수 (있으면 헤더에 우선 사용) */
+  totalViewers?: number
+  /** Top Live API 집계 방송 수 (있으면 헤더에 우선 사용) */
+  liveStreamCount?: number
   onBack: () => void
   onStreamClick?: (stream: StreamData) => void
   onVideoClick?: (video: VideoData) => void
@@ -224,11 +230,13 @@ export function GameDetailsClient({
     setDisplayStreamCount((prev) => prev + 16) // 4 rows × 4 cols
   }
 
-  // Calculate total viewers
-  const totalViewers = liveStreams.reduce((sum, stream) => sum + (stream.viewers || 0), 0)
-  const viewersFormatted = totalViewers >= 1000 
-    ? `${(totalViewers / 1000).toFixed(1)}K` 
-    : String(totalViewers)
+  // 헤더 통계: Top Live 집계값 우선, 없으면 현재 스트리밍 목록 합산 (fallback)
+  const headerViewers =
+    totalViewersProp ?? liveStreams.reduce((sum, stream) => sum + (stream.viewers || 0), 0)
+  const headerStreamCount = liveStreamCountProp ?? liveStreams.length
+  const viewersFormatted = headerViewers >= 1000
+    ? `${(headerViewers / 1000).toFixed(1)}K`
+    : String(headerViewers)
   
   // Use top_tags from game object (top 5 tags)
   const tags = game.top_tags && Array.isArray(game.top_tags) 
@@ -307,7 +315,7 @@ export function GameDetailsClient({
             <div className="flex flex-wrap items-center gap-4 text-sm">
               <span className="flex items-center gap-1.5 text-foreground">
                 <Radio className="h-4 w-4 text-[hsl(var(--live-red))]" />
-                <span className="font-semibold">{liveStreams.length}</span>
+                <span className="font-semibold">{headerStreamCount}</span>
                 <span className="text-muted-foreground">Live Channels</span>
               </span>
               <span className="flex items-center gap-1.5 text-foreground">
@@ -315,7 +323,7 @@ export function GameDetailsClient({
                 <span className="font-semibold">{viewersFormatted}</span>
                 <span className="text-muted-foreground">Viewers</span>
               </span>
-              {game.discount_rate && game.discount_rate > 0 && (
+              {game.discount_rate != null && game.discount_rate > 0 && (
                 <span className="flex items-center gap-1.5">
                   <Tag className="h-4 w-4 text-amber-400" />
                   <Badge className="border-transparent bg-gradient-to-r from-amber-500 to-red-500 px-2 py-0.5 text-xs font-bold text-[hsl(var(--primary-foreground))]">

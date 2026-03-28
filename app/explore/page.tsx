@@ -3,11 +3,11 @@ import {
   getTopGameTags,
   getGamesByTrendScore,
   fetchAllGamesForHome,
-  matchTopLiveGamesToTrendingRows,
   type TrendingGameRow,
   type HistoricalTrendingRow,
   type TagRow,
 } from "@/lib/data"
+import { matchTopLiveGamesToTrendingRows } from "@/lib/match-top-live-games"
 import { getTopLiveGames } from "@/lib/chzzk"
 import { ExploreClient } from "@/components/explore/explore-client"
 

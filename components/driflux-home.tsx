@@ -4,13 +4,13 @@ import {
   fetchEsportsChannels,
   fetchAllGamesForHome,
   getHistoricalTrending,
-  matchTopLiveGamesToTrendingRows,
   type HomeGameRow,
   type HiddenGemsRow,
   type NewReleasesRow,
   type TrendingGameRow,
   type GamesWithDropsRow,
 } from "@/lib/data"
+import { matchTopLiveGamesToTrendingRows } from "@/lib/match-top-live-games"
 import { getTopLiveGames, type TopLiveGame } from "@/lib/chzzk"
 import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { HomeClient } from "@/components/home-client"
@@ -170,7 +170,7 @@ export default async function DrifluxHome() {
   const lookup = buildGameLookup(dbGames)
 
   // 서버 사이드 컨퓨테이션
-  // matchTopLiveGamesToTrendingRows: lib/data.ts의 공용 함수, 상위 8개만 사용
+  // matchTopLiveGamesToTrendingRows: lib/match-top-live-games, 상위 8개만 사용
   const trendingLive = matchTopLiveGamesToTrendingRows(topLiveGames, dbGames).slice(0, 8)
   const hiddenGemsGames = computeHiddenGems(topLiveGames, lookup)
   const newReleasesGames = computeNewReleases(topLiveGames, lookup)

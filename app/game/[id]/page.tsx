@@ -1,13 +1,18 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { fetchGameById } from "@/lib/data"
-import { getChzzkStreamsByCategory } from "@/lib/chzzk"
+import { getChzzkStreamsByCategory, getTopLiveGames } from "@/lib/chzzk"
 import { getBestGameImage, getDisplayGameTitle, formatViewerCountShort } from "@/lib/utils"
 import { GameDetailsPage } from "@/components/game-details-page"
 import type { StreamData } from "@/components/stream-card"
 
 // Revalidate every 60s — aligned with Chzzk live stream ISR cache
 export const revalidate = 60
+
+/** categoryId 정규화: 언더스코어↔공백 변환 후 소문자 비교 */
+function normCategoryId(s: string) {
+  return s.toLowerCase().replace(/_/g, " ").trim()
+}
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -60,10 +65,22 @@ export default async function GamePage({ params }: PageProps) {
   const gameTitle = getDisplayGameTitle(game)
   const categoryId = game.english_title?.trim() ?? ""
 
-  // Chzzk API에서 실시간 방송 목록 가져오기 (english_title = Chzzk 카테고리 ID)
-  const chzzkStreams = categoryId
-    ? await getChzzkStreamsByCategory(categoryId)
-    : []
+  // 방송 목록(페이징 20개)과 전체 카테고리 집계(Top 50)를 병렬로 패칭
+  const [chzzkStreams, topLiveGames] = await Promise.all([
+    categoryId ? getChzzkStreamsByCategory(categoryId) : Promise.resolve([]),
+    getTopLiveGames(50),
+  ])
+
+  // 현재 게임을 Top Live 목록에서 매칭 (정규화 비교)
+  const matchedLive = categoryId
+    ? topLiveGames.find((g) => normCategoryId(g.categoryId) === normCategoryId(categoryId))
+    : undefined
+
+  // 헤더 통계: Top Live 집계 우선, 없으면 방송 목록 합산 (비주류 게임 fallback)
+  const totalViewers =
+    matchedLive?.concurrentUserCount ??
+    chzzkStreams.reduce((sum, s) => sum + s.concurrentUserCount, 0)
+  const liveStreamCount = matchedLive?.openLiveCount ?? chzzkStreams.length
 
   const streams: StreamData[] = chzzkStreams.map((s, i) => ({
     id: i + 1,
@@ -81,5 +98,12 @@ export default async function GamePage({ params }: PageProps) {
     channelImageUrl: null,
   }))
 
-  return <GameDetailsPage game={game} streams={streams} />
+  return (
+    <GameDetailsPage
+      game={game}
+      streams={streams}
+      totalViewers={totalViewers}
+      liveStreamCount={liveStreamCount}
+    />
+  )
 }

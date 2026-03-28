@@ -1,9 +1,6 @@
 import type { Metadata } from "next"
-import {
-  getGamesByTrendScore,
-  fetchAllGamesForHome,
-  matchTopLiveGamesToTrendingRows,
-} from "@/lib/data"
+import { getGamesByTrendScore, fetchAllGamesForHome } from "@/lib/data"
+import { matchTopLiveGamesToTrendingRows } from "@/lib/match-top-live-games"
 import { getTopLiveGames } from "@/lib/chzzk"
 import { TagDetailsPage } from "@/components/tag-details-page"
 
