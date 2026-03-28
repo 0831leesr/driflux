@@ -1,5 +1,4 @@
 import {
-  fetchGamesWithDrops,
   fetchUpcomingEvents,
   fetchEsportsChannels,
   fetchAllGamesForHome,
@@ -116,31 +115,6 @@ function computeNewReleases(
     .map(({ score: _score, ...rest }) => rest as NewReleasesRow)
 }
 
-/**
- * 드롭스 섹션: DB의 games_with_drops 뷰 결과에 라이브 시청자 수를 반영해 정렬
- * (기존 streams 크론잡이 병행 운영 중이므로 DB 기반 유지)
- */
-function enrichDropsWithLiveViewers(
-  dropsGames: GamesWithDropsRow[],
-  liveGames: TopLiveGame[],
-  lookup: (l: TopLiveGame) => HomeGameRow | null
-): GamesWithDropsRow[] {
-  // 라이브 API의 시청자 수로 totalViewers를 덮어씌워 정렬 정확도 향상
-  const liveViewersById = new Map<number, number>()
-  for (const live of liveGames) {
-    const db = lookup(live)
-    if (db) liveViewersById.set(db.id, live.concurrentUserCount)
-  }
-
-  return dropsGames
-    .map((g) => ({
-      ...g,
-      totalViewers: liveViewersById.get(g.id) ?? g.totalViewers,
-    }))
-    .sort((a, b) => b.totalViewers - a.totalViewers)
-    .slice(0, 4)
-}
-
 /* ─────────────────────────────────────────────────────────
    Server Component (page root)
 ───────────────────────────────────────────────────────── */
@@ -152,7 +126,6 @@ export default async function DrifluxHome() {
     weekTrending,
     monthTrending,
     dbGames,
-    rawDropsGames,
     upcomingEvents,
     esportsChannels,
   ] = await Promise.all([
@@ -161,7 +134,6 @@ export default async function DrifluxHome() {
     getHistoricalTrending("week"),
     getHistoricalTrending("month"),
     fetchAllGamesForHome(),
-    fetchGamesWithDrops(),
     fetchUpcomingEvents(),
     fetchEsportsChannels(),
   ])
@@ -174,7 +146,8 @@ export default async function DrifluxHome() {
   const trendingLive = matchTopLiveGamesToTrendingRows(topLiveGames, dbGames).slice(0, 8)
   const hiddenGemsGames = computeHiddenGems(topLiveGames, lookup)
   const newReleasesGames = computeNewReleases(topLiveGames, lookup)
-  const gamesWithDrops = enrichDropsWithLiveViewers(rawDropsGames, topLiveGames, lookup)
+  // games_with_drops DB 뷰 삭제로 인해 라이브 API에서 drops 정보를 가져올 수 없음 → 빈 배열 유지
+  const gamesWithDrops: GamesWithDropsRow[] = []
 
   return (
     <HomeClient
