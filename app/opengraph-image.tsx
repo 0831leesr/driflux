@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og"
 
-export const alt = "Driflux - Discover Game Streams & Sales"
+export const alt = "Richzem - Discover Game Streams & Sales"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
@@ -37,22 +37,22 @@ export default async function Image() {
               alignItems: "center",
               justifyContent: "center",
               fontSize: 36,
-              fontWeight: "bold",
-              color: "white",
-            }}
-          >
-            D
-          </div>
-          <span
-            style={{
-              fontSize: 48,
-              fontWeight: "bold",
-              color: "white",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Driflux
-          </span>
+            fontWeight: "bold",
+            color: "white",
+          }}
+        >
+          R
+        </div>
+        <span
+          style={{
+            fontSize: 48,
+            fontWeight: "bold",
+            color: "white",
+            letterSpacing: "-0.02em",
+          }}
+        >
+          Richzem
+        </span>
         </div>
         <p
           style={{

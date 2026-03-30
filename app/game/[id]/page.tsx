@@ -32,8 +32,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const displayTitle = getDisplayGameTitle(game)
-  const title = `${displayTitle} - Live on Driflux`
-  const description = `Driflux에서 ${displayTitle}의 실시간 방송, 다시보기, 클립을 확인하세요.`
+  const title = `${displayTitle} - Live on Richzem`
+  const description = `Richzem에서 ${displayTitle}의 실시간 방송, 다시보기, 클립을 확인하세요.`
   const ogImage = getBestGameImage(game.header_image_url, game.cover_image_url, "header")
 
   return {

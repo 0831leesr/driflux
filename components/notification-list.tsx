@@ -10,7 +10,7 @@ import { Bell } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const DUMMY_NOTIFICATIONS = [
-  { id: "1", message: "Welcome to Driflux!", unread: true },
+  { id: "1", message: "Welcome to Richzem!", unread: true },
   { id: "2", message: "Data updated successfully.", unread: true },
   { id: "3", message: "New features added.", unread: true },
 ]

@@ -13,14 +13,14 @@ export async function generateMetadata({ searchParams }: PageProps) {
 
   if (query) {
     return {
-      title: `Search: ${query} | Driflux`,
-      description: `Search results for "${query}" - Find games and live streams on Driflux.`,
+      title: `Search: ${query} | Richzem`,
+      description: `Search results for "${query}" - Find games and live streams on Richzem.`,
     }
   }
 
   return {
-    title: "Search | Driflux",
-    description: "Search for games, streamers, and live content on Driflux.",
+    title: "Search | Richzem",
+    description: "Search for games, streamers, and live content on Richzem.",
   }
 }
 

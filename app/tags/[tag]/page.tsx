@@ -13,8 +13,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const tagName = decodeURIComponent(tag)
 
   return {
-    title: `#${tagName} 트렌딩 게임 | Driflux`,
-    description: `Driflux에서 ${tagName} 장르 게임의 트렌드와 실시간 라이브를 확인하세요.`,
+    title: `#${tagName} 트렌딩 게임 | Richzem`,
+    description: `Richzem에서 ${tagName} 장르 게임의 트렌드와 실시간 라이브를 확인하세요.`,
   }
 }
 

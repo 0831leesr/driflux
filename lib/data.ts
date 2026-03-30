@@ -1084,16 +1084,19 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
 
   if (statsErr || !stats || stats.length === 0) return []
 
-  // game_id별 최댓값 집계 (TypeScript)
+  // game_id별 누적 집계 (TypeScript)
+  // trend_score: 기간 내 일별 점수 합산 (꾸준히 인기 있는 게임 우대)
+  // peak_viewers: 기간 내 최고 시청자 수 (카드 표시용)
   const gameStats = new Map<number, { peak_viewers: number; trend_score: number }>()
   for (const row of stats) {
     const gid = row.game_id as number
     const ts = (row.trend_score as number) ?? 0
     const pv = (row.peak_viewers as number) ?? 0
     const prev = gameStats.get(gid)
-    if (!prev || ts > prev.trend_score) {
-      gameStats.set(gid, { peak_viewers: pv, trend_score: ts })
-    }
+    gameStats.set(gid, {
+      peak_viewers: Math.max(pv, prev?.peak_viewers ?? 0),
+      trend_score: (prev?.trend_score ?? 0) + ts,
+    })
   }
 
   const topIds = Array.from(gameStats.entries())

@@ -2,14 +2,14 @@ import { Metadata } from "next"
 
 export const metadata: Metadata = {
   title: "개인정보처리방침 (Privacy Policy)",
-  description: "Driflux 개인정보처리방침을 확인하세요.",
+  description: "Richzem 개인정보처리방침을 확인하세요.",
 }
 
 const sections = [
   {
     title: "1. 수집하는 개인정보 항목",
     content:
-      "소셜 로그인 연동 시 이메일 주소, 프로필 이미지, 닉네임이 수집되며, 서비스 이용 기록(팔로우, 즐겨찾기 등)이 저장될 수 있습니다.",
+      "(소셜 로그인 연동 시) 이메일 주소, 프로필 이미지, 닉네임, 서비스 이용 기록(팔로우, 즐겨찾기 등)이 수집될 수 있습니다.",
   },
   {
     title: "2. 개인정보의 수집 및 이용 목적",

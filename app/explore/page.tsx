@@ -12,7 +12,7 @@ import { getTopLiveGames } from "@/lib/chzzk"
 import { ExploreClient } from "@/components/explore/explore-client"
 
 export const metadata: Metadata = {
-  title: "게임 탐색 | Driflux",
+  title: "게임 탐색 | Richzem",
   description: "실시간 라이브와 주간 트렌드로 게임을 발견하세요.",
 }
 

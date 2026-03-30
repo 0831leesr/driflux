@@ -2,14 +2,14 @@ import { Metadata } from "next"
 
 export const metadata: Metadata = {
   title: "이용약관 (Terms of Service)",
-  description: "Driflux 서비스 이용약관을 확인하세요.",
+  description: "Richzem 서비스 이용약관을 확인하세요.",
 }
 
 const sections = [
   {
     title: "제1조 (목적)",
     content:
-      "본 약관은 Driflux에서 제공하는 서비스의 이용 조건 및 절차, 권리 및 책임을 규정합니다.",
+      "본 약관은 Richzem에서 제공하는 서비스의 이용 조건 및 절차, 권리 및 책임을 규정합니다.",
   },
   {
     title: "제2조 (서비스의 제공 및 변경)",
@@ -19,7 +19,7 @@ const sections = [
   {
     title: "제3조 (저작권 및 면책 조항)",
     content:
-      "사이트 내 표시되는 모든 게임 이미지, 영상, 스트리머 정보의 저작권은 원작자 및 해당 플랫폼에 있습니다. Driflux는 정보의 정확성이나 신뢰성에 대해 보증하지 않습니다.",
+      "사이트 내 표시되는 모든 게임 이미지, 영상, 스트리머 정보의 저작권은 원작자 및 해당 플랫폼에 있습니다. Richzem은 네이버(치지직), Valve(스팀) 등과 공식적인 제휴 관계가 없는 독립 프로젝트이며, 정보의 정확성이나 신뢰성에 대해 보증하지 않습니다.",
   },
   {
     title: "제4조 (사용자 의무)",

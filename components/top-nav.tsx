@@ -19,11 +19,11 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
           <div className="flex items-center gap-1.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--neon-purple))]">
               <span className="text-sm font-bold text-[hsl(var(--primary-foreground))]">
-                D
+                R
               </span>
             </div>
             <span className="text-lg font-bold tracking-tight text-foreground">
-              Driflux
+              Richzem
             </span>
           </div>
         </div>

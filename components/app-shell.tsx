@@ -4,7 +4,7 @@ import { useState, FormEvent, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import Link from "next/link"
-import { Search, LogIn, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { Search, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,16 +14,19 @@ import { Footer } from "@/components/footer"
 
 interface AppShellProps {
   children: React.ReactNode
+  /** Server-rendered auth slot (Login / account menu). */
+  headerAuth: React.ReactNode
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, headerAuth }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { resolvedTheme } = useTheme()
-  const logoSrc = resolvedTheme === "light" ? "/logo_light.png" : "/logo_dark.png"
+  const logoMiniSrc = resolvedTheme === "light" ? "/logo_mini_light.png" : "/logo_mini_dark.png"
+  const logoTextSrc = resolvedTheme === "light" ? "/logo_light.png" : "/logo_dark.png"
 
   // Close mobile menu when route changes (e.g. user clicked a link)
   useEffect(() => {
@@ -64,12 +67,19 @@ export function AppShell({ children }: AppShellProps) {
           >
             {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
-          <Link href="/" className="flex h-8 items-center">
+          <Link href="/" className="flex h-8 items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={logoSrc}
-              alt="Driflux"
-              className="h-8 w-auto max-w-[120px] object-contain"
+              src={logoMiniSrc}
+              alt=""
+              className="h-8 w-auto object-contain"
+              fetchPriority="high"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoTextSrc}
+              alt="Richzem"
+              className="h-5 w-auto object-contain"
               fetchPriority="high"
             />
           </Link>
@@ -90,13 +100,7 @@ export function AppShell({ children }: AppShellProps) {
 
           <div className="flex items-center gap-2">
             <ModeToggle />
-            <Button
-              size="sm"
-              className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
-            >
-              <LogIn className="mr-1.5 h-4 w-4" />
-              Login
-            </Button>
+            {headerAuth}
           </div>
         </div>
       </header>

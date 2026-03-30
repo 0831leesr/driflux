@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
+import { AppHeaderAuth } from "@/components/app-header";
 import { FavoritesProvider } from "@/contexts/favorites-context";
 import { CalendarSettingsProvider } from "@/contexts/calendar-settings-context";
 import { CustomEventsProvider } from "@/contexts/custom-events-context";
@@ -20,23 +21,23 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://driflux.vercel.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://richzem.vercel.app"),
   title: {
-    default: "Driflux - Discover Game Streams & Sales",
-    template: "%s | Driflux",
+    default: "Richzem - Discover Game Streams & Sales",
+    template: "%s | Richzem",
   },
   description: "Watch live game streams, find Steam sales, and discover new games. Your ultimate gaming streaming platform.",
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "Driflux",
-    title: "Driflux - Discover Game Streams & Sales",
+    siteName: "Richzem",
+    title: "Richzem - Discover Game Streams & Sales",
     description: "Watch live game streams, find Steam sales, and discover new games. Your ultimate gaming streaming platform.",
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Driflux" }],
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Richzem" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Driflux - Discover Game Streams & Sales",
+    title: "Richzem - Discover Game Streams & Sales",
     description: "Watch live game streams, find Steam sales, and discover new games.",
   },
 };
@@ -46,6 +47,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headerAuth = <AppHeaderAuth />;
+
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
       <body
@@ -57,7 +60,7 @@ export default function RootLayout({
             <FavoritesProvider>
               <CalendarSettingsProvider>
                 <CustomEventsProvider>
-                  <AppShell>{children}</AppShell>
+                  <AppShell headerAuth={headerAuth}>{children}</AppShell>
                 </CustomEventsProvider>
               </CalendarSettingsProvider>
             </FavoritesProvider>
