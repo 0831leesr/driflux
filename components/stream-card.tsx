@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useTransition } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { Eye, UserPlus, User } from "lucide-react"
+import { Eye, UserPlus, User, Loader2 } from "lucide-react"
 import { formatViewerCountShort, getGameImageSrc, DEFAULT_STREAMING_IMAGE } from "@/lib/utils"
 import { useFavoriteStreamers } from "@/contexts/favorites-context"
 
@@ -64,6 +64,7 @@ export function StreamCard({
     useFavoriteStreamers()
   const hasChannelId = Boolean(stream.channelId?.trim())
   const isFollowing = hasChannelId && isFollowingStreamer(stream.channelId!)
+  const [isPending, startTransition] = useTransition()
 
   const handleStreamClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
@@ -77,10 +78,12 @@ export function StreamCard({
   const handleFollowClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!hasChannelId) return
-    toggleFollowStreamer({
-      channelId: stream.channelId!,
-      streamerName: stream.streamerName,
-      channelImageUrl: stream.channelImageUrl ?? undefined,
+    startTransition(async () => {
+      await toggleFollowStreamer({
+        channelId: stream.channelId!,
+        streamerName: stream.streamerName,
+        channelImageUrl: stream.channelImageUrl ?? undefined,
+      })
     })
   }
 
@@ -198,14 +201,19 @@ export function StreamCard({
               <button
                 type="button"
                 aria-label={isFollowing ? "Unfollow" : "Follow"}
-                className="streamer-follow-btn ml-auto shrink-0 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-[hsl(var(--neon-purple))]/15 hover:text-[hsl(var(--neon-purple))]"
+                disabled={isPending}
+                className="streamer-follow-btn ml-auto shrink-0 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-[hsl(var(--neon-purple))]/15 hover:text-[hsl(var(--neon-purple))] disabled:opacity-60"
                 onClick={handleFollowClick}
               >
-                <UserPlus
-                  className={`h-3.5 w-3.5 ${
-                    isFollowing ? "fill-current text-[hsl(var(--neon-purple))]" : ""
-                  }`}
-                />
+                {isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <UserPlus
+                    className={`h-3.5 w-3.5 ${
+                      isFollowing ? "fill-current text-[hsl(var(--neon-purple))]" : ""
+                    }`}
+                  />
+                )}
               </button>
             )}
           </div>

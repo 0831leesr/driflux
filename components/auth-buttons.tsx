@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { LogIn } from "lucide-react"
 import type { User } from "@supabase/supabase-js"
 
-import { createClient } from "@/lib/supabase/client"
+import { createBrowserClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import { Button, type ButtonProps } from "@/components/ui/button"
 import {
@@ -18,29 +19,20 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-export function LoginButton({ className, ...props }: ButtonProps) {
-  const supabase = createClient()
-
+export function LoginButton({ className }: Pick<ButtonProps, "className">) {
   return (
     <Button
-      type="button"
+      asChild
       size="sm"
       className={cn(
         "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80",
         className,
       )}
-      onClick={() => {
-        void supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-          },
-        })
-      }}
-      {...props}
     >
-      <LogIn className="h-4 w-4" />
-      로그인
+      <Link href="/login">
+        <LogIn className="h-4 w-4" />
+        로그인
+      </Link>
     </Button>
   )
 }
@@ -48,7 +40,7 @@ export function LoginButton({ className, ...props }: ButtonProps) {
 export const LogoutButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
   function LogoutButton({ className, variant = "ghost", onClick, ...props }, ref) {
     const router = useRouter()
-    const supabase = createClient()
+    const supabase = createBrowserClient()
 
     return (
       <Button

@@ -1,5 +1,5 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { createServerClient } from "@supabase/ssr"
+import { createServerClient as createSupabaseServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
 /**
@@ -25,19 +25,18 @@ export function createAdminClient() {
 export function createClientForCache() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 }
 
 /**
- * Especially important if using Fluid compute: Don't put this client in a
- * global variable. Always create a new client within each function when using
- * it.
+ * Cookie-aware Supabase client for Server Components, Server Actions, and Route Handlers.
+ * Especially important if using Fluid compute: don't store this client in a global; create per call.
  */
-export async function createClient() {
+export async function createServerClient() {
   const cookieStore = await cookies()
 
-  return createServerClient(
+  return createSupabaseServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -51,12 +50,15 @@ export async function createClient() {
               cookieStore.set(name, value, options),
             )
           } catch {
-            // The "setAll" method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
+            // Called from a Server Component; session refresh runs in proxy.
           }
         },
       },
     },
   )
+}
+
+/** @deprecated Prefer `createServerClient` — kept for existing call sites. */
+export async function createClient() {
+  return createServerClient()
 }

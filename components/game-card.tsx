@@ -1,8 +1,9 @@
 "use client"
 
+import { useTransition } from "react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { Heart, Eye, Gift, Sparkles } from "lucide-react"
+import { Heart, Eye, Gift, Sparkles, Loader2 } from "lucide-react"
 import {
   formatKRW,
   formatDiscountRate,
@@ -41,11 +42,14 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
 
   const { isFavorite, toggleFavorite } = useFavoriteGames()
   const isGameFavorite = isFavorite(game.id)
+  const [isPending, startTransition] = useTransition()
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    toggleFavorite(game.id)
+    startTransition(async () => {
+      await toggleFavorite(game.id)
+    })
   }
 
   const hasStreamStats =
@@ -102,14 +106,19 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
             size="icon"
             variant="ghost"
             onClick={handleFavoriteClick}
-            className={`h-8 w-8 rounded-full bg-white/10 backdrop-blur-md transition-all hover:bg-white/20 ${
+            disabled={isPending}
+            className={`h-8 w-8 rounded-full bg-white/10 backdrop-blur-md transition-all hover:bg-white/20 disabled:opacity-70 ${
               isGameFavorite
                 ? "text-red-400 hover:text-red-300"
                 : "text-white hover:text-white/90"
             }`}
             aria-label={isGameFavorite ? "팔로우 해제" : "팔로우"}
           >
-            <Heart className={`h-4 w-4 ${isGameFavorite ? "fill-current" : ""}`} />
+            {isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Heart className={`h-4 w-4 ${isGameFavorite ? "fill-current" : ""}`} />
+            )}
           </Button>
         </div>
 

@@ -1,18 +1,21 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { toast } from "sonner"
+import { createBrowserClient } from "@/lib/supabase/client"
+import { toggleFollow, getUserFollows } from "@/app/actions/follow"
 import type { VideoData } from "@/components/video-card"
 import type { ClipData } from "@/components/clip-card"
 
 /* ═══════════════════════════════════════════════════════════════
-   Local Storage Keys
+   Local Storage Keys (videos/clips only + streamer display cache)
    ═══════════════════════════════════════════════════════════════ */
 
-const STORAGE_KEY_GAMES = "driflux_favorite_games"
-const STORAGE_KEY_TAGS = "driflux_favorite_tags"
-const STORAGE_KEY_STREAMERS = "driflux_favorite_streamers"
 const STORAGE_KEY_VIDEOS = "driflux_saved_videos"
 const STORAGE_KEY_CLIPS = "driflux_saved_clips"
+/** Stores streamer display metadata { [channelId]: { streamerName, channelImageUrl } } */
+const STORAGE_KEY_STREAMER_META = "driflux_streamer_meta"
+
 const MAX_SAVED_VIDEOS = 500
 const MAX_SAVED_CLIPS = 500
 
@@ -38,27 +41,27 @@ interface FavoriteVideosContextType {
 interface FavoriteGamesContextType {
   favorites: number[]
   isFavorite: (gameId: number) => boolean
-  addFavorite: (gameId: number) => void
-  removeFavorite: (gameId: number) => void
-  toggleFavorite: (gameId: number) => void
+  addFavorite: (gameId: number) => Promise<void>
+  removeFavorite: (gameId: number) => Promise<void>
+  toggleFavorite: (gameId: number) => Promise<void>
   isInitialized: boolean
 }
 
 interface FavoriteTagsContextType {
   favorites: string[]
   isFavorite: (tagName: string) => boolean
-  addFavorite: (tagName: string) => void
-  removeFavorite: (tagName: string) => void
-  toggleFavorite: (tagName: string) => void
+  addFavorite: (tagName: string) => Promise<void>
+  removeFavorite: (tagName: string) => Promise<void>
+  toggleFavorite: (tagName: string) => Promise<void>
   isInitialized: boolean
 }
 
 interface FavoriteStreamersContextType {
   favorites: FollowedStreamer[]
   isFavorite: (channelId: string) => boolean
-  addFavorite: (streamer: FollowedStreamer) => void
-  removeFavorite: (channelId: string) => void
-  toggleFavorite: (streamer: FollowedStreamer) => void
+  addFavorite: (streamer: FollowedStreamer) => Promise<void>
+  removeFavorite: (channelId: string) => Promise<void>
+  toggleFavorite: (streamer: FollowedStreamer) => Promise<void>
   isInitialized: boolean
 }
 
@@ -82,67 +85,14 @@ const FavoriteVideosContext = createContext<FavoriteVideosContextType | undefine
 const FavoriteClipsContext = createContext<FavoriteClipsContextType | undefined>(undefined)
 
 /* ═══════════════════════════════════════════════════════════════
-   Helper Functions
+   localStorage helpers (videos, clips, streamer display metadata)
    ═══════════════════════════════════════════════════════════════ */
-
-function getStoredArray<T>(key: string, defaultValue: T[]): T[] {
-  if (typeof window === "undefined") return defaultValue
-  
-  try {
-    const stored = localStorage.getItem(key)
-    if (stored === null) {
-      return defaultValue
-    }
-    const parsed = JSON.parse(stored)
-    return Array.isArray(parsed) ? parsed : defaultValue
-  } catch (error) {
-    console.error(`Error reading ${key} from localStorage:`, error)
-    return defaultValue
-  }
-}
-
-function setStoredArray<T>(key: string, value: T[]): void {
-  if (typeof window === "undefined") return
-  
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-    // Dispatch custom event for cross-component synchronization
-    window.dispatchEvent(new CustomEvent('localStorageChange', { 
-      detail: { key, value } 
-    }))
-  } catch (error) {
-    console.error(`Error writing ${key} to localStorage:`, error)
-  }
-}
-
-function getStoredStreamers(): FollowedStreamer[] {
-  const raw = getStoredArray<{ channelId?: string; streamerName?: string; channelImageUrl?: string }>(STORAGE_KEY_STREAMERS, [])
-  return raw
-    .filter((s) => s && typeof s.channelId === "string" && s.channelId.trim() !== "")
-    .map((s) => ({
-      channelId: String(s!.channelId).trim(),
-      streamerName: typeof s!.streamerName === "string" ? s!.streamerName : "Unknown",
-      channelImageUrl: typeof s!.channelImageUrl === "string" ? s.channelImageUrl : undefined,
-    }))
-}
-
-function setStoredStreamers(value: FollowedStreamer[]): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_KEY_STREAMERS, JSON.stringify(value))
-    window.dispatchEvent(new CustomEvent("localStorageChange", {
-      detail: { key: STORAGE_KEY_STREAMERS, value },
-    }))
-  } catch (error) {
-    console.error(`Error writing ${STORAGE_KEY_STREAMERS} to localStorage:`, error)
-  }
-}
 
 function getStoredVideos(): VideoData[] {
   if (typeof window === "undefined") return []
   try {
     const stored = localStorage.getItem(STORAGE_KEY_VIDEOS)
-    if (stored === null) return []
+    if (!stored) return []
     const parsed = JSON.parse(stored)
     return Array.isArray(parsed) ? parsed : []
   } catch {
@@ -154,11 +104,8 @@ function setStoredVideos(value: VideoData[]): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(STORAGE_KEY_VIDEOS, JSON.stringify(value))
-    window.dispatchEvent(new CustomEvent('localStorageChange', {
-      detail: { key: STORAGE_KEY_VIDEOS, value }
-    }))
-  } catch (error) {
-    console.error(`Error writing ${STORAGE_KEY_VIDEOS} to localStorage:`, error)
+  } catch {
+    /* ignore */
   }
 }
 
@@ -166,7 +113,7 @@ function getStoredClips(): ClipData[] {
   if (typeof window === "undefined") return []
   try {
     const stored = localStorage.getItem(STORAGE_KEY_CLIPS)
-    if (stored === null) return []
+    if (!stored) return []
     const parsed = JSON.parse(stored)
     return Array.isArray(parsed) ? parsed : []
   } catch {
@@ -178,11 +125,43 @@ function setStoredClips(value: ClipData[]): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(STORAGE_KEY_CLIPS, JSON.stringify(value))
-    window.dispatchEvent(new CustomEvent('localStorageChange', {
-      detail: { key: STORAGE_KEY_CLIPS, value }
-    }))
-  } catch (error) {
-    console.error(`Error writing ${STORAGE_KEY_CLIPS} to localStorage:`, error)
+  } catch {
+    /* ignore */
+  }
+}
+
+type StreamerMeta = Record<string, { streamerName: string; channelImageUrl?: string }>
+
+function getStoredStreamerMeta(): StreamerMeta {
+  if (typeof window === "undefined") return {}
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_STREAMER_META)
+    if (!stored) return {}
+    return JSON.parse(stored) ?? {}
+  } catch {
+    return {}
+  }
+}
+
+function saveStreamerMeta(channelId: string, meta: { streamerName: string; channelImageUrl?: string }) {
+  if (typeof window === "undefined") return
+  try {
+    const existing = getStoredStreamerMeta()
+    existing[channelId] = meta
+    localStorage.setItem(STORAGE_KEY_STREAMER_META, JSON.stringify(existing))
+  } catch {
+    /* ignore */
+  }
+}
+
+function removeStreamerMeta(channelId: string) {
+  if (typeof window === "undefined") return
+  try {
+    const existing = getStoredStreamerMeta()
+    delete existing[channelId]
+    localStorage.setItem(STORAGE_KEY_STREAMER_META, JSON.stringify(existing))
+  } catch {
+    /* ignore */
   }
 }
 
@@ -191,215 +170,330 @@ function setStoredClips(value: ClipData[]): void {
    ═══════════════════════════════════════════════════════════════ */
 
 export function FavoritesProvider({ children }: { children: ReactNode }) {
-  // Games state
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // DB-backed states
   const [favoriteGames, setFavoriteGames] = useState<number[]>([])
   const [gamesInitialized, setGamesInitialized] = useState(false)
 
-  // Tags state
   const [favoriteTags, setFavoriteTags] = useState<string[]>([])
   const [tagsInitialized, setTagsInitialized] = useState(false)
 
-  // Streamers state
   const [favoriteStreamers, setFavoriteStreamers] = useState<FollowedStreamer[]>([])
   const [streamersInitialized, setStreamersInitialized] = useState(false)
 
-  // Videos state (saved replay videos)
+  // localStorage-only states
   const [savedVideos, setSavedVideos] = useState<VideoData[]>([])
   const [videosInitialized, setVideosInitialized] = useState(false)
 
-  // Clips state (saved clips)
   const [savedClips, setSavedClips] = useState<ClipData[]>([])
   const [clipsInitialized, setClipsInitialized] = useState(false)
 
-  // Initialize from localStorage on mount
-  useEffect(() => {
-    const storedGames = getStoredArray<number>(STORAGE_KEY_GAMES, [])
-    const storedTags = getStoredArray<string>(STORAGE_KEY_TAGS, [])
-    const storedStreamers = getStoredStreamers()
-    const storedVideos = getStoredVideos()
-    const storedClips = getStoredClips()
+  /* ── Load follows from DB ── */
+  async function loadFollowsFromDB() {
+    try {
+      const [gameIds, tagNames, streamerIds] = await Promise.all([
+        getUserFollows("game"),
+        getUserFollows("tag"),
+        getUserFollows("streamer"),
+      ])
 
-    setFavoriteGames(storedGames)
-    setFavoriteTags(storedTags)
-    setFavoriteStreamers(storedStreamers)
-    setSavedVideos(storedVideos)
-    setSavedClips(storedClips)
+      setFavoriteGames(gameIds.map((id) => Number(id)))
+      setGamesInitialized(true)
+
+      setFavoriteTags(tagNames)
+      setTagsInitialized(true)
+
+      const meta = getStoredStreamerMeta()
+      setFavoriteStreamers(
+        streamerIds.map((channelId) => ({
+          channelId,
+          streamerName: meta[channelId]?.streamerName ?? channelId,
+          channelImageUrl: meta[channelId]?.channelImageUrl,
+        })),
+      )
+      setStreamersInitialized(true)
+    } catch {
+      setGamesInitialized(true)
+      setTagsInitialized(true)
+      setStreamersInitialized(true)
+    }
+  }
+
+  /* ── Clear follow state (on logout) ── */
+  function clearFollows() {
+    setFavoriteGames([])
+    setFavoriteTags([])
+    setFavoriteStreamers([])
     setGamesInitialized(true)
     setTagsInitialized(true)
     setStreamersInitialized(true)
+  }
+
+  useEffect(() => {
+    // localStorage-only init (synchronous, no auth needed)
+    setSavedVideos(getStoredVideos())
     setVideosInitialized(true)
+    setSavedClips(getStoredClips())
     setClipsInitialized(true)
+
+    const supabase = createBrowserClient()
+
+    // Bootstrap auth state then load follows
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsAuthenticated(!!user)
+      if (user) {
+        loadFollowsFromDB()
+      } else {
+        setGamesInitialized(true)
+        setTagsInitialized(true)
+        setStreamersInitialized(true)
+      }
+    })
+
+    // Keep in sync with auth events
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const authed = !!session?.user
+      setIsAuthenticated(authed)
+      if (authed) {
+        loadFollowsFromDB()
+      } else {
+        clearFollows()
+      }
+    })
+
+    return () => subscription.unsubscribe()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Save games to localStorage whenever they change
+  /* ── Persist videos/clips to localStorage ── */
   useEffect(() => {
-    if (gamesInitialized) {
-      setStoredArray(STORAGE_KEY_GAMES, favoriteGames)
-    }
-  }, [favoriteGames, gamesInitialized])
-
-  // Save tags to localStorage whenever they change
-  useEffect(() => {
-    if (tagsInitialized) {
-      setStoredArray(STORAGE_KEY_TAGS, favoriteTags)
-    }
-  }, [favoriteTags, tagsInitialized])
-
-  // Save streamers to localStorage whenever they change
-  useEffect(() => {
-    if (streamersInitialized) {
-      setStoredStreamers(favoriteStreamers)
-    }
-  }, [favoriteStreamers, streamersInitialized])
-
-  // Save videos to localStorage whenever they change
-  useEffect(() => {
-    if (videosInitialized) {
-      setStoredVideos(savedVideos)
-    }
+    if (videosInitialized) setStoredVideos(savedVideos)
   }, [savedVideos, videosInitialized])
 
-  // Save clips to localStorage whenever they change
   useEffect(() => {
-    if (clipsInitialized) {
-      setStoredClips(savedClips)
-    }
+    if (clipsInitialized) setStoredClips(savedClips)
   }, [savedClips, clipsInitialized])
 
-  // Videos context value
+  /* ════════════════════════════════════════════════════════════
+     Auth guard helper — shows toast and returns true if blocked
+     ════════════════════════════════════════════════════════════ */
+  function requireAuth(): boolean {
+    if (!isAuthenticated) {
+      toast.error("로그인이 필요한 기능입니다", {
+        description: "계정에 로그인한 후 이용해 주세요.",
+        duration: 3000,
+      })
+      return true
+    }
+    return false
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Games context value
+     ════════════════════════════════════════════════════════════ */
+  const gamesContextValue: FavoriteGamesContextType = {
+    favorites: favoriteGames,
+    isInitialized: gamesInitialized,
+
+    isFavorite: (gameId) => favoriteGames.includes(gameId),
+
+    addFavorite: async (gameId) => {
+      if (requireAuth()) return
+      if (favoriteGames.includes(gameId)) return
+      setFavoriteGames((prev) => [...prev, gameId])
+      const result = await toggleFollow(String(gameId), "game")
+      if (result?.error) {
+        setFavoriteGames((prev) => prev.filter((id) => id !== gameId))
+      }
+    },
+
+    removeFavorite: async (gameId) => {
+      if (requireAuth()) return
+      setFavoriteGames((prev) => prev.filter((id) => id !== gameId))
+      const result = await toggleFollow(String(gameId), "game")
+      if (result?.error) {
+        setFavoriteGames((prev) => [...prev, gameId])
+      }
+    },
+
+    toggleFavorite: async (gameId) => {
+      if (requireAuth()) return
+      const wasFollowing = favoriteGames.includes(gameId)
+      setFavoriteGames((prev) =>
+        wasFollowing ? prev.filter((id) => id !== gameId) : [...prev, gameId],
+      )
+      const result = await toggleFollow(String(gameId), "game")
+      if (result?.error) {
+        setFavoriteGames((prev) =>
+          wasFollowing ? [...prev, gameId] : prev.filter((id) => id !== gameId),
+        )
+      }
+    },
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Tags context value
+     ════════════════════════════════════════════════════════════ */
+  const tagsContextValue: FavoriteTagsContextType = {
+    favorites: favoriteTags,
+    isInitialized: tagsInitialized,
+
+    isFavorite: (tagName) => favoriteTags.includes(tagName),
+
+    addFavorite: async (tagName) => {
+      if (requireAuth()) return
+      if (favoriteTags.includes(tagName)) return
+      setFavoriteTags((prev) => [...prev, tagName])
+      const result = await toggleFollow(tagName, "tag")
+      if (result?.error) {
+        setFavoriteTags((prev) => prev.filter((t) => t !== tagName))
+      }
+    },
+
+    removeFavorite: async (tagName) => {
+      if (requireAuth()) return
+      setFavoriteTags((prev) => prev.filter((t) => t !== tagName))
+      const result = await toggleFollow(tagName, "tag")
+      if (result?.error) {
+        setFavoriteTags((prev) => [...prev, tagName])
+      }
+    },
+
+    toggleFavorite: async (tagName) => {
+      if (requireAuth()) return
+      const wasFollowing = favoriteTags.includes(tagName)
+      setFavoriteTags((prev) =>
+        wasFollowing ? prev.filter((t) => t !== tagName) : [...prev, tagName],
+      )
+      const result = await toggleFollow(tagName, "tag")
+      if (result?.error) {
+        setFavoriteTags((prev) =>
+          wasFollowing ? [...prev, tagName] : prev.filter((t) => t !== tagName),
+        )
+      }
+    },
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Streamers context value
+     ════════════════════════════════════════════════════════════ */
+  const streamersContextValue: FavoriteStreamersContextType = {
+    favorites: favoriteStreamers,
+    isInitialized: streamersInitialized,
+
+    isFavorite: (channelId) => favoriteStreamers.some((s) => s.channelId === channelId),
+
+    addFavorite: async (streamer) => {
+      if (requireAuth()) return
+      if (favoriteStreamers.some((s) => s.channelId === streamer.channelId)) return
+      saveStreamerMeta(streamer.channelId, {
+        streamerName: streamer.streamerName,
+        channelImageUrl: streamer.channelImageUrl,
+      })
+      setFavoriteStreamers((prev) => [...prev, streamer])
+      const result = await toggleFollow(streamer.channelId, "streamer")
+      if (result?.error) {
+        setFavoriteStreamers((prev) => prev.filter((s) => s.channelId !== streamer.channelId))
+      }
+    },
+
+    removeFavorite: async (channelId) => {
+      if (requireAuth()) return
+      const prev = favoriteStreamers.find((s) => s.channelId === channelId)
+      setFavoriteStreamers((all) => all.filter((s) => s.channelId !== channelId))
+      removeStreamerMeta(channelId)
+      const result = await toggleFollow(channelId, "streamer")
+      if (result?.error && prev) {
+        setFavoriteStreamers((all) => [...all, prev])
+        saveStreamerMeta(channelId, {
+          streamerName: prev.streamerName,
+          channelImageUrl: prev.channelImageUrl,
+        })
+      }
+    },
+
+    toggleFavorite: async (streamer) => {
+      if (requireAuth()) return
+      const wasFollowing = favoriteStreamers.some((s) => s.channelId === streamer.channelId)
+      if (wasFollowing) {
+        setFavoriteStreamers((prev) => prev.filter((s) => s.channelId !== streamer.channelId))
+        removeStreamerMeta(streamer.channelId)
+      } else {
+        saveStreamerMeta(streamer.channelId, {
+          streamerName: streamer.streamerName,
+          channelImageUrl: streamer.channelImageUrl,
+        })
+        setFavoriteStreamers((prev) => [...prev, streamer])
+      }
+      const result = await toggleFollow(streamer.channelId, "streamer")
+      if (result?.error) {
+        if (wasFollowing) {
+          saveStreamerMeta(streamer.channelId, {
+            streamerName: streamer.streamerName,
+            channelImageUrl: streamer.channelImageUrl,
+          })
+          setFavoriteStreamers((prev) => [...prev, streamer])
+        } else {
+          setFavoriteStreamers((prev) => prev.filter((s) => s.channelId !== streamer.channelId))
+          removeStreamerMeta(streamer.channelId)
+        }
+      }
+    },
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Videos context value (localStorage only)
+     ════════════════════════════════════════════════════════════ */
   const videosContextValue: FavoriteVideosContextType = {
     savedVideos,
     isInitialized: videosInitialized,
-    isSaved: (videoId: string) => savedVideos.some((v) => v.videoId === videoId),
-    addSavedVideo: (video: VideoData) => {
+    isSaved: (videoId) => savedVideos.some((v) => v.videoId === videoId),
+    addSavedVideo: (video) => {
       setSavedVideos((prev) => {
         if (prev.some((v) => v.videoId === video.videoId)) return prev
         const next = [...prev, video]
         return next.length > MAX_SAVED_VIDEOS ? next.slice(-MAX_SAVED_VIDEOS) : next
       })
     },
-    removeSavedVideo: (videoId: string) => {
+    removeSavedVideo: (videoId) => {
       setSavedVideos((prev) => prev.filter((v) => v.videoId !== videoId))
     },
-    toggleSavedVideo: (video: VideoData) => {
+    toggleSavedVideo: (video) => {
       setSavedVideos((prev) => {
         const exists = prev.some((v) => v.videoId === video.videoId)
         if (exists) return prev.filter((v) => v.videoId !== video.videoId)
         const next = [...prev, video]
-        return next.length > MAX_SAVED_VIDEOS ? next.slice(-MAX_SAVED_VIDEOS) : next
+        return next.length > MAX_SAVED_VIDEOS ? next.slice(-MAX_SAVED_CLIPS) : next
       })
     },
   }
 
-  // Clips context value
+  /* ════════════════════════════════════════════════════════════
+     Clips context value (localStorage only)
+     ════════════════════════════════════════════════════════════ */
   const clipsContextValue: FavoriteClipsContextType = {
     savedClips,
     isInitialized: clipsInitialized,
-    isSaved: (clipUID: string) => savedClips.some((c) => c.clipUID === clipUID),
-    addSavedClip: (clip: ClipData) => {
+    isSaved: (clipUID) => savedClips.some((c) => c.clipUID === clipUID),
+    addSavedClip: (clip) => {
       setSavedClips((prev) => {
         if (prev.some((c) => c.clipUID === clip.clipUID)) return prev
         const next = [...prev, clip]
         return next.length > MAX_SAVED_CLIPS ? next.slice(-MAX_SAVED_CLIPS) : next
       })
     },
-    removeSavedClip: (clipUID: string) => {
+    removeSavedClip: (clipUID) => {
       setSavedClips((prev) => prev.filter((c) => c.clipUID !== clipUID))
     },
-    toggleSavedClip: (clip: ClipData) => {
+    toggleSavedClip: (clip) => {
       setSavedClips((prev) => {
         const exists = prev.some((c) => c.clipUID === clip.clipUID)
         if (exists) return prev.filter((c) => c.clipUID !== clip.clipUID)
         const next = [...prev, clip]
         return next.length > MAX_SAVED_CLIPS ? next.slice(-MAX_SAVED_CLIPS) : next
-      })
-    },
-  }
-
-  // Games context value
-  const gamesContextValue: FavoriteGamesContextType = {
-    favorites: favoriteGames,
-    isInitialized: gamesInitialized,
-    
-    isFavorite: (gameId: number) => {
-      return favoriteGames.includes(gameId)
-    },
-    
-    addFavorite: (gameId: number) => {
-      setFavoriteGames((prev) => {
-        if (prev.includes(gameId)) return prev
-        return [...prev, gameId]
-      })
-    },
-    
-    removeFavorite: (gameId: number) => {
-      setFavoriteGames((prev) => prev.filter((id) => id !== gameId))
-    },
-    
-    toggleFavorite: (gameId: number) => {
-      setFavoriteGames((prev) => {
-        if (prev.includes(gameId)) {
-          return prev.filter((id) => id !== gameId)
-        }
-        return [...prev, gameId]
-      })
-    },
-  }
-
-  // Tags context value
-  const tagsContextValue: FavoriteTagsContextType = {
-    favorites: favoriteTags,
-    isInitialized: tagsInitialized,
-    
-    isFavorite: (tagName: string) => {
-      return favoriteTags.includes(tagName)
-    },
-    
-    addFavorite: (tagName: string) => {
-      setFavoriteTags((prev) => {
-        if (prev.includes(tagName)) return prev
-        return [...prev, tagName]
-      })
-    },
-    
-    removeFavorite: (tagName: string) => {
-      setFavoriteTags((prev) => prev.filter((name) => name !== tagName))
-    },
-    
-    toggleFavorite: (tagName: string) => {
-      setFavoriteTags((prev) => {
-        if (prev.includes(tagName)) {
-          return prev.filter((name) => name !== tagName)
-        }
-        return [...prev, tagName]
-      })
-    },
-  }
-
-  // Streamers context value
-  const streamersContextValue: FavoriteStreamersContextType = {
-    favorites: favoriteStreamers,
-    isInitialized: streamersInitialized,
-    isFavorite: (channelId: string) =>
-      favoriteStreamers.some((s) => s.channelId === channelId),
-    addFavorite: (streamer: FollowedStreamer) => {
-      setFavoriteStreamers((prev) => {
-        if (prev.some((s) => s.channelId === streamer.channelId)) return prev
-        return [...prev, streamer]
-      })
-    },
-    removeFavorite: (channelId: string) => {
-      setFavoriteStreamers((prev) =>
-        prev.filter((s) => s.channelId !== channelId)
-      )
-    },
-    toggleFavorite: (streamer: FollowedStreamer) => {
-      setFavoriteStreamers((prev) => {
-        const exists = prev.some((s) => s.channelId === streamer.channelId)
-        if (exists) {
-          return prev.filter((s) => s.channelId !== streamer.channelId)
-        }
-        return [...prev, streamer]
       })
     },
   }
@@ -425,40 +519,30 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
 
 export function useFavoriteGames(): FavoriteGamesContextType {
   const context = useContext(FavoriteGamesContext)
-  if (context === undefined) {
-    throw new Error("useFavoriteGames must be used within a FavoritesProvider")
-  }
+  if (!context) throw new Error("useFavoriteGames must be used within a FavoritesProvider")
   return context
 }
 
 export function useFavoriteTags(): FavoriteTagsContextType {
   const context = useContext(FavoriteTagsContext)
-  if (context === undefined) {
-    throw new Error("useFavoriteTags must be used within a FavoritesProvider")
-  }
+  if (!context) throw new Error("useFavoriteTags must be used within a FavoritesProvider")
   return context
 }
 
 export function useFavoriteStreamers(): FavoriteStreamersContextType {
   const context = useContext(FavoriteStreamersContext)
-  if (context === undefined) {
-    throw new Error("useFavoriteStreamers must be used within a FavoritesProvider")
-  }
+  if (!context) throw new Error("useFavoriteStreamers must be used within a FavoritesProvider")
   return context
 }
 
 export function useFavoriteVideos(): FavoriteVideosContextType {
   const context = useContext(FavoriteVideosContext)
-  if (context === undefined) {
-    throw new Error("useFavoriteVideos must be used within a FavoritesProvider")
-  }
+  if (!context) throw new Error("useFavoriteVideos must be used within a FavoritesProvider")
   return context
 }
 
 export function useFavoriteClips(): FavoriteClipsContextType {
   const context = useContext(FavoriteClipsContext)
-  if (context === undefined) {
-    throw new Error("useFavoriteClips must be used within a FavoritesProvider")
-  }
+  if (!context) throw new Error("useFavoriteClips must be used within a FavoritesProvider")
   return context
 }

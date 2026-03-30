@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import Link from "next/link"
-import { ArrowLeft, TrendingUp, Heart, Users, Flame } from "lucide-react"
+import { ArrowLeft, TrendingUp, Heart, Users, Flame, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import { useFavoriteTags } from "@/contexts/favorites-context"
@@ -54,6 +54,7 @@ export function TagDetailsPage({ tagName, trendGames, hotLiveGames }: TagDetails
   const [shownCount, setShownCount] = useState(PAGE_SIZE)
   const { isFavorite, toggleFavorite } = useFavoriteTags()
   const isFollowing = isFavorite(tagName)
+  const [isPending, startTransition] = useTransition()
 
   const totalHotViewers = hotLiveGames.reduce((sum, g) => sum + (g.totalViewers ?? 0), 0)
   const hotViewersFormatted =
@@ -108,14 +109,23 @@ export function TagDetailsPage({ tagName, trendGames, hotLiveGames }: TagDetails
             {/* Action Buttons */}
             <div className="flex items-center gap-3">
               <Button
-                onClick={() => toggleFavorite(tagName)}
+                disabled={isPending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await toggleFavorite(tagName)
+                  })
+                }
                 className={
                   isFollowing
-                    ? "bg-[hsl(var(--neon-purple))]/15 text-[hsl(var(--neon-purple))] hover:bg-[hsl(var(--neon-purple))]/25"
-                    : "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+                    ? "bg-[hsl(var(--neon-purple))]/15 text-[hsl(var(--neon-purple))] hover:bg-[hsl(var(--neon-purple))]/25 disabled:opacity-70"
+                    : "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80 disabled:opacity-70"
                 }
               >
-                <Heart className={`mr-2 h-4 w-4 ${isFollowing ? "fill-current" : ""}`} />
+                {isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Heart className={`mr-2 h-4 w-4 ${isFollowing ? "fill-current" : ""}`} />
+                )}
                 {isFollowing ? "Following" : "Follow Tag"}
               </Button>
             </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useTransition } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   Users,
   Video,
   Scissors,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -104,6 +105,7 @@ export function GameDetailsClient({
 }) {
   const { isFavorite, toggleFavorite } = useFavoriteGames()
   const isFollowing = isFavorite(game.id)
+  const [isPending, startTransition] = useTransition()
   const [steamModalOpen, setSteamModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>("live")
   const [videos, setVideos] = useState<VideoData[]>([])
@@ -244,7 +246,9 @@ export function GameDetailsClient({
     : []
   
   const handleFollowClick = () => {
-    toggleFavorite(game.id)
+    startTransition(async () => {
+      await toggleFavorite(game.id)
+    })
   }
 
   const handleVisitStoreClick = () => {
@@ -354,15 +358,18 @@ export function GameDetailsClient({
             <div className="flex items-center gap-3">
               <Button
                 onClick={handleFollowClick}
+                disabled={isPending}
                 className={
                   isFollowing
-                    ? "bg-[hsl(var(--neon-purple))]/15 text-[hsl(var(--neon-purple))] hover:bg-[hsl(var(--neon-purple))]/25"
-                    : "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
+                    ? "bg-[hsl(var(--neon-purple))]/15 text-[hsl(var(--neon-purple))] hover:bg-[hsl(var(--neon-purple))]/25 disabled:opacity-70"
+                    : "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80 disabled:opacity-70"
                 }
               >
-                <Heart
-                  className={`mr-2 h-4 w-4 ${isFollowing ? "fill-current" : ""}`}
-                />
+                {isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Heart className={`mr-2 h-4 w-4 ${isFollowing ? "fill-current" : ""}`} />
+                )}
                 {isFollowing ? "Following" : "Follow Game"}
               </Button>
               {game.steam_appid != null && (
