@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { LogIn } from "lucide-react"
 import type { User } from "@supabase/supabase-js"
 
@@ -20,6 +20,12 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function LoginButton({ className }: Pick<ButtonProps, "className">) {
+  const pathname = usePathname()
+  const loginHref =
+    pathname && pathname !== "/login"
+      ? `/login?next=${encodeURIComponent(pathname)}`
+      : "/login"
+
   return (
     <Button
       asChild
@@ -29,7 +35,7 @@ export function LoginButton({ className }: Pick<ButtonProps, "className">) {
         className,
       )}
     >
-      <Link href="/login">
+      <Link href={loginHref}>
         <LogIn className="h-4 w-4" />
         로그인
       </Link>

@@ -5,16 +5,24 @@ import { createBrowserClient } from "@/lib/supabase/client"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-export function GoogleLoginButton() {
+interface GoogleLoginButtonProps {
+  next?: string
+}
+
+export function GoogleLoginButton({ next }: GoogleLoginButtonProps) {
   const [loading, setLoading] = useState(false)
 
   const handleLogin = async () => {
     setLoading(true)
     const supabase = createBrowserClient()
+
+    const redirectUrl = new URL(`${location.origin}/auth/callback`)
+    if (next) redirectUrl.searchParams.set("next", next)
+
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${location.origin}/auth/callback`,
+        redirectTo: redirectUrl.toString(),
         queryParams: {
           prompt: "select_account",
         },
