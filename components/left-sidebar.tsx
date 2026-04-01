@@ -3,13 +3,14 @@
 import { usePathname } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { Gamepad2, Tags, UserCircle2 } from "lucide-react"
+import { Gamepad2, Tags, UserCircle2, CalendarDays } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers } from "@/contexts/favorites-context"
 import { useEffect, useState } from "react"
 import { fetchGamesByIds, type GameRow } from "@/lib/data"
 import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useFollowedEvents } from "@/contexts/followed-events-context"
 
 interface LeftSidebarProps {
   games?: Array<{
@@ -43,11 +44,23 @@ function getTagIcon(tagName: string): string {
   return TAG_ICONS[tagName] || "🎮"
 }
 
+function getDDayLabel(eventDate: Date, today: Date): { text: string; color: string } {
+  const todayMidnight = new Date(today)
+  todayMidnight.setHours(0, 0, 0, 0)
+  const eventMidnight = new Date(eventDate)
+  eventMidnight.setHours(0, 0, 0, 0)
+  const diff = Math.ceil((eventMidnight.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24))
+  if (diff === 0) return { text: "D-Day", color: "text-[hsl(var(--live-red))]" }
+  if (diff <= 3) return { text: `D-${diff}`, color: "text-amber-400" }
+  return { text: `D-${diff}`, color: "text-muted-foreground" }
+}
+
 export function LeftSidebar({ games: _deprecatedGames, embedded = false, isCollapsed = false }: LeftSidebarProps = {}) {
   const pathname = usePathname()
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
   const { favorites: favoriteStreamers, isInitialized: streamersInitialized } = useFavoriteStreamers()
+  const { followedEvents } = useFollowedEvents()
   const [games, setGames] = useState<GameRow[]>([])
   const [isLoadingGames, setIsLoadingGames] = useState(true)
   const [streamerStatuses, setStreamerStatuses] = useState<Record<string, { isLive: boolean; gameTitle?: string }>>({})
@@ -135,12 +148,83 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
 
   const sidebarWidth = embedded ? "w-60" : isCollapsed ? "w-[70px]" : "w-60"
 
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const upcomingFollowedEvents = followedEvents
+    .map((ev) => {
+      const date = new Date(ev.date)
+      const endDate = ev.endDate ? new Date(ev.endDate) : null
+      const effectiveEnd = endDate ?? date
+      effectiveEnd.setHours(0, 0, 0, 0)
+      return { ...ev, dateObj: date, endDateObj: endDate, effectiveEnd }
+    })
+    .filter((ev) => ev.effectiveEnd >= today)
+    .sort((a, b) => a.effectiveEnd.getTime() - b.effectiveEnd.getTime())
+
   return (
     <aside
       className={`${embedded ? "flex h-full shrink-0 flex-col border-r border-border bg-card" : "hidden shrink-0 flex-col border-r border-border bg-card lg:flex"} ${sidebarWidth} transition-[width] duration-300 ease-in-out`}
     >
       <ScrollArea className={embedded ? "h-full" : "min-h-0 flex-1"}>
         <div className={`flex flex-col gap-6 transition-all duration-300 ${isCollapsed ? "p-2" : "p-4"}`}>
+          {/* 팔로우 일정 */}
+          {(upcomingFollowedEvents.length > 0 || !isCollapsed) && (
+            <section>
+              <h3
+                className={`mb-3 flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground ${
+                  isCollapsed ? "justify-center" : "gap-2"
+                }`}
+              >
+                <CalendarDays className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                {!isCollapsed && <span>팔로우 일정</span>}
+              </h3>
+              <div className="flex flex-col gap-1 transition-opacity duration-200">
+                {upcomingFollowedEvents.length === 0 ? (
+                  <p className={`py-2 text-center text-xs text-muted-foreground ${isCollapsed ? "hidden" : ""}`}>
+                    팔로우한 일정이 없습니다
+                  </p>
+                ) : (
+                  upcomingFollowedEvents.map((ev) => {
+                    const { text: ddayText, color: ddayColor } = getDDayLabel(ev.effectiveEnd, today)
+                    return (
+                      <div
+                        key={ev.id}
+                        title={isCollapsed ? `${ev.title} (${ddayText})` : undefined}
+                        className={`flex items-center rounded-md py-1.5 transition-all duration-200 animate-in fade-in ${
+                          isCollapsed ? "justify-center px-0" : "gap-2 px-2"
+                        }`}
+                      >
+                        {isCollapsed ? (
+                          <span className={`text-[10px] font-bold ${ddayColor}`}>
+                            {ddayText === "D-Day" ? "D" : ddayText.replace("D-", "-")}
+                          </span>
+                        ) : (
+                          <>
+                            <div className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-medium text-foreground">
+                                {ev.title}
+                              </span>
+                              {ev.subtitle && (
+                                <span className="block truncate text-[10px] text-muted-foreground">
+                                  {ev.subtitle}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`shrink-0 text-[10px] font-bold tabular-nums ${ddayColor}`}>
+                              {ddayText}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </section>
+          )}
+          <div className={`h-px bg-border ${upcomingFollowedEvents.length === 0 && isCollapsed ? "hidden" : ""}`} />
+
           {/* My Followed Games */}
           <section>
             <h3

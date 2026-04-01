@@ -6,6 +6,7 @@ import { AppHeaderAuth } from "@/components/header";
 import { FavoritesProvider } from "@/contexts/favorites-context";
 import { CalendarSettingsProvider } from "@/contexts/calendar-settings-context";
 import { CustomEventsProvider } from "@/contexts/custom-events-context";
+import { FollowedEventsProvider } from "@/contexts/followed-events-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/next";
@@ -62,7 +63,9 @@ export default function RootLayout({
             <FavoritesProvider>
               <CalendarSettingsProvider>
                 <CustomEventsProvider>
-                  <AppShell headerAuth={headerAuth}>{children}</AppShell>
+                  <FollowedEventsProvider>
+                    <AppShell headerAuth={headerAuth}>{children}</AppShell>
+                  </FollowedEventsProvider>
                 </CustomEventsProvider>
               </CalendarSettingsProvider>
             </FavoritesProvider>

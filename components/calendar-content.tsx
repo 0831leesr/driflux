@@ -17,6 +17,7 @@ import {
   Trash2,
   Pencil,
   Plus,
+  Bookmark,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -38,6 +39,8 @@ import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle, getGameImageSrc, DEFAULT_IMAGES } from "@/lib/utils"
 import { useCalendarSettings, type EventCategory } from "@/contexts/calendar-settings-context"
 import { useCustomEvents } from "@/contexts/custom-events-context"
+import { useFollowedEvents } from "@/contexts/followed-events-context"
+import { CalendarFollowButton } from "@/components/calendar/follow-button"
 import { AddCustomEventDialog } from "@/components/add-custom-event-dialog"
 
 /* ── Types ── */
@@ -63,7 +66,7 @@ const CATEGORY_CONFIG: Record<
   { label: string; icon: typeof Trophy; color: string; bgColor: string; barColor: string; checkColor: string }
 > = {
   competition: {
-    label: "E-sports",
+    label: "이스포츠",
     icon: Trophy,
     color: "text-indigo-400",
     bgColor: "bg-indigo-500/15",
@@ -71,7 +74,7 @@ const CATEGORY_CONFIG: Record<
     checkColor: "border-indigo-500 data-[state=checked]:bg-indigo-500 data-[state=checked]:text-white",
   },
   patch: {
-    label: "Patch",
+    label: "패치",
     icon: RefreshCw,
     color: "text-emerald-400",
     bgColor: "bg-emerald-500/15",
@@ -79,7 +82,7 @@ const CATEGORY_CONFIG: Record<
     checkColor: "border-emerald-500 data-[state=checked]:bg-emerald-500 data-[state=checked]:text-white",
   },
   discount: {
-    label: "Discount",
+    label: "할인",
     icon: Tag,
     color: "text-amber-400",
     bgColor: "bg-amber-500/15",
@@ -87,7 +90,7 @@ const CATEGORY_CONFIG: Record<
     checkColor: "border-amber-500 data-[state=checked]:bg-amber-500 data-[state=checked]:text-white",
   },
   collaboration: {
-    label: "Collaboration",
+    label: "콜라보",
     icon: Server,
     color: "text-cyan-400",
     bgColor: "bg-cyan-500/15",
@@ -95,7 +98,7 @@ const CATEGORY_CONFIG: Record<
     checkColor: "border-cyan-500 data-[state=checked]:bg-cyan-500 data-[state=checked]:text-white",
   },
   custom: {
-    label: "Custom",
+    label: "커스텀",
     icon: CalendarPlus,
     color: "text-violet-400",
     bgColor: "bg-violet-500/15",
@@ -368,6 +371,10 @@ function EventCard({
   const isToday = isSameDay(effectiveEnd, today)
   const isCustom = event.isCustom === true
 
+  // DB 이벤트만 Supabase 팔로우 가능 (커스텀은 UUID라 parseInt → NaN)
+  const numericId = parseInt(event.id)
+  const canFollow = !isCustom && !isNaN(numericId)
+
   function handleExternalClick() {
     if (event.externalUrl) {
       window.open(event.externalUrl, "_blank", "noopener,noreferrer")
@@ -402,9 +409,22 @@ function EventCard({
         <p className="text-xs text-muted-foreground/70">{event.description}</p>
       </div>
 
-      {/* Right: Actions + Game Cover + Edit/Delete (Custom만) */}
-      {(event.externalUrl || (event.gameCover && event.gameId) || (isCustom && (onDelete || onEdit))) && (
+      {/* Right: Follow + External + Game Cover + Edit/Delete */}
       <div className="flex shrink-0 flex-col items-center gap-2">
+        {/* 팔로우 버튼 (DB 이벤트만) */}
+        {canFollow && (
+          <CalendarFollowButton
+            eventId={numericId}
+            eventData={{
+              id: event.id,
+              title: event.title,
+              date: event.date.toISOString(),
+              endDate: event.endDate ? event.endDate.toISOString() : null,
+              category: event.category,
+              subtitle: event.subtitle,
+            }}
+          />
+        )}
         {event.externalUrl && (
           <Button
             variant="ghost"
@@ -455,7 +475,6 @@ function EventCard({
           </Button>
         )}
       </div>
-      )}
     </div>
 
     <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -506,8 +525,11 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
   } = useCalendarSettings()
 
   const { events: customEvents, addEvent, updateEvent, removeEvent } = useCustomEvents()
+  const { followedEvents, unfollowEvent } = useFollowedEvents()
+  const isFollowed = (id: string) => followedEvents.some((e) => e.id === id)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editEventId, setEditEventId] = useState<string | null>(null)
+  const [showFollowedOnly, setShowFollowedOnly] = useState(false)
   const editEvent = customEvents.find((e) => e.id === editEventId) ?? null
 
   const serverGameEvents = useMemo(() => mapEventsToGameEvents(events), [events])
@@ -570,14 +592,17 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
   /* Filter & sort events (카테고리 필터 + E-sports 채널 필터 + end_date 기준 활성화 + Past Events 토글) */
   const filteredEvents = useMemo(() => {
     return gameEvents
-      .filter((ev) => categories[ev.category] === true && passesEsportsChannelFilter(ev))
+      .filter((ev) => {
+        if (showFollowedOnly) return isFollowed(ev.id)
+        return categories[ev.category] === true && passesEsportsChannelFilter(ev)
+      })
       .filter((ev) => {
         if (showPast) return true
         const effectiveEnd = getEffectiveEndDate(ev)
         return effectiveEnd >= today || isSameDay(effectiveEnd, today)
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime())
-  }, [gameEvents, categories, esportsChannelsChecked, showPast, today])
+  }, [gameEvents, categories, esportsChannelsChecked, showPast, today, showFollowedOnly, followedEvents])
 
   /* Group by month+week */
   const grouped = useMemo(() => {
@@ -651,16 +676,30 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
   const categoryFilterUI = (
     <div className="rounded-xl border border-border bg-card p-4">
       <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Categories
+        카테고리
       </h4>
       <div className="flex flex-col gap-3">
+        {/* 팔로우 필터 */}
+        <div className="flex items-center gap-2.5">
+          <label className="flex flex-1 cursor-pointer items-center gap-2.5">
+            <Checkbox
+              checked={showFollowedOnly}
+              onCheckedChange={(checked) => setShowFollowedOnly(checked === true)}
+              className="border-rose-500 data-[state=checked]:bg-rose-500 data-[state=checked]:text-white"
+            />
+            <Bookmark className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+            <span className="text-sm text-foreground">팔로우</span>
+          </label>
+        </div>
+        <div className="h-px bg-border" />
+
         {(["competition", "patch", "discount", "collaboration", "custom"] as EventCategory[]).map((cat) => {
           const config = CATEGORY_CONFIG[cat]
           const Icon = config.icon
           const isChecked = categories[cat] ?? true
           const isCompetition = cat === "competition"
           return (
-            <div key={cat} className="flex items-center gap-2.5">
+            <div key={cat} className={`flex items-center gap-2.5 ${showFollowedOnly ? "opacity-40 pointer-events-none" : ""}`}>
               <label className="flex flex-1 cursor-pointer items-center gap-2.5">
                 <Checkbox
                   checked={isChecked}
@@ -867,11 +906,18 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
                       {/* Timeline Dot */}
                       <div className={`absolute -left-3 top-5 h-2.5 w-2.5 rounded-full border-2 border-background ${CATEGORY_CONFIG[ev.category].barColor}`} />
                       <EventCard
-                      event={ev}
-                      today={today}
-                      onDelete={ev.isCustom ? removeEvent : undefined}
-                      onEdit={ev.isCustom ? (id) => setEditEventId(id) : undefined}
-                    />
+                        event={ev}
+                        today={today}
+                        onDelete={
+                          ev.isCustom
+                            ? (id) => {
+                                removeEvent(id)
+                                unfollowEvent(id)
+                              }
+                            : undefined
+                        }
+                        onEdit={ev.isCustom ? (id) => setEditEventId(id) : undefined}
+                      />
                     </div>
                   ))}
                 </div>
