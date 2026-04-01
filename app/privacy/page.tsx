@@ -1,45 +1,223 @@
-import { Metadata } from "next"
+import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "개인정보처리방침 (Privacy Policy)",
+  title: "개인정보처리방침 | Richzem",
   description: "Richzem 개인정보처리방침을 확인하세요.",
 }
 
-const sections = [
-  {
-    title: "1. 수집하는 개인정보 항목",
-    content:
-      "(소셜 로그인 연동 시) 이메일 주소, 프로필 이미지, 닉네임, 서비스 이용 기록(팔로우, 즐겨찾기 등)이 수집될 수 있습니다.",
-  },
-  {
-    title: "2. 개인정보의 수집 및 이용 목적",
-    content:
-      "수집된 개인정보는 사용자 식별, 개인화된 서비스 제공(즐겨찾기 유지), 서비스 개선을 위해 사용됩니다.",
-  },
-  {
-    title: "3. 개인정보의 보유 및 이용 기간",
-    content:
-      "회원이 탈퇴를 요청하거나 개인정보 동의를 철회하는 경우, 수집된 개인정보는 지체 없이 파기합니다.",
-  },
-  {
-    title: "4. 제3자 제공",
-    content:
-      "수집된 데이터는 클라우드 데이터베이스(Supabase)에 안전하게 보관되며, 법령에 의한 경우를 제외하고는 외부로 제공되지 않습니다.",
-  },
-]
-
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto max-w-4xl px-4 py-12">
-      <h1 className="text-3xl font-bold text-foreground">개인정보처리방침 (Privacy Policy)</h1>
+    <main className="mx-auto max-w-3xl px-4 py-14">
+      <div className="mb-10">
+        <h1 className="text-3xl font-black tracking-tight text-foreground">개인정보처리방침</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          최종 업데이트: 2026년 4월 1일 &nbsp;·&nbsp; Richzem은 이용자의 개인정보를 소중히
+          여기며, 관련 법령을 준수합니다.
+        </p>
+      </div>
 
-      <div className="mt-8 space-y-8">
-        {sections.map((section) => (
-          <section key={section.title}>
-            <h2 className="text-lg font-semibold text-foreground">{section.title}</h2>
-            <p className="mt-2 text-muted-foreground leading-relaxed">{section.content}</p>
-          </section>
-        ))}
+      <div className="space-y-8">
+        {/* 1 */}
+        <section className="border-b border-border pb-8">
+          <h2 className="text-base font-bold text-foreground">
+            제1조 (개인정보의 처리 목적)
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            Richzem은 다음의 목적을 위해 개인정보를 처리합니다. 처리된 개인정보는 다음 목적
+            이외의 용도로는 이용되지 않으며, 목적이 변경될 경우 사전 동의를 구합니다.
+          </p>
+          <ul className="mt-3 space-y-1.5 text-sm leading-7 text-muted-foreground">
+            {[
+              "회원 가입 및 본인 확인 (소셜 로그인 인증)",
+              "개인화 서비스 제공 (팔로우, 즐겨찾기 등 사용자 설정 유지)",
+              "서비스 이상 및 부정 이용 방지",
+            ].map((item, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* 2 */}
+        <section className="border-b border-border pb-8">
+          <h2 className="text-base font-bold text-foreground">
+            제2조 (수집하는 개인정보 항목 및 수집 방법)
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            Richzem은 Google OAuth 소셜 로그인을 통해서만 개인정보를 수집합니다. 별도의 회원가입
+            양식이나 이메일·비밀번호 기반 로그인은 제공하지 않습니다.
+          </p>
+          <div className="mt-4 overflow-hidden rounded-xl border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-2.5 text-left font-semibold text-foreground">
+                    수집 항목
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-foreground">
+                    수집 목적
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-foreground">
+                    필수 여부
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border text-muted-foreground">
+                <tr>
+                  <td className="px-4 py-2.5">이메일 주소</td>
+                  <td className="px-4 py-2.5">회원 식별 및 본인 확인</td>
+                  <td className="px-4 py-2.5">필수</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2.5">프로필 이름</td>
+                  <td className="px-4 py-2.5">서비스 내 표시 이름</td>
+                  <td className="px-4 py-2.5">필수</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2.5">아바타(프로필) 이미지 URL</td>
+                  <td className="px-4 py-2.5">프로필 아이콘 표시</td>
+                  <td className="px-4 py-2.5">선택</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2.5">서비스 이용 기록</td>
+                  <td className="px-4 py-2.5">팔로우·즐겨찾기 데이터 유지</td>
+                  <td className="px-4 py-2.5">선택</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* 3 */}
+        <section className="border-b border-border pb-8">
+          <h2 className="text-base font-bold text-foreground">
+            제3조 (개인정보의 보유 및 이용 기간)
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            수집된 개인정보는 회원 탈퇴 시 또는 개인정보 처리 동의 철회 시 지체 없이(즉시)
+            삭제합니다. 단, 관련 법령(「전자상거래 등에서의 소비자 보호에 관한 법률」 등)에서
+            일정 기간 보관을 요구하는 경우에는 해당 법령에 따릅니다.
+          </p>
+          <ul className="mt-3 space-y-1.5 text-sm leading-7 text-muted-foreground">
+            <li className="flex gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+              소비자 불만 또는 분쟁 처리에 관한 기록: 3년 (전자상거래법)
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+              서비스 접속 로그: 3개월 (통신비밀보호법)
+            </li>
+          </ul>
+        </section>
+
+        {/* 4 */}
+        <section className="border-b border-border pb-8">
+          <h2 className="text-base font-bold text-foreground">
+            제4조 (개인정보의 제3자 제공)
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            Richzem은 원칙적으로 이용자의 개인정보를 제3자에게 제공하지 않습니다. 다만, 아래의
+            경우에는 예외로 합니다.
+          </p>
+          <ul className="mt-3 space-y-1.5 text-sm leading-7 text-muted-foreground">
+            <li className="flex gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+              이용자가 사전에 동의한 경우
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+              법령에 의하거나 수사 목적으로 수사기관이 적법한 절차를 통해 요청하는 경우
+            </li>
+          </ul>
+        </section>
+
+        {/* 5 */}
+        <section className="border-b border-border pb-8">
+          <h2 className="text-base font-bold text-foreground">
+            제5조 (개인정보 처리의 위탁)
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            Richzem은 서비스 제공을 위해 아래와 같이 개인정보 처리를 위탁하고 있습니다.
+          </p>
+          <div className="mt-4 overflow-hidden rounded-xl border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-2.5 text-left font-semibold text-foreground">수탁 업체</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-foreground">위탁 업무</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border text-muted-foreground">
+                <tr>
+                  <td className="px-4 py-2.5">Supabase, Inc.</td>
+                  <td className="px-4 py-2.5">회원 인증 및 데이터베이스 호스팅</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2.5">Google LLC</td>
+                  <td className="px-4 py-2.5">소셜 로그인(OAuth 2.0) 인증 처리</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* 6 */}
+        <section className="border-b border-border pb-8">
+          <h2 className="text-base font-bold text-foreground">
+            제6조 (이용자의 권리와 행사 방법)
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            이용자는 언제든지 자신의 개인정보를 조회하거나 수정, 삭제, 처리 정지를 요청할 수
+            있습니다. 계정 삭제는 서비스 내 '회원 탈퇴' 기능을 통해 즉시 처리되며, 그 외
+            문의 사항은 아래 개인정보 보호책임자에게 연락하시기 바랍니다.
+          </p>
+        </section>
+
+        {/* 7 */}
+        <section className="border-b border-border pb-8">
+          <h2 className="text-base font-bold text-foreground">
+            제7조 (개인정보의 안전성 확보 조치)
+          </h2>
+          <ul className="mt-3 space-y-1.5 text-sm leading-7 text-muted-foreground">
+            {[
+              "개인정보는 암호화된 HTTPS 통신을 통해 전송됩니다.",
+              "데이터베이스는 Row-Level Security(RLS)가 적용되어 본인 데이터에만 접근 가능합니다.",
+              "서비스 내 비밀번호를 별도로 저장하지 않으며, 인증은 전적으로 Google OAuth에 위임합니다.",
+              "불필요한 개인정보를 수집하지 않으며, 최소 수집 원칙을 준수합니다.",
+            ].map((item, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* 8 */}
+        <section>
+          <h2 className="text-base font-bold text-foreground">
+            제8조 (개인정보 보호책임자)
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            개인정보 처리에 관한 업무를 총괄하는 개인정보 보호책임자는 아래와 같습니다.
+          </p>
+          <div className="mt-3 rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">담당자:</span> Richzem 운영팀
+            </p>
+            <p className="mt-1">
+              <span className="font-medium text-foreground">이메일:</span>{" "}
+              <a
+                href="mailto:admin@richzem.com"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                admin@richzem.com
+              </a>
+            </p>
+          </div>
+        </section>
       </div>
     </main>
   )

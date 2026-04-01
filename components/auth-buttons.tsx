@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { DeleteAccountButton } from "@/components/delete-account-button"
 
 export function LoginButton({ className }: Pick<ButtonProps, "className">) {
   const pathname = usePathname()
@@ -122,6 +123,10 @@ export function UserAccountMenu({ user }: { user: User }) {
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild className="cursor-pointer p-0 focus:bg-transparent">
           <LogoutButton className="w-full px-2 py-1.5 font-normal" />
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+          <DeleteAccountButton />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

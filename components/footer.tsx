@@ -21,22 +21,22 @@ export function Footer() {
         {/* Navigation links */}
         <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
           <Link href="/about" className="transition-colors hover:text-foreground">
-            About Richzem
+            서비스 소개
           </Link>
           <span className="text-border">·</span>
           <Link href="/terms" className="transition-colors hover:text-foreground">
-            Terms of Service
+            이용약관
           </Link>
           <span className="text-border">·</span>
           <Link href="/privacy" className="transition-colors hover:text-foreground">
-            Privacy Policy
+            개인정보처리방침
           </Link>
           <span className="text-border">·</span>
           <a
             href="mailto:admin@richzem.com"
             className="transition-colors hover:text-foreground"
           >
-            Contact / Bug Report
+            문의 / 버그 제보
           </a>
         </div>
 
