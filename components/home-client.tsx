@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Gamepad2, Tags, Video, Bookmark, UserCircle2, Scissors } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MainTabNav } from "@/components/main-tab-nav"
 import { TrendingGames } from "@/components/trending-games"
 import { DropsSection } from "@/components/drops-section"
 import { HiddenGemsSection } from "@/components/hidden-gems-section"
@@ -52,8 +53,9 @@ export function HomeClient({
   upcomingEvents,
   esportsChannels,
 }: HomeClientProps) {
-  const router = useRouter()
-  const [activeTab, setActiveTab] = useState("main")
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get("tab") ?? "main"
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved" | "streamers">("games")
   const [savedSubTab, setSavedSubTab] = useState<"replay" | "clips">("replay")
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
@@ -190,46 +192,10 @@ export function HomeClient({
   return (
     <>
       {/* Tab Navigation */}
-      <div className="flex items-center gap-2 border-b border-border/50 bg-card/80 backdrop-blur-xl px-4 lg:px-6">
-        <Tabs
-          value={activeTab}
-          onValueChange={(val) => {
-            if (val === "explore") {
-              router.push("/explore")
-            } else {
-              setActiveTab(val)
-            }
-          }}
-          className="w-full"
-        >
-          <TabsList className="h-10 bg-transparent p-0">
-            <TabsTrigger
-              value="main"
-              className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-[hsl(var(--neon-purple))] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-            >
-              메인
-            </TabsTrigger>
-            <TabsTrigger
-              value="follow"
-              className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-[hsl(var(--neon-purple))] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-            >
-              팔로우
-            </TabsTrigger>
-            <TabsTrigger
-              value="explore"
-              className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-[hsl(var(--neon-purple))] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-            >
-              탐색
-            </TabsTrigger>
-            <TabsTrigger
-              value="calendar"
-              className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-[hsl(var(--neon-purple))] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-            >
-              캘린더
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      <MainTabNav
+        activeTab={activeTab as "main" | "follow" | "explore" | "calendar"}
+        onTabChange={setActiveTab}
+      />
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">

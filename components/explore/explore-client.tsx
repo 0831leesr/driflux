@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { TrendingUp, Check, Wifi } from "lucide-react"
+import { TrendingUp, Check } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import { TagSearchInput } from "@/components/explore/tag-search-input"
+import { MainTabNav } from "@/components/main-tab-nav"
 import type { TagRow, TrendingGameRow, HistoricalTrendingRow } from "@/lib/data"
 
 const PAGE_SIZE = 16
@@ -104,16 +105,10 @@ export function ExploreClient({
   )
 
   return (
+    <>
+      <MainTabNav activeTab="explore" />
     <div className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold text-foreground sm:text-4xl">게임 탐색</h1>
-          <p className="text-base text-muted-foreground sm:text-lg">
-            실시간 라이브와 주간 트렌드로 게임을 발견하세요
-          </p>
-        </div>
-
         {/* Mode Toggle */}
         <div className="mb-8 flex gap-2">
           <button
@@ -147,32 +142,14 @@ export function ExploreClient({
         {/* ── LIVE MODE ── */}
         {initialMode === "live" && (
           <>
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-[hsl(var(--live-red))]" />
-                <h2 className="text-lg font-semibold text-foreground">
-                  지금 라이브
-                </h2>
-                <span className="rounded-full bg-[hsl(var(--live-red))]/10 px-2 py-0.5 text-xs font-medium text-[hsl(var(--live-red))]">
-                  Top {displayedLive.length}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">실시간 시청자 순 정렬</p>
-            </div>
-
-            {/* Tag filter disabled notice */}
-            <div className="mb-6 flex items-center gap-2 rounded-lg border border-dashed border-border bg-card/50 px-4 py-2.5">
-              <Wifi className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                라이브 탐색 모드에서는 태그 필터를 사용할 수 없습니다.{" "}
-                <button
-                  onClick={() => setMode("trend")}
-                  className="font-medium text-[hsl(var(--neon-purple))] underline-offset-2 hover:underline"
-                >
-                  트렌드 탐색
-                </button>
-                으로 전환하면 태그별 게임을 찾을 수 있습니다.
-              </p>
+            <div className="mb-6 flex items-center gap-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[hsl(var(--live-red))]" />
+              <h2 className="text-lg font-semibold text-foreground">
+                지금 라이브
+              </h2>
+              <span className="rounded-full bg-[hsl(var(--live-red))]/10 px-2 py-0.5 text-xs font-medium text-[hsl(var(--live-red))]">
+                Top {displayedLive.length}
+              </span>
             </div>
 
             {displayedLive.length === 0 ? (
@@ -314,5 +291,6 @@ export function ExploreClient({
         )}
       </div>
     </div>
+    </>
   )
 }
