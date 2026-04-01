@@ -119,7 +119,7 @@ export async function searchSteamGame(
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "User-Agent": "Driflux/1.0",
+        "User-Agent": "Richzem/1.0",
       },
     })
 
@@ -362,7 +362,7 @@ export async function getSteamGameDetails(
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "User-Agent": "Driflux/1.0",
+        "User-Agent": "Richzem/1.0",
       },
       next: { revalidate: 3600 }, // Cache for 1 hour
     } as NextFetchOptions)
@@ -524,7 +524,7 @@ export async function getSteamReviewSummary(
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "User-Agent": "Driflux/1.0",
+        "User-Agent": "Richzem/1.0",
       },
     })
 

@@ -11,10 +11,13 @@ import type { ClipData } from "@/components/clip-card"
    Local Storage Keys (videos/clips only + streamer display cache)
    ═══════════════════════════════════════════════════════════════ */
 
-const STORAGE_KEY_VIDEOS = "driflux_saved_videos"
-const STORAGE_KEY_CLIPS = "driflux_saved_clips"
+const STORAGE_KEY_VIDEOS = "richzem_saved_videos"
+const LEGACY_STORAGE_KEY_VIDEOS = "driflux_saved_videos"
+const STORAGE_KEY_CLIPS = "richzem_saved_clips"
+const LEGACY_STORAGE_KEY_CLIPS = "driflux_saved_clips"
 /** Stores streamer display metadata { [channelId]: { streamerName, channelImageUrl } } */
-const STORAGE_KEY_STREAMER_META = "driflux_streamer_meta"
+const STORAGE_KEY_STREAMER_META = "richzem_streamer_meta"
+const LEGACY_STORAGE_KEY_STREAMER_META = "driflux_streamer_meta"
 
 const MAX_SAVED_VIDEOS = 500
 const MAX_SAVED_CLIPS = 500
@@ -91,7 +94,14 @@ const FavoriteClipsContext = createContext<FavoriteClipsContextType | undefined>
 function getStoredVideos(): VideoData[] {
   if (typeof window === "undefined") return []
   try {
-    const stored = localStorage.getItem(STORAGE_KEY_VIDEOS)
+    let stored = localStorage.getItem(STORAGE_KEY_VIDEOS)
+    if (!stored) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY_VIDEOS)
+      if (legacy) {
+        localStorage.setItem(STORAGE_KEY_VIDEOS, legacy)
+        stored = legacy
+      }
+    }
     if (!stored) return []
     const parsed = JSON.parse(stored)
     return Array.isArray(parsed) ? parsed : []
@@ -112,7 +122,14 @@ function setStoredVideos(value: VideoData[]): void {
 function getStoredClips(): ClipData[] {
   if (typeof window === "undefined") return []
   try {
-    const stored = localStorage.getItem(STORAGE_KEY_CLIPS)
+    let stored = localStorage.getItem(STORAGE_KEY_CLIPS)
+    if (!stored) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY_CLIPS)
+      if (legacy) {
+        localStorage.setItem(STORAGE_KEY_CLIPS, legacy)
+        stored = legacy
+      }
+    }
     if (!stored) return []
     const parsed = JSON.parse(stored)
     return Array.isArray(parsed) ? parsed : []
@@ -135,7 +152,14 @@ type StreamerMeta = Record<string, { streamerName: string; channelImageUrl?: str
 function getStoredStreamerMeta(): StreamerMeta {
   if (typeof window === "undefined") return {}
   try {
-    const stored = localStorage.getItem(STORAGE_KEY_STREAMER_META)
+    let stored = localStorage.getItem(STORAGE_KEY_STREAMER_META)
+    if (!stored) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY_STREAMER_META)
+      if (legacy) {
+        localStorage.setItem(STORAGE_KEY_STREAMER_META, legacy)
+        stored = legacy
+      }
+    }
     if (!stored) return {}
     return JSON.parse(stored) ?? {}
   } catch {

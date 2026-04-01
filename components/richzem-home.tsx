@@ -18,7 +18,7 @@ import { HomeClient } from "@/components/home-client"
    Server-side computation helpers (home-specific)
 ───────────────────────────────────────────────────────── */
 
-/** DB 룩업 인덱스 — computeHiddenGems / computeNewReleases / enrichDropsWithLiveViewers 전용 */
+/** DB 룩업 인덱스 — computeHiddenGems / computeNewReleases 전용 */
 function buildGameLookup(dbGames: HomeGameRow[]) {
   const byKorean = new Map<string, HomeGameRow>()
   const byEnglish = new Map<string, HomeGameRow>()
@@ -119,7 +119,7 @@ function computeNewReleases(
    Server Component (page root)
 ───────────────────────────────────────────────────────── */
 
-export default async function DrifluxHome() {
+export default async function RichzemHome() {
   const [
     topLiveGames,
     yesterdayTrending,

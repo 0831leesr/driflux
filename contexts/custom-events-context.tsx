@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 
-const STORAGE_KEY = "driflux_custom_events"
+const STORAGE_KEY = "richzem_custom_events"
+const LEGACY_STORAGE_KEY = "driflux_custom_events"
 
 export interface CustomEventItem {
   id: string
@@ -31,7 +32,14 @@ const CustomEventsContext = createContext<CustomEventsContextType | undefined>(u
 function getStoredEvents(): CustomEventItem[] {
   if (typeof window === "undefined") return []
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    let stored = localStorage.getItem(STORAGE_KEY)
+    if (stored === null) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (legacy !== null) {
+        localStorage.setItem(STORAGE_KEY, legacy)
+        stored = legacy
+      }
+    }
     if (stored === null) return []
     const parsed = JSON.parse(stored)
     return Array.isArray(parsed) ? parsed : []

@@ -23,6 +23,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://richzem.vercel.app"),
+  applicationName: "Richzem",
   title: {
     default: "Richzem - Discover Game Streams & Sales",
     template: "%s | Richzem",

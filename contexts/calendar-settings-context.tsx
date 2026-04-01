@@ -7,7 +7,8 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
    추후 계정 로그인 시 서버 동기화 예정
    ═══════════════════════════════════════════════════════════════ */
 
-const STORAGE_KEY = "driflux_calendar_settings"
+const STORAGE_KEY = "richzem_calendar_settings"
+const LEGACY_STORAGE_KEY = "driflux_calendar_settings"
 
 /* ═══════════════════════════════════════════════════════════════
    Types
@@ -55,7 +56,14 @@ function getStoredSettings(): CalendarSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    let stored = localStorage.getItem(STORAGE_KEY)
+    if (stored === null) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (legacy !== null) {
+        localStorage.setItem(STORAGE_KEY, legacy)
+        stored = legacy
+      }
+    }
     if (stored === null) return DEFAULT_SETTINGS
     const parsed = JSON.parse(stored) as Partial<CalendarSettings>
     return {

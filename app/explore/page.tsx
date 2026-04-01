@@ -19,13 +19,14 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 interface ExplorePageProps {
-  searchParams: { mode?: string; tags?: string }
+  searchParams: Promise<{ mode?: string; tags?: string }>
 }
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
-  const mode = searchParams.mode === "trend" ? "trend" : "live"
-  const rawTag = searchParams.tags
-    ? decodeURIComponent(searchParams.tags.split(",")[0].trim())
+  const { mode: modeParam, tags: tagsParam } = await searchParams
+  const mode = modeParam === "trend" ? "trend" : "live"
+  const rawTag = tagsParam
+    ? decodeURIComponent(tagsParam.split(",")[0].trim())
     : undefined
   const selectedTagName = rawTag || undefined
 
