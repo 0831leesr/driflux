@@ -2,6 +2,7 @@ import {
   fetchUpcomingEvents,
   fetchEsportsChannels,
   fetchAllGamesForHome,
+  fetchTodayDailyGameStatsByGameIds,
   getHistoricalTrending,
   type HomeGameRow,
   type HiddenGemsRow,
@@ -141,9 +142,17 @@ export default async function RichzemHome() {
   // 공유 DB 룩업 인덱스 (한 번만 생성)
   const lookup = buildGameLookup(dbGames)
 
-  // 서버 사이드 컨퓨테이션
-  // matchTopLiveGamesToTrendingRows: lib/match-top-live-games, 상위 8개만 사용
-  const trendingLive = matchTopLiveGamesToTrendingRows(topLiveGames, dbGames).slice(0, 8)
+  // 서버 사이드 컨퓨테이션 — 라이브 매칭 전체 + 당일 daily_game_stats 병합 (클라이언트에서 트렌드/급상승 정렬)
+  const allMatchedLive = matchTopLiveGamesToTrendingRows(topLiveGames, dbGames)
+  const todayStatsMap = await fetchTodayDailyGameStatsByGameIds(allMatchedLive.map((g) => g.id))
+  const trendingLive: TrendingGameRow[] = allMatchedLive.map((g) => {
+    const s = todayStatsMap.get(g.id)
+    return {
+      ...g,
+      trend_score: s?.trend_score ?? 0,
+      momentum_score: s?.momentum_score ?? 0,
+    }
+  })
   const hiddenGemsGames = computeHiddenGems(topLiveGames, lookup)
   const newReleasesGames = computeNewReleases(topLiveGames, lookup)
   // games_with_drops DB 뷰 삭제로 인해 라이브 API에서 drops 정보를 가져올 수 없음 → 빈 배열 유지

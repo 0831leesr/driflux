@@ -1,0 +1,15 @@
+name: Frequent stats — update-daily-stats
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # 30분마다
+  workflow_dispatch:
+
+jobs:
+  update-daily-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger update-daily-stats
+        run: |
+          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-daily-stats" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

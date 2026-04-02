@@ -2,15 +2,18 @@ import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
 
 /**
- * Cron Job API: 일일 피크 통계 갱신
+ * Cron Job API: 일일 피크 통계 + 급상승(Momentum) 갱신
  *
  * GET /api/cron/update-daily-stats
  *
- * - 1시간마다 실행 (vercel.json: "0 * * * *")
+ * - 스케줄은 외부(예: 30분 주기 GitHub Actions 등)에서 호출 — vercel.json crons 비움
  * - Chzzk categories/live API에서 실시간 게임별 시청자 수 및 방송 수 수집
  * - games 테이블의 title/korean_title/english_title과 매핑
- * - daily_game_stats 테이블에 Upsert:
- *   peak_viewers / peak_stream_count / trend_score 는 GREATEST(기존값, 현재값) 유지
+ * - daily_game_stats Upsert:
+ *   - peak_viewers / peak_stream_count / trend_score: GREATEST(기존, 현재)
+ *   - previous_viewers ← 직전 DB의 current_viewers
+ *   - current_viewers ← 이번 API 값
+ *   - momentum_score = max(0, delta) where delta = new - old; delta < 100 또는 하락 시 0
  *
  * trend_score 공식:
  *   concurrentUserCount * (1 + LN(openLiveCount + 1))
@@ -29,6 +32,14 @@ interface ChzzkCategoryItem {
   concurrentUserCount: number
   openLiveCount: number
   posterImageUrl: string | null
+}
+
+interface ExistingDailyStatRow {
+  game_id: number
+  peak_viewers: number | null
+  peak_stream_count: number | null
+  trend_score: number | null
+  current_viewers: number | null
 }
 
 function normalize(s: string): string {
@@ -154,7 +165,7 @@ export async function GET(request: Request) {
     const gameIds = Array.from(statsMap.keys())
     const { data: existingRows, error: existingError } = await supabase
       .from("daily_game_stats")
-      .select("game_id, peak_viewers, peak_stream_count, trend_score")
+      .select("game_id, peak_viewers, peak_stream_count, trend_score, current_viewers")
       .in("game_id", gameIds)
       .eq("record_date", today)
 
@@ -168,23 +179,33 @@ export async function GET(request: Request) {
 
     const existingMap = new Map<
       number,
-      { peak_viewers: number; peak_stream_count: number; trend_score: number }
+      {
+        peak_viewers: number
+        peak_stream_count: number
+        trend_score: number
+        current_viewers: number
+      }
     >()
     for (const row of existingRows ?? []) {
-      existingMap.set(row.game_id as number, {
-        peak_viewers: (row.peak_viewers as number) ?? 0,
-        peak_stream_count: (row.peak_stream_count as number) ?? 0,
-        trend_score: (row.trend_score as number) ?? 0,
+      const r = row as ExistingDailyStatRow
+      existingMap.set(r.game_id, {
+        peak_viewers: r.peak_viewers ?? 0,
+        peak_stream_count: r.peak_stream_count ?? 0,
+        trend_score: r.trend_score ?? 0,
+        current_viewers: r.current_viewers ?? 0,
       })
     }
 
-    // ── Step 6: Upsert 페이로드 구성 (GREATEST 비교) ──
+    // ── Step 6: Upsert 페이로드 (피크 GREATEST + Momentum) ──
     type UpsertRow = {
       game_id: number
       record_date: string
       peak_viewers: number
       peak_stream_count: number
       trend_score: number
+      current_viewers: number
+      previous_viewers: number
+      momentum_score: number
     }
 
     const upsertRows: UpsertRow[] = []
@@ -194,13 +215,21 @@ export async function GET(request: Request) {
         current.concurrentUserCount * (1 + Math.log(current.openLiveCount + 1))
 
       const prev = existingMap.get(gameId)
+      const oldCurrentViewers = prev?.current_viewers ?? 0
+      const newViewers = current.concurrentUserCount
+      const delta = newViewers - oldCurrentViewers
+      const momentumScore =
+        delta >= 100 ? Math.round(delta) : 0
 
       upsertRows.push({
         game_id: gameId,
         record_date: today,
-        peak_viewers: Math.max(current.concurrentUserCount, prev?.peak_viewers ?? 0),
+        peak_viewers: Math.max(newViewers, prev?.peak_viewers ?? 0),
         peak_stream_count: Math.max(current.openLiveCount, prev?.peak_stream_count ?? 0),
         trend_score: Math.max(currentTrendScore, prev?.trend_score ?? 0),
+        current_viewers: newViewers,
+        previous_viewers: oldCurrentViewers,
+        momentum_score: momentumScore,
       })
     }
 

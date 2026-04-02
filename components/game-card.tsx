@@ -34,6 +34,8 @@ export interface GameCardData {
   showDropsBadge?: boolean
   /** 출시 N일차 (신작 섹션용, 0이면 NEW, 1이상이면 D-N) */
   daysSinceRelease?: number
+  /** 급상승 탭 — 시청자 수 옆 붉은 강조 (momentum_score) */
+  momentumScore?: number
 }
 
 export function GameCard({ game, priority }: { game: GameCardData; priority?: boolean }) {
@@ -144,6 +146,14 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
                   <Eye className="h-3 w-3" />
                   {formatViewerCountShort(game.totalViewers)}
                 </span>
+              )}
+              {game.momentumScore !== undefined && game.momentumScore > 0 && (
+                <>
+                  <span className="text-white/50">·</span>
+                  <span className="font-semibold text-red-500">
+                    (▲ {game.momentumScore.toLocaleString("ko-KR")}명 급증)
+                  </span>
+                </>
               )}
             </div>
           )}

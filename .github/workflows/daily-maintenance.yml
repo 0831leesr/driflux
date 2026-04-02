@@ -1,24 +1,25 @@
-name: Daily Game Metadata
+name: Daily maintenance — discover, Steam, evaluations
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 UTC 00:00 (한국 시간 09:00)
-  workflow_dispatch:      # 수동 실행 가능
+    - cron: "0 19 * * *" # 매일 UTC 19:00 (한국시간 새벽 4시)
+  workflow_dispatch:
 
 jobs:
-  update-steam:
+  daily-maintenance:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Update Steam Metadata
+      - name: Discover top games
+        run: |
+          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/discover-top-games" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: Update Steam metadata
         run: |
           curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam?limit=50" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
-  update-evaluations:
-    runs-on: ubuntu-latest
-    needs: []  # 독립 실행
-    steps:
-      - name: Trigger Update Evaluations (Steam + Critic)
+      - name: Update evaluations (Steam + critic)
         run: |
           HTTP=$(curl -s -o /tmp/evals_resp.txt -w "%{http_code}" -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")

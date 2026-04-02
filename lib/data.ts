@@ -447,6 +447,9 @@ export interface TrendingGameRow extends GameRow {
   viewersFormatted: string
   liveStreamCount: number
   topTag?: string
+  /** 당일 daily_game_stats — 실시간 탭에서 트렌드/급상승 정렬용 */
+  trend_score?: number
+  momentum_score?: number
 }
 
 /* ── V2: 기간별 과거 트렌딩 (daily_game_stats 기반) ── */
@@ -464,6 +467,38 @@ export interface HistoricalTrendingRow {
   discount_rate: number | null
   is_free: boolean | null
   top_tags: string[] | null
+}
+
+/** 오늘 날짜 `daily_game_stats` — 홈 실시간 탭 트렌드/급상승 정렬용 */
+export async function fetchTodayDailyGameStatsByGameIds(
+  gameIds: number[]
+): Promise<Map<number, { trend_score: number; momentum_score: number; current_viewers: number }>> {
+  const map = new Map<number, { trend_score: number; momentum_score: number; current_viewers: number }>()
+  if (gameIds.length === 0) return map
+
+  const supabase = createClientForCache()
+  const today = new Date().toISOString().slice(0, 10)
+
+  const { data, error } = await supabase
+    .from("daily_game_stats")
+    .select("game_id, trend_score, momentum_score, current_viewers")
+    .eq("record_date", today)
+    .in("game_id", gameIds)
+
+  if (error || !data) {
+    if (error) console.error("fetchTodayDailyGameStatsByGameIds:", error.message)
+    return map
+  }
+
+  for (const row of data) {
+    const id = row.game_id as number
+    map.set(id, {
+      trend_score: Number(row.trend_score) || 0,
+      momentum_score: Number((row as { momentum_score?: number }).momentum_score) || 0,
+      current_viewers: Number((row as { current_viewers?: number }).current_viewers) || 0,
+    })
+  }
+  return map
 }
 
 /* ── V2: 홈 서버 컨퓨테이션용 게임 DB 데이터 ── */
