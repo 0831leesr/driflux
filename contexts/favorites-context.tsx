@@ -252,27 +252,35 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     setGamesInitialized(true)
     setTagsInitialized(true)
     setStreamersInitialized(true)
+    // Clear auth-required localStorage content on logout
+    setSavedVideos([])
+    setSavedClips([])
+    try {
+      localStorage.removeItem(STORAGE_KEY_VIDEOS)
+      localStorage.removeItem(STORAGE_KEY_CLIPS)
+    } catch {
+      /* ignore */
+    }
   }
 
   useEffect(() => {
-    // localStorage-only init (synchronous, no auth needed)
-    setSavedVideos(getStoredVideos())
-    setVideosInitialized(true)
-    setSavedClips(getStoredClips())
-    setClipsInitialized(true)
-
     const supabase = createBrowserClient()
 
-    // Bootstrap auth state then load follows
+    // Bootstrap auth state then load follows + localStorage-backed data
     supabase.auth.getUser().then(({ data: { user } }) => {
       setIsAuthenticated(!!user)
       if (user) {
         loadFollowsFromDB()
+        // Only load localStorage-backed data for authenticated users
+        setSavedVideos(getStoredVideos())
+        setSavedClips(getStoredClips())
       } else {
         setGamesInitialized(true)
         setTagsInitialized(true)
         setStreamersInitialized(true)
       }
+      setVideosInitialized(true)
+      setClipsInitialized(true)
     })
 
     // Keep in sync with auth events
@@ -283,6 +291,8 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(authed)
       if (authed) {
         loadFollowsFromDB()
+        setSavedVideos(getStoredVideos())
+        setSavedClips(getStoredClips())
       } else {
         clearFollows()
       }
@@ -476,6 +486,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     isInitialized: videosInitialized,
     isSaved: (videoId) => savedVideos.some((v) => v.videoId === videoId),
     addSavedVideo: (video) => {
+      if (requireAuth()) return
       setSavedVideos((prev) => {
         if (prev.some((v) => v.videoId === video.videoId)) return prev
         const next = [...prev, video]
@@ -483,9 +494,11 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       })
     },
     removeSavedVideo: (videoId) => {
+      if (requireAuth()) return
       setSavedVideos((prev) => prev.filter((v) => v.videoId !== videoId))
     },
     toggleSavedVideo: (video) => {
+      if (requireAuth()) return
       setSavedVideos((prev) => {
         const exists = prev.some((v) => v.videoId === video.videoId)
         if (exists) return prev.filter((v) => v.videoId !== video.videoId)
@@ -503,6 +516,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     isInitialized: clipsInitialized,
     isSaved: (clipUID) => savedClips.some((c) => c.clipUID === clipUID),
     addSavedClip: (clip) => {
+      if (requireAuth()) return
       setSavedClips((prev) => {
         if (prev.some((c) => c.clipUID === clip.clipUID)) return prev
         const next = [...prev, clip]
@@ -510,9 +524,11 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       })
     },
     removeSavedClip: (clipUID) => {
+      if (requireAuth()) return
       setSavedClips((prev) => prev.filter((c) => c.clipUID !== clipUID))
     },
     toggleSavedClip: (clip) => {
+      if (requireAuth()) return
       setSavedClips((prev) => {
         const exists = prev.some((c) => c.clipUID === clip.clipUID)
         if (exists) return prev.filter((c) => c.clipUID !== clip.clipUID)
