@@ -18,6 +18,7 @@ import {
   Pencil,
   Plus,
   Bookmark,
+  Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -97,6 +98,14 @@ const CATEGORY_CONFIG: Record<
     barColor: "bg-cyan-500",
     checkColor: "border-cyan-500 data-[state=checked]:bg-cyan-500 data-[state=checked]:text-white",
   },
+  new: {
+    label: "신작",
+    icon: Sparkles,
+    color: "text-pink-400",
+    bgColor: "bg-pink-500/15",
+    barColor: "bg-pink-500",
+    checkColor: "border-pink-500 data-[state=checked]:bg-pink-500 data-[state=checked]:text-white",
+  },
   custom: {
     label: "커스텀",
     icon: CalendarPlus,
@@ -114,6 +123,7 @@ function normalizeCategory(eventType: string | null): EventCategory {
   if (lower === "patch") return "patch"
   if (lower === "discount") return "discount"
   if (lower === "collaboration") return "collaboration"
+  if (lower === "new") return "new"
   if (lower === "custom") return "custom"
   /* fallback for legacy/invalid data */
   return "competition"
@@ -693,7 +703,7 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
         </div>
         <div className="h-px bg-border" />
 
-        {(["competition", "patch", "discount", "collaboration", "custom"] as EventCategory[]).map((cat) => {
+        {(["competition", "patch", "discount", "collaboration", "new", "custom"] as EventCategory[]).map((cat) => {
           const config = CATEGORY_CONFIG[cat]
           const Icon = config.icon
           const isChecked = categories[cat] ?? true

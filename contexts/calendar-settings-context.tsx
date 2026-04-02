@@ -14,7 +14,7 @@ const LEGACY_STORAGE_KEY = "driflux_calendar_settings"
    Types
    ═══════════════════════════════════════════════════════════════ */
 
-export type EventCategory = "competition" | "patch" | "discount" | "collaboration" | "custom"
+export type EventCategory = "competition" | "patch" | "discount" | "collaboration" | "new" | "custom"
 
 export interface CalendarSettings {
   categories: Record<EventCategory, boolean>
@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS: CalendarSettings = {
     patch: true,
     discount: true,
     collaboration: true,
+    new: true,
     custom: true,
   },
   showPast: false,
