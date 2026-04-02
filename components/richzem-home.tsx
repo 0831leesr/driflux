@@ -153,6 +153,10 @@ export default async function RichzemHome() {
       momentum_score: s?.momentum_score ?? 0,
     }
   })
+  const risingTrendingGames: TrendingGameRow[] = trendingLive
+    .filter((g) => (g.momentum_score ?? 0) > 0)
+    .sort((a, b) => (b.momentum_score ?? 0) - (a.momentum_score ?? 0))
+    .slice(0, 8)
   const hiddenGemsGames = computeHiddenGems(topLiveGames, lookup)
   const newReleasesGames = computeNewReleases(topLiveGames, lookup)
   // games_with_drops DB 뷰 삭제로 인해 라이브 API에서 drops 정보를 가져올 수 없음 → 빈 배열 유지
@@ -161,6 +165,7 @@ export default async function RichzemHome() {
   return (
     <HomeClient
       trendingLive={trendingLive}
+      risingTrendingGames={risingTrendingGames}
       yesterdayTrending={yesterdayTrending}
       weekTrending={weekTrending}
       monthTrending={monthTrending}

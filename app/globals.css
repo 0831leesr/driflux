@@ -164,4 +164,33 @@
     gap: 1.5rem;
     min-width: 872px; /* 4*200px + 3*24px gap - 최소 크기 미만 시 가로 스크롤 */
   }
+
+  /* 홈: 트렌딩·급상승 — 모바일은 2열·여백 축소, lg 이상에서 기존 4열 스크롤 그리드 */
+  .card-grid-home-wrapper {
+    overflow-x: visible;
+    width: 100%;
+  }
+  .card-grid-home {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  @media (min-width: 640px) {
+    .card-grid-home {
+      gap: 1rem;
+    }
+  }
+  @media (min-width: 900px) {
+    .card-grid-home {
+      grid-template-columns: repeat(4, minmax(200px, 1fr));
+      gap: 1.5rem;
+      min-width: 872px;
+    }
+    .card-grid-home-wrapper {
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+  }
 }

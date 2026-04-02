@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MainTabNav } from "@/components/main-tab-nav"
 import { TrendingGames } from "@/components/trending-games"
+import { RisingGames } from "@/components/rising-games"
 import { DropsSection } from "@/components/drops-section"
 import { HiddenGemsSection } from "@/components/hidden-gems-section"
 import { NewReleasesSection } from "@/components/new-releases-section"
@@ -32,6 +33,7 @@ import { fetchStreamsForFollowedGames, fetchStreamsForFollowedTags } from "@/lib
 import { formatViewerCountShort } from "@/lib/utils"
 interface HomeClientProps {
   trendingLive: TrendingGameRow[]
+  risingTrendingGames: TrendingGameRow[]
   yesterdayTrending: HistoricalTrendingRow[]
   weekTrending: HistoricalTrendingRow[]
   monthTrending: HistoricalTrendingRow[]
@@ -44,6 +46,7 @@ interface HomeClientProps {
 
 export function HomeClient({
   trendingLive,
+  risingTrendingGames,
   yesterdayTrending,
   weekTrending,
   monthTrending,
@@ -201,12 +204,15 @@ export function HomeClient({
       <main className="flex-1 overflow-y-auto">
         {activeTab === "main" ? (
           <div className="flex flex-col gap-8 p-4 lg:p-6">
-            <TrendingGames
-              liveGames={trendingLive}
-              yesterdayGames={yesterdayTrending}
-              weekGames={weekTrending}
-              monthGames={monthTrending}
-            />
+            <div className="flex flex-col gap-8 sm:gap-10">
+              <TrendingGames
+                liveGames={trendingLive}
+                yesterdayGames={yesterdayTrending}
+                weekGames={weekTrending}
+                monthGames={monthTrending}
+              />
+              <RisingGames games={risingTrendingGames} />
+            </div>
             <DropsSection games={gamesWithDrops} />
             <HiddenGemsSection games={hiddenGemsGames} />
             <NewReleasesSection games={newReleasesGames} />
