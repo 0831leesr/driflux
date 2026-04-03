@@ -199,7 +199,7 @@ const REVALIDATE_META = 300   // 게임 포스터 등 메타 — 5분
 
 // Polling API는 봇 차단이 덜하므로 service/v1 대신 polling/v2 사용
 // User-Agent는 여전히 최신 Chrome으로 유지
-const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 /* ── Helper Functions ── */
 
@@ -440,8 +440,11 @@ export async function getPopularCategories(
     } as NextFetchOptions)
 
     if (!response.ok) {
-      console.error(`[Chzzk Categories] ✗ HTTP Error: ${response.status}`)
-      throw new Error(`Chzzk API Error: ${response.status}`)
+      const errorBody = await response.text()
+      console.error(
+        `[Chzzk Categories] ✗ HTTP Error: ${response.status} — body: ${errorBody.substring(0, 1000)}`
+      )
+      return []
     }
 
     const json = await response.json()
@@ -494,7 +497,10 @@ export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]>
     } as NextFetchOptions)
 
     if (!response.ok) {
-      console.error(`[Chzzk TopLiveGames] ✗ HTTP Error: ${response.status}`)
+      const errorBody = await response.text()
+      console.error(
+        `[Chzzk TopLiveGames] ✗ HTTP Error: ${response.status} — body: ${errorBody.substring(0, 1000)}`
+      )
       return []
     }
 

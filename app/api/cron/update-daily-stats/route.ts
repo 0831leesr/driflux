@@ -24,7 +24,7 @@ const CHZZK_CATEGORIES_URL =
   "https://api.chzzk.naver.com/service/v1/categories/live?categoryType=GAME&size=200&sort=POPULAR"
 
 const BROWSER_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 interface ChzzkCategoryItem {
   categoryId: string
@@ -63,34 +63,41 @@ export async function GET(request: Request) {
 
   try {
     // ── Step 1: Chzzk API에서 실시간 게임 카테고리 데이터 수집 ──
-    const res = await fetch(CHZZK_CATEGORIES_URL, {
-      method: "GET",
-      headers: {
-        "User-Agent": BROWSER_UA,
-        "Accept": "application/json",
-        "Accept-Language": "ko-KR,ko;q=0.9",
-        "Referer": "https://chzzk.naver.com/",
-      },
-      cache: "no-store",
-    })
+    let categories: ChzzkCategoryItem[] = []
 
-    if (!res.ok) {
-      console.error(`[DailyStats] Chzzk API error: HTTP ${res.status}`)
-      return NextResponse.json(
-        { error: "Chzzk API request failed", status: res.status },
-        { status: 502 }
+    try {
+      const res = await fetch(CHZZK_CATEGORIES_URL, {
+        method: "GET",
+        headers: {
+          "User-Agent": BROWSER_UA,
+          "Accept": "application/json",
+          "Accept-Language": "ko-KR,ko;q=0.9",
+          "Referer": "https://chzzk.naver.com/",
+        },
+        cache: "no-store",
+      })
+
+      if (!res.ok) {
+        const errorBody = await res.text()
+        console.error(
+          `[DailyStats] Chzzk API error: HTTP ${res.status} — body: ${errorBody.substring(0, 1000)}`
+        )
+      } else {
+        const json = await res.json()
+        categories = json?.content?.data ?? json?.content ?? []
+      }
+    } catch (fetchErr) {
+      console.error(
+        "[DailyStats] Chzzk fetch exception:",
+        fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
       )
     }
 
-    const json = await res.json()
-    const categories: ChzzkCategoryItem[] =
-      json?.content?.data ?? json?.content ?? []
-
     if (categories.length === 0) {
-      console.warn("[DailyStats] No categories returned from Chzzk.")
+      console.warn("[DailyStats] No categories returned from Chzzk — skipping upsert.")
       return NextResponse.json({
         success: true,
-        message: "No live categories found",
+        message: "No live categories found (Chzzk API may be unavailable)",
         stats: { gamesProcessed: 0, upserted: 0, failed: 0 },
         duration: Date.now() - startTime,
       })
