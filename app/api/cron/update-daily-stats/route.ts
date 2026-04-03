@@ -64,14 +64,16 @@ export async function GET(request: Request) {
   try {
     // ── Step 1: Chzzk API에서 실시간 게임 카테고리 데이터 수집 ──
     let categories: ChzzkCategoryItem[] = []
+    let rawChzzkData: unknown = null
 
     try {
       const res = await fetch(CHZZK_CATEGORIES_URL, {
         method: "GET",
         headers: {
           "User-Agent": BROWSER_UA,
-          "Accept": "application/json",
-          "Accept-Language": "ko-KR,ko;q=0.9",
+          "Accept": "application/json, text/plain, */*",
+          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Origin": "https://chzzk.naver.com",
           "Referer": "https://chzzk.naver.com/",
         },
         cache: "no-store",
@@ -83,8 +85,18 @@ export async function GET(request: Request) {
           `[DailyStats] Chzzk API error: HTTP ${res.status} — body: ${errorBody.substring(0, 1000)}`
         )
       } else {
-        const json = await res.json()
-        categories = json?.content?.data ?? json?.content ?? []
+        rawChzzkData = await res.json()
+        const raw = rawChzzkData as Record<string, unknown>
+        const content = raw?.content as Record<string, unknown> | null | undefined
+        const data = content?.data
+        categories = (Array.isArray(data) ? data : Array.isArray(content) ? content : []) as ChzzkCategoryItem[]
+
+        if (categories.length === 0) {
+          console.warn(
+            "[DailyStats] Chzzk returned OK but no categories — raw response:",
+            JSON.stringify(rawChzzkData).slice(0, 1000)
+          )
+        }
       }
     } catch (fetchErr) {
       console.error(
@@ -98,6 +110,9 @@ export async function GET(request: Request) {
       return NextResponse.json({
         success: true,
         message: "No live categories found (Chzzk API may be unavailable)",
+        rawChzzkData: rawChzzkData
+          ? JSON.stringify(rawChzzkData).slice(0, 500)
+          : null,
         stats: { gamesProcessed: 0, upserted: 0, failed: 0 },
         duration: Date.now() - startTime,
       })
