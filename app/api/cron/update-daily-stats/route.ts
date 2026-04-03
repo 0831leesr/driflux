@@ -16,9 +16,9 @@ import {
  * - games 테이블의 title/korean_title/english_title과 매핑
  * - daily_game_stats Upsert:
  *   - peak_viewers / peak_stream_count / trend_score: GREATEST(기존, 현재)
- *   - previous_viewers ← 직전 DB의 current_viewers
+ *   - previous_viewers ← 오늘 첫 스냅샷 시점의 시청자 수(Baseline), 이후 크론에서 유지
  *   - current_viewers ← 이번 API 값
- *   - momentum_score = max(0, delta) where delta = new - old; delta < 100 또는 하락 시 0
+ *   - momentum_score: delta = current - baseline, delta >= 100 이면 delta(반올림), 그 외 0(최고점 유지 없음)
  *
  * trend_score 공식:
  *   concurrentUserCount * (1 + LN(openLiveCount + 1))
@@ -39,6 +39,8 @@ interface ExistingDailyStatRow {
   peak_stream_count: number | null
   trend_score: number | null
   current_viewers: number | null
+  /** 오늘 누적 모멘텀 기준: 해당 일자 최초 기록 시점 시청자 수 */
+  previous_viewers: number | null
 }
 
 function normalize(s: string): string {
@@ -174,7 +176,7 @@ export async function GET(request: Request) {
     const gameIds = Array.from(statsMap.keys())
     const { data: existingRows, error: existingError } = await supabase
       .from("daily_game_stats")
-      .select("game_id, peak_viewers, peak_stream_count, trend_score, current_viewers")
+      .select("game_id, peak_viewers, peak_stream_count, trend_score, current_viewers, previous_viewers")
       .in("game_id", gameIds)
       .eq("record_date", today)
 
@@ -193,6 +195,7 @@ export async function GET(request: Request) {
         peak_stream_count: number
         trend_score: number
         current_viewers: number
+        previous_viewers: number | null
       }
     >()
     for (const row of existingRows ?? []) {
@@ -202,6 +205,7 @@ export async function GET(request: Request) {
         peak_stream_count: r.peak_stream_count ?? 0,
         trend_score: r.trend_score ?? 0,
         current_viewers: r.current_viewers ?? 0,
+        previous_viewers: r.previous_viewers,
       })
     }
 
@@ -228,12 +232,14 @@ export async function GET(request: Request) {
 
       const prev = existingMap.get(gameId)
       const isFirstInsert = prev === undefined
-
-      // 최초 삽입: previous_viewers = 0, momentum_score = 0
-      // 갱신: 직전 current_viewers를 previous_viewers로 이동, delta로 momentum 계산
-      const oldCurrentViewers = prev?.current_viewers ?? 0
       const newViewers = current.concurrentUserCount
-      const delta = newViewers - oldCurrentViewers
+
+      // 오늘 Baseline: 이미 저장된 previous_viewers가 있으면 유지, 없으면 이번 시청자 수로 설정(첫 기록)
+      const baselineViewers =
+        prev != null && prev.previous_viewers != null
+          ? prev.previous_viewers
+          : newViewers
+      const delta = newViewers - baselineViewers
       const momentumScore = !isFirstInsert && delta >= 100 ? Math.round(delta) : 0
 
       upsertRows.push({
@@ -243,7 +249,7 @@ export async function GET(request: Request) {
         peak_stream_count: Math.max(current.openLiveCount, prev?.peak_stream_count ?? 0),
         trend_score: Math.max(currentTrendScore, prev?.trend_score ?? 0),
         current_viewers: newViewers,
-        previous_viewers: oldCurrentViewers,
+        previous_viewers: baselineViewers,
         momentum_score: momentumScore,
       })
 
