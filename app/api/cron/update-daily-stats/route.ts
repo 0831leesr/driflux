@@ -203,7 +203,8 @@ export async function GET(request: Request) {
       })
     }
 
-    // ── Step 6: Upsert 페이로드 (피크 GREATEST + Momentum) ──
+    // ── Step 6: Upsert 페이로드 구성 ──
+    // Chzzk(statsMap)을 기준으로 순회 — existingMap에 기록이 없어도 신규 삽입 보장
     type UpsertRow = {
       game_id: number
       record_date: string
@@ -215,6 +216,8 @@ export async function GET(request: Request) {
       momentum_score: number
     }
 
+    let newInserts = 0
+    let updates = 0
     const upsertRows: UpsertRow[] = []
 
     for (const [gameId, current] of statsMap.entries()) {
@@ -222,11 +225,14 @@ export async function GET(request: Request) {
         current.concurrentUserCount * (1 + Math.log(current.openLiveCount + 1))
 
       const prev = existingMap.get(gameId)
+      const isFirstInsert = prev === undefined
+
+      // 최초 삽입: previous_viewers = 0, momentum_score = 0
+      // 갱신: 직전 current_viewers를 previous_viewers로 이동, delta로 momentum 계산
       const oldCurrentViewers = prev?.current_viewers ?? 0
       const newViewers = current.concurrentUserCount
       const delta = newViewers - oldCurrentViewers
-      const momentumScore =
-        delta >= 100 ? Math.round(delta) : 0
+      const momentumScore = !isFirstInsert && delta >= 100 ? Math.round(delta) : 0
 
       upsertRows.push({
         game_id: gameId,
@@ -238,7 +244,14 @@ export async function GET(request: Request) {
         previous_viewers: oldCurrentViewers,
         momentum_score: momentumScore,
       })
+
+      if (isFirstInsert) newInserts++
+      else updates++
     }
+
+    console.log(
+      `[DailyStats] Upsert payload ready — total: ${upsertRows.length}, new: ${newInserts}, update: ${updates}`
+    )
 
     // ── Step 7: Batch Upsert (100개씩) ──
     const BATCH_SIZE = 100
@@ -247,14 +260,18 @@ export async function GET(request: Request) {
 
     for (let i = 0; i < upsertRows.length; i += BATCH_SIZE) {
       const batch = upsertRows.slice(i, i + BATCH_SIZE)
+      const batchNo = Math.floor(i / BATCH_SIZE) + 1
       const { error: upsertError } = await supabase
         .from("daily_game_stats")
         .upsert(batch, { onConflict: "game_id,record_date", ignoreDuplicates: false })
 
       if (upsertError) {
         console.error(
-          `[DailyStats] Upsert failed for batch ${i / BATCH_SIZE + 1}:`,
-          upsertError.message
+          `[DailyStats] Upsert failed (batch ${batchNo}/${Math.ceil(upsertRows.length / BATCH_SIZE)}):`,
+          upsertError.message,
+          "| code:", upsertError.code,
+          "| details:", upsertError.details,
+          "| hint:", upsertError.hint
         )
         failed += batch.length
       } else {
@@ -264,7 +281,7 @@ export async function GET(request: Request) {
 
     const duration = Date.now() - startTime
     console.log(
-      `[DailyStats] Done in ${duration}ms — date: ${today}, categories: ${categories.length}, matched: ${statsMap.size}, upserted: ${upserted}, failed: ${failed}`
+      `[DailyStats] Done in ${duration}ms — date: ${today}, chzzk: ${categories.length}, matched: ${statsMap.size}, new: ${newInserts}, updated: ${updates}, upserted: ${upserted}, failed: ${failed}`
     )
 
     return NextResponse.json({
