@@ -48,9 +48,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ clips })
   } catch (error) {
     console.error("[API chzzk/clips] Error:", error)
-    return NextResponse.json(
-      { error: "Failed to fetch clips" },
-      { status: 500 }
-    )
+    return NextResponse.json({ clips: [] })
   }
 }

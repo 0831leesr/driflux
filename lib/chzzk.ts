@@ -187,6 +187,14 @@ const CHZZK_CATEGORY_CLIPS_URL = (categoryId: string) =>
 const CHZZK_CATEGORY_INFO_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V1}/categories/GAME/${encodeURIComponent(categoryId)}/info`
 
+/**
+ * 치지직 GAME categoryId는 공백 대신 언더스코어를 사용합니다 (예: `Slay_the_Spire2`).
+ * 게임 메타/DB에 공백이 섞여 있어도 API 경로와 일치하도록 전처리합니다.
+ */
+export function formatChzzkGameCategoryIdForApi(categoryId: string): string {
+  return categoryId.trim().replace(/ /g, "_")
+}
+
 /** categories/live: 문서상 size 최대 50 — 초과 시 400(잘못된 값) 가능 */
 export const CHZZK_CATEGORIES_LIVE_MAX_SIZE = 50
 
@@ -230,13 +238,26 @@ const REVALIDATE_META = 300   // 게임 포스터 등 메타 — 5분
 // User-Agent는 여전히 최신 Chrome으로 유지
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
-/** categories/live 등 JSON API용 브라우저 유사 헤더 */
-const CHZZK_JSON_BROWSER_HEADERS: Record<string, string> = {
+/** categories/live·게임별 lives/videos/clips 등 JSON API용 브라우저 유사 헤더 (크론/상세 페이지 공통) */
+export const CHZZK_JSON_BROWSER_HEADERS: Record<string, string> = {
   "User-Agent": BROWSER_USER_AGENT,
-  "Accept": "application/json, text/plain, */*",
+  Accept: "application/json, text/plain, */*",
   "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-  "Origin": "https://chzzk.naver.com",
-  "Referer": "https://chzzk.naver.com/",
+  Origin: "https://chzzk.naver.com",
+  Referer: "https://chzzk.naver.com/",
+}
+
+/** API `content`가 배열이거나 `{ data: [] }` 형태일 때 목록 배열로 정규화 */
+function chzzkListFromContent(content: unknown): unknown[] {
+  if (Array.isArray(content)) return content
+  if (
+    content &&
+    typeof content === "object" &&
+    Array.isArray((content as { data?: unknown[] }).data)
+  ) {
+    return (content as { data: unknown[] }).data
+  }
+  return []
 }
 
 export type FetchChzzkCategoriesLiveTextFirstResult = {
@@ -372,28 +393,30 @@ export async function getChzzkLiveStatus(
 
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://chzzk.naver.com/",
-      },
+      headers: CHZZK_JSON_BROWSER_HEADERS,
       next: { revalidate: 60 }, // Cache for 1 minute (live data changes frequently)
     } as NextFetchOptions)
 
+    const rawText = await response.text()
     if (!response.ok) {
       if (response.status === 404) {
         console.warn(`[Chzzk API] 404 Not Found (channel may not exist): ${url}`)
       } else {
         console.error(`[Chzzk API] ✗ HTTP Error: ${response.status} ${response.statusText}`)
-        const errorText = await response.text()
-        console.error(`[Chzzk API] Error Response Body:`, errorText.substring(0, 1000))
+        console.error(`[Chzzk API] Error Response Body:`, rawText)
       }
       console.warn(`[Chzzk API] Returning offline status (soft fail)`)
       return createOfflineStatus(trimmedId)
     }
 
-    const data: ChzzkApiResponse = await response.json()
+    let data: ChzzkApiResponse
+    try {
+      data = JSON.parse(rawText) as ChzzkApiResponse
+    } catch (e) {
+      console.error(`[Chzzk API] JSON parse failed:`, e)
+      console.error(`[Chzzk API] Raw:`, rawText)
+      return createOfflineStatus(trimmedId)
+    }
 
     // Check API response code
     if (!data || typeof data.code === 'undefined') {
@@ -647,32 +670,33 @@ export async function fetchChzzkGamePosterImage(categoryId: string): Promise<str
     return null
   }
 
-  const trimmedId = categoryId.trim()
-  const url = CHZZK_CATEGORY_INFO_URL(trimmedId)
+  const formattedCategoryId = formatChzzkGameCategoryIdForApi(categoryId)
+  const url = CHZZK_CATEGORY_INFO_URL(formattedCategoryId)
 
   try {
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://chzzk.naver.com/",
-      },
+      headers: CHZZK_JSON_BROWSER_HEADERS,
       next: { revalidate: REVALIDATE_META },
     } as NextFetchOptions)
 
+    const rawText = await response.text()
     if (!response.ok) {
-      if (response.status === 404) {
-        return null
-      }
+      console.error("[Fetch Game Poster Error]:", rawText)
       return null
     }
 
-    const data = await response.json()
+    let data: { content?: { posterImageUrl?: string }; posterImageUrl?: string }
+    try {
+      data = JSON.parse(rawText)
+    } catch (e) {
+      console.error("[Fetch Game Poster Error] (JSON parse):", e, rawText)
+      return null
+    }
     const posterUrl = (data?.content?.posterImageUrl ?? data?.posterImageUrl)?.trim()
     return posterUrl || null
-  } catch {
+  } catch (e) {
+    console.error("[Fetch Game Poster Error] (exception):", e)
     return null
   }
 }
@@ -694,43 +718,39 @@ export async function getChzzkStreamsByCategory(
     return []
   }
 
-  const trimmedId = categoryId.trim()
-  const url = CHZZK_CATEGORY_LIVES_URL(trimmedId)
+  const formattedCategoryId = formatChzzkGameCategoryIdForApi(categoryId)
+  const url = CHZZK_CATEGORY_LIVES_URL(formattedCategoryId)
   console.log("[Chzzk Request] Fetching category lives:", url)
 
   try {
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://chzzk.naver.com/",
-      },
+      headers: CHZZK_JSON_BROWSER_HEADERS,
       next: { revalidate: REVALIDATE_LIVE },
     } as NextFetchOptions)
 
+    const rawText = await response.text()
     if (!response.ok) {
-      if (response.status === 404) {
-        console.warn(`[Chzzk Category] 404 Not Found: ${url}`)
-      } else {
-        console.error(`[Chzzk Category] ✗ HTTP Error: ${response.status}`)
-        const errorText = await response.text()
-        console.error(`[Chzzk Category] Error Body:`, errorText.substring(0, 500))
-      }
+      console.error("[Fetch Lives Error]:", rawText)
       return []
     }
 
-    const data = await response.json()
-    if (!data || data.code !== 200) {
-      console.error(`[Chzzk Category] ✗ API Error: code=${data?.code}`)
+    let dataL: { code?: number; content?: unknown }
+    try {
+      dataL = JSON.parse(rawText)
+    } catch (e) {
+      console.error("[Fetch Lives Error] (JSON parse):", e, rawText)
+      return []
+    }
+    if (!dataL || dataL.code !== 200) {
+      console.error(`[Fetch Lives Error] (API code):`, dataL?.code, rawText)
       return []
     }
 
-    const items = data.content?.data ?? data.content ?? []
-    console.log(`[Chzzk] Fetched ${items.length} streams for category "${trimmedId}".`)
+    const items = chzzkListFromContent(dataL.content)
+    console.log(`[Chzzk] Fetched ${items.length} streams for category "${formattedCategoryId}".`)
 
-    if (!Array.isArray(items) || items.length === 0) {
+    if (items.length === 0) {
       return []
     }
 
@@ -751,7 +771,7 @@ export async function getChzzkStreamsByCategory(
           liveImageUrl: thumbnailUrl,
           concurrentUserCount: Number(item.concurrentUserCount ?? 0),
           openDate: item.openDate ?? new Date().toISOString(),
-          category: item.liveCategoryValue ?? item.liveCategory ?? trimmedId,
+          category: item.liveCategoryValue ?? item.liveCategory ?? formattedCategoryId,
           hasDrops,
         }
       })
@@ -785,41 +805,37 @@ export async function getChzzkVideosByCategory(
     return []
   }
 
-  const trimmedId = categoryId.trim()
-  const url = `${CHZZK_CATEGORY_VIDEOS_URL(trimmedId)}?size=${size}&offset=${offset}`
+  const formattedCategoryId = formatChzzkGameCategoryIdForApi(categoryId)
+  const url = `${CHZZK_CATEGORY_VIDEOS_URL(formattedCategoryId)}?size=${size}&offset=${offset}`
   console.log("[Chzzk Request] Fetching category videos:", url)
 
   try {
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://chzzk.naver.com/",
-      },
+      headers: CHZZK_JSON_BROWSER_HEADERS,
       next: { revalidate: REVALIDATE_VOD },
     } as NextFetchOptions)
 
+    const rawText = await response.text()
     if (!response.ok) {
-      if (response.status === 404) {
-        console.warn(`[Chzzk Videos] 404 Not Found: ${url}`)
-      } else {
-        console.error(`[Chzzk Videos] ✗ HTTP Error: ${response.status}`)
-        const errorText = await response.text()
-        console.error(`[Chzzk Videos] Error Body:`, errorText.substring(0, 500))
-      }
+      console.error("[Fetch VODs Error]:", rawText)
       return []
     }
 
-    const data = await response.json()
-    if (!data || data.code !== 200) {
-      console.error(`[Chzzk Videos] ✗ API Error: code=${data?.code}`)
+    let dataR: { code?: number; content?: unknown }
+    try {
+      dataR = JSON.parse(rawText)
+    } catch (e) {
+      console.error("[Fetch VODs Error] (JSON parse):", e, rawText)
+      return []
+    }
+    if (!dataR || dataR.code !== 200) {
+      console.error(`[Fetch VODs Error] (API code):`, dataR?.code, rawText)
       return []
     }
 
-    const items = data.content?.data ?? []
-    console.log(`[Chzzk] Fetched ${items.length} videos for category "${trimmedId}".`)
+    const items = chzzkListFromContent(dataR.content)
+    console.log(`[Chzzk] Fetched ${items.length} videos for category "${formattedCategoryId}".`)
 
     if (!Array.isArray(items) || items.length === 0) {
       return []
@@ -834,7 +850,7 @@ export async function getChzzkVideosByCategory(
       thumbnailImageUrl: item.thumbnailImageUrl ?? "",
       duration: Number(item.duration ?? 0),
       readCount: Number(item.readCount ?? 0),
-      videoCategory: item.videoCategory ?? trimmedId,
+      videoCategory: item.videoCategory ?? formattedCategoryId,
       videoCategoryValue: item.videoCategoryValue ?? "",
       channel: {
         channelId: item.channel?.channelId ?? "",
@@ -875,44 +891,40 @@ export async function getChzzkClipsByCategory(
     return []
   }
 
-  const trimmedId = categoryId.trim()
+  const formattedCategoryId = formatChzzkGameCategoryIdForApi(categoryId)
   const safeSize = Math.min(50, Math.max(1, size))
-  const url = `${CHZZK_CATEGORY_CLIPS_URL(trimmedId)}?filterType=${filterType}&orderType=${orderType}&size=${safeSize}`
+  const url = `${CHZZK_CATEGORY_CLIPS_URL(formattedCategoryId)}?filterType=${filterType}&orderType=${orderType}&size=${safeSize}`
   console.log("[Chzzk Request] Fetching category clips:", url)
 
   try {
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://chzzk.naver.com/",
-      },
+      headers: CHZZK_JSON_BROWSER_HEADERS,
       next: { revalidate: REVALIDATE_VOD },
     } as NextFetchOptions)
 
+    const rawText = await response.text()
     if (!response.ok) {
-      if (response.status === 404) {
-        console.warn(`[Chzzk Clips] 404 Not Found: ${url}`)
-      } else {
-        console.error(`[Chzzk Clips] ✗ HTTP Error: ${response.status}`)
-        const errorText = await response.text()
-        console.error(`[Chzzk Clips] Error Body:`, errorText.substring(0, 500))
-      }
+      console.error("[Fetch Clips Error]:", rawText)
       return []
     }
 
-    const data = await response.json()
-    if (!data || data.code !== 200) {
-      console.error(`[Chzzk Clips] ✗ API Error: code=${data?.code}`)
+    let dataC: { code?: number; content?: unknown }
+    try {
+      dataC = JSON.parse(rawText)
+    } catch (e) {
+      console.error("[Fetch Clips Error] (JSON parse):", e, rawText)
+      return []
+    }
+    if (!dataC || dataC.code !== 200) {
+      console.error(`[Fetch Clips Error] (API code):`, dataC?.code, rawText)
       return []
     }
 
-    const items = data.content?.data ?? data.content ?? []
-    console.log(`[Chzzk] Fetched ${Array.isArray(items) ? items.length : 0} clips for category "${trimmedId}".`)
+    const items = chzzkListFromContent(dataC.content)
+    console.log(`[Chzzk] Fetched ${items.length} clips for category "${formattedCategoryId}".`)
 
-    if (!Array.isArray(items) || items.length === 0) {
+    if (items.length === 0) {
       return []
     }
 
@@ -928,7 +940,7 @@ export async function getChzzkClipsByCategory(
         verifiedMark: item.ownerChannel?.verifiedMark ?? false,
       },
       thumbnailImageUrl: item.thumbnailImageUrl ?? "",
-      clipCategory: item.clipCategory ?? trimmedId,
+      clipCategory: item.clipCategory ?? formattedCategoryId,
       duration: Number(item.duration ?? 0),
       adult: Boolean(item.adult),
       createdDate: item.createdDate ?? "",
@@ -964,27 +976,23 @@ export async function searchChzzkLives(
   try {
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://chzzk.naver.com/",
-      },
+      headers: CHZZK_JSON_BROWSER_HEADERS,
       next: { revalidate: REVALIDATE_LIVE },
     } as NextFetchOptions)
 
+    const rawText = await response.text()
     if (!response.ok) {
-      if (response.status === 404) {
-        console.warn(`[Chzzk Search] 404 Not Found (soft fail):`, url)
-      } else {
-        console.error(`[Chzzk Search] ✗ HTTP Error: ${response.status}`)
-        const errorText = await response.text()
-        console.error(`[Chzzk Search] Error Body:`, errorText.substring(0, 500))
-      }
+      console.error("[Fetch Search Lives Error]:", rawText)
       return []
     }
 
-    const data: ChzzkSearchResponse = await response.json()
+    let data: ChzzkSearchResponse
+    try {
+      data = JSON.parse(rawText) as ChzzkSearchResponse
+    } catch (e) {
+      console.error("[Fetch Search Lives Error] (JSON parse):", e, rawText)
+      return []
+    }
 
     if (!data) {
       console.error(`[Chzzk Search] ✗ Empty response`)

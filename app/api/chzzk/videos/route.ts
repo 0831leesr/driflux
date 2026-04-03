@@ -30,6 +30,10 @@ export async function GET(request: NextRequest) {
       .order("read_count", { ascending: false })
       .range(offset, offset + size - 1)
 
+    if (error) {
+      console.error("[game_videos Supabase]:", error.message, error)
+    }
+
     if (!error && cached && cached.length > 0) {
       const videos = cached.map((row) => ({
         videoId: row.video_id,
@@ -48,9 +52,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ videos, source: "api" })
   } catch (error) {
     console.error("[API chzzk/videos] Error:", error)
-    return NextResponse.json(
-      { error: "Failed to fetch videos" },
-      { status: 500 }
-    )
+    return NextResponse.json({ videos: [], source: "error" })
   }
 }

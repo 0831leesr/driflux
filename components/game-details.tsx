@@ -35,6 +35,27 @@ import {
 import { DonutChart } from "@/components/ui/donut-chart"
 
 /* ── Helpers ── */
+/** 치지직 프록시 API 응답 파싱 — 비정상 응답 시 로그 후 빈 객체로 안전 종료 */
+async function fetchChzzkProxyJson(url: string, logLabel: string): Promise<Record<string, unknown>> {
+  try {
+    const res = await fetch(url)
+    const text = await res.text()
+    if (!res.ok) {
+      console.error(`[${logLabel}] HTTP ${res.status}:`, text)
+      return {}
+    }
+    try {
+      return JSON.parse(text) as Record<string, unknown>
+    } catch (e) {
+      console.error(`[${logLabel}] JSON parse failed:`, e, text)
+      return {}
+    }
+  } catch (e) {
+    console.error(`[${logLabel}]`, e)
+    return {}
+  }
+}
+
 /** 스팀 평가 표시 가능 여부: Overwhelmingly Positive ~ Overwhelmingly Negative만. NULL, "No user reviews", "N user reviews" 제외 */
 function isValidSteamReview(game: { steam_review_desc?: string | null }): boolean {
   const desc = game.steam_review_desc?.trim()
@@ -132,10 +153,12 @@ export function GameDetailsClient({
     setVideos([])
     setHasMoreVideos(true)
     setVideosLoading(true)
-    fetch(`/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=${BATCH_SIZE}&offset=0`)
-      .then((res) => res.json())
+    fetchChzzkProxyJson(
+      `/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=${BATCH_SIZE}&offset=0`,
+      "GameDetails VOD"
+    )
       .then((data) => {
-        const items = data.videos ?? []
+        const items = (data.videos as unknown[] | undefined) ?? []
         setVideos(
           items.map((v: any) => ({
             videoId: v.videoId ?? "",
@@ -152,10 +175,6 @@ export function GameDetailsClient({
         )
         setHasMoreVideos(items.length >= BATCH_SIZE)
       })
-      .catch(() => {
-        setVideos([])
-        setHasMoreVideos(false)
-      })
       .finally(() => setVideosLoading(false))
   }, [activeTab, categoryId, gameCover, gameTitle, game.id])
 
@@ -164,12 +183,12 @@ export function GameDetailsClient({
     setClips([])
     setDisplayClipCount(16)
     setClipsLoading(true)
-    fetch(
-      `/api/chzzk/clips?categoryId=${encodeURIComponent(categoryId)}&filterType=${clipFilterType}&orderType=${clipOrderType}&size=50`
+    fetchChzzkProxyJson(
+      `/api/chzzk/clips?categoryId=${encodeURIComponent(categoryId)}&filterType=${clipFilterType}&orderType=${clipOrderType}&size=50`,
+      "GameDetails Clips"
     )
-      .then((res) => res.json())
       .then((data) => {
-        const items = data.clips ?? []
+        const items = (data.clips as unknown[] | undefined) ?? []
         setClips(
           items.map((c: any) => ({
             clipUID: c.clipUID ?? "",
@@ -185,7 +204,6 @@ export function GameDetailsClient({
           }))
         )
       })
-      .catch(() => setClips([]))
       .finally(() => setClipsLoading(false))
   }, [activeTab, categoryId, clipFilterType, clipOrderType, gameCover, gameTitle, game.id])
 
@@ -193,10 +211,12 @@ export function GameDetailsClient({
     if (!categoryId || loadMoreLoading || !hasMoreVideos) return
     setLoadMoreLoading(true)
     const offset = videos.length
-    fetch(`/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=${BATCH_SIZE}&offset=${offset}`)
-      .then((res) => res.json())
+    fetchChzzkProxyJson(
+      `/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=${BATCH_SIZE}&offset=${offset}`,
+      "GameDetails VOD load more"
+    )
       .then((data) => {
-        const items = data.videos ?? []
+        const items = (data.videos as unknown[] | undefined) ?? []
         if (items.length > 0) {
           const newVideos: VideoData[] = items.map((v: any) => ({
             videoId: v.videoId ?? "",
@@ -214,7 +234,6 @@ export function GameDetailsClient({
         }
         setHasMoreVideos(items.length >= BATCH_SIZE)
       })
-      .catch(() => setHasMoreVideos(false))
       .finally(() => setLoadMoreLoading(false))
   }
 
