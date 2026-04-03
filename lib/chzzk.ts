@@ -201,6 +201,99 @@ const REVALIDATE_META = 300   // 게임 포스터 등 메타 — 5분
 // User-Agent는 여전히 최신 Chrome으로 유지
 const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
+/** categories/live 등 JSON API용 브라우저 유사 헤더 */
+const CHZZK_JSON_BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent": BROWSER_USER_AGENT,
+  "Accept": "application/json, text/plain, */*",
+  "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Origin": "https://chzzk.naver.com",
+  "Referer": "https://chzzk.naver.com/",
+}
+
+export type FetchChzzkCategoriesLiveTextFirstResult = {
+  categories: ChzzkLiveCategoryItem[]
+  /** 응답 원문 (HTML 차단 페이지 포함 가능) */
+  rawText: string
+  parseError: string | null
+  parsed: unknown | null
+  httpOk: boolean
+  httpStatus: number
+}
+
+/**
+ * categories/live — 응답을 text()로 받은 뒤 JSON.parse (파싱 실패·HTML 응답 대비)
+ */
+export async function fetchChzzkCategoriesLiveTextFirst(
+  url: string,
+  extraInit: NextFetchOptions = {}
+): Promise<FetchChzzkCategoriesLiveTextFirstResult> {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: CHZZK_JSON_BROWSER_HEADERS,
+    ...extraInit,
+  } as NextFetchOptions)
+
+  const rawText = await response.text()
+  console.log("[Chzzk Raw Response]:", rawText.slice(0, 300))
+
+  if (!response.ok) {
+    console.error(
+      `[Chzzk] HTTP ${response.status} — body prefix:`,
+      rawText.slice(0, 1000)
+    )
+    return {
+      categories: [],
+      rawText,
+      parseError: null,
+      parsed: null,
+      httpOk: false,
+      httpStatus: response.status,
+    }
+  }
+
+  let parsed: unknown = null
+  try {
+    parsed = JSON.parse(rawText)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(
+      "[Chzzk] JSON.parse failed:",
+      msg,
+      "| raw prefix:",
+      rawText.slice(0, 500)
+    )
+    return {
+      categories: [],
+      rawText,
+      parseError: msg,
+      parsed: null,
+      httpOk: true,
+      httpStatus: response.status,
+    }
+  }
+
+  const raw = parsed as Record<string, unknown>
+  const code = raw?.code
+  if (typeof code === "number" && code !== 200) {
+    console.error("[Chzzk] API body code !== 200:", code, raw?.message)
+  }
+
+  const content = raw?.content as Record<string, unknown> | null | undefined
+  const data = content?.data
+  const categories = (
+    Array.isArray(data) ? data : Array.isArray(content) ? content : []
+  ) as ChzzkLiveCategoryItem[]
+
+  return {
+    categories,
+    rawText,
+    parseError: null,
+    parsed,
+    httpOk: true,
+    httpStatus: response.status,
+  }
+}
+
 /* ── Helper Functions ── */
 
 /**
@@ -428,27 +521,12 @@ export async function getPopularCategories(
     const url = `${CHZZK_SERVICE_V1}/categories/live?categoryType=GAME&size=50&sort=POPULAR`
     console.log("[Chzzk Request] Fetching live categories:", url)
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://chzzk.naver.com/",
-      },
+    const r = await fetchChzzkCategoriesLiveTextFirst(url, {
       next: { revalidate: REVALIDATE_LIVE },
-    } as NextFetchOptions)
+    })
+    if (!r.httpOk || r.parseError) return []
 
-    if (!response.ok) {
-      const errorBody = await response.text()
-      console.error(
-        `[Chzzk Categories] ✗ HTTP Error: ${response.status} — body: ${errorBody.substring(0, 1000)}`
-      )
-      return []
-    }
-
-    const json = await response.json()
-    const items = json.content?.data ?? []
+    const items = r.categories
 
     const categories: ChzzkPopularCategory[] = items.map((item: any) => ({
       title: item.categoryValue ?? "",
@@ -485,33 +563,19 @@ export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]>
   try {
     console.log("[Chzzk Request] Fetching top live games:", CHZZK_TOP_LIVE_GAMES_URL)
 
-    const response = await fetch(CHZZK_TOP_LIVE_GAMES_URL, {
-      method: "GET",
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        "Accept": "application/json",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://chzzk.naver.com/",
-      },
+    const r = await fetchChzzkCategoriesLiveTextFirst(CHZZK_TOP_LIVE_GAMES_URL, {
       next: { revalidate: REVALIDATE_LIVE },
-    } as NextFetchOptions)
+    })
 
-    if (!response.ok) {
-      const errorBody = await response.text()
-      console.error(
-        `[Chzzk TopLiveGames] ✗ HTTP Error: ${response.status} — body: ${errorBody.substring(0, 1000)}`
-      )
-      return []
-    }
+    if (!r.httpOk || r.parseError) return []
 
-    const json = await response.json()
-
+    const json = r.parsed as { code?: number } | null
     if (!json || json.code !== 200) {
       console.error(`[Chzzk TopLiveGames] ✗ API Error: code=${json?.code}`)
       return []
     }
 
-    const items: ChzzkLiveCategoryItem[] = json.content?.data ?? []
+    const items: ChzzkLiveCategoryItem[] = r.categories
 
     if (!Array.isArray(items) || items.length === 0) {
       console.warn("[Chzzk TopLiveGames] Empty response")

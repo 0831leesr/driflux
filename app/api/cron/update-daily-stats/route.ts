@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
+import {
+  fetchChzzkCategoriesLiveTextFirst,
+  type FetchChzzkCategoriesLiveTextFirstResult,
+} from "@/lib/chzzk"
 
 /**
  * Cron Job API: 일일 피크 통계 + 급상승(Momentum) 갱신
@@ -23,9 +27,6 @@ export const maxDuration = 60
 const CHZZK_CATEGORIES_URL =
   "https://api.chzzk.naver.com/service/v1/categories/live?categoryType=GAME&size=200&sort=POPULAR"
 
-const BROWSER_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-
 interface ChzzkCategoryItem {
   categoryId: string
   categoryValue: string
@@ -46,6 +47,16 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/_/g, " ").trim()
 }
 
+function buildRawChzzkDebugSnippet(r: FetchChzzkCategoriesLiveTextFirstResult): string {
+  if (r.parseError) {
+    return `JSON.parse error: ${r.parseError} | body: ${r.rawText.slice(0, 600)}`
+  }
+  if (!r.httpOk) {
+    return `HTTP ${r.httpStatus} | body: ${r.rawText.slice(0, 600)}`
+  }
+  return r.rawText.slice(0, 800)
+}
+
 export async function GET(request: Request) {
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
@@ -62,41 +73,21 @@ export async function GET(request: Request) {
   console.log("[DailyStats] Starting — fetching from Chzzk categories/live API...")
 
   try {
-    // ── Step 1: Chzzk API에서 실시간 게임 카테고리 데이터 수집 ──
+    // ── Step 1: Chzzk API — text() → 로그 → JSON.parse (HTML/비JSON 대비) ──
     let categories: ChzzkCategoryItem[] = []
-    let rawChzzkData: unknown = null
+    let chzzkFetch: FetchChzzkCategoriesLiveTextFirstResult | null = null
 
     try {
-      const res = await fetch(CHZZK_CATEGORIES_URL, {
-        method: "GET",
-        headers: {
-          "User-Agent": BROWSER_UA,
-          "Accept": "application/json, text/plain, */*",
-          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Origin": "https://chzzk.naver.com",
-          "Referer": "https://chzzk.naver.com/",
-        },
+      chzzkFetch = await fetchChzzkCategoriesLiveTextFirst(CHZZK_CATEGORIES_URL, {
         cache: "no-store",
       })
+      categories = chzzkFetch.categories as ChzzkCategoryItem[]
 
-      if (!res.ok) {
-        const errorBody = await res.text()
-        console.error(
-          `[DailyStats] Chzzk API error: HTTP ${res.status} — body: ${errorBody.substring(0, 1000)}`
+      if (categories.length === 0) {
+        console.warn(
+          "[DailyStats] No category rows after parse — raw prefix:",
+          chzzkFetch.rawText.slice(0, 1000)
         )
-      } else {
-        rawChzzkData = await res.json()
-        const raw = rawChzzkData as Record<string, unknown>
-        const content = raw?.content as Record<string, unknown> | null | undefined
-        const data = content?.data
-        categories = (Array.isArray(data) ? data : Array.isArray(content) ? content : []) as ChzzkCategoryItem[]
-
-        if (categories.length === 0) {
-          console.warn(
-            "[DailyStats] Chzzk returned OK but no categories — raw response:",
-            JSON.stringify(rawChzzkData).slice(0, 1000)
-          )
-        }
       }
     } catch (fetchErr) {
       console.error(
@@ -110,9 +101,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         success: true,
         message: "No live categories found (Chzzk API may be unavailable)",
-        rawChzzkData: rawChzzkData
-          ? JSON.stringify(rawChzzkData).slice(0, 500)
-          : null,
+        rawChzzkData: chzzkFetch ? buildRawChzzkDebugSnippet(chzzkFetch) : "no fetch result",
         stats: { gamesProcessed: 0, upserted: 0, failed: 0 },
         duration: Date.now() - startTime,
       })
