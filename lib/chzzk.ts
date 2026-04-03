@@ -186,8 +186,37 @@ const CHZZK_CATEGORY_CLIPS_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V1}/categories/GAME/${encodeURIComponent(categoryId)}/clips`
 const CHZZK_CATEGORY_INFO_URL = (categoryId: string) =>
   `${CHZZK_SERVICE_V1}/categories/GAME/${encodeURIComponent(categoryId)}/info`
-export const CHZZK_TOP_LIVE_GAMES_URL =
-  `${CHZZK_SERVICE_V1}/categories/live?categoryType=GAME&size=50&sort=POPULAR`
+
+/** categories/live: 문서상 size 최대 50 — 초과 시 400(잘못된 값) 가능 */
+export const CHZZK_CATEGORIES_LIVE_MAX_SIZE = 50
+
+/**
+ * GAME 라이브 카테고리 목록 (게임·시청자 집계용)
+ * GET /service/v1/categories/live
+ */
+export function buildChzzkCategoriesLiveUrl(): string {
+  const params = new URLSearchParams({
+    categoryType: "GAME",
+    size: String(CHZZK_CATEGORIES_LIVE_MAX_SIZE),
+  })
+  return `${CHZZK_SERVICE_V1}/categories/live?${params.toString()}`
+}
+
+/**
+ * 전체 라이브 방송 목록 (시청자순) — 스트림 단위
+ * GET /service/v1/lives — sortType 은 대문자 POPULAR 고정
+ */
+export function buildChzzkServiceV1LivesUrl(): string {
+  const params = new URLSearchParams({
+    size: String(CHZZK_CATEGORIES_LIVE_MAX_SIZE),
+    sortType: "POPULAR",
+  })
+  return `${CHZZK_SERVICE_V1}/lives?${params.toString()}`
+}
+
+/** @deprecated buildChzzkCategoriesLiveUrl() 사용 권장 */
+export const CHZZK_TOP_LIVE_GAMES_URL = buildChzzkCategoriesLiveUrl()
+
 const RATE_LIMIT_DELAY = 1000 // 1초 (치지직 API Rate Limit 고려)
 const DEFAULT_THUMBNAIL_SIZE = "720" // 썸네일 해상도 (480, 720, 1080 등)
 const DEFAULT_THUMBNAIL_URL = "https://via.placeholder.com/1280x720/1a1a1a/ffffff?text=No+Thumbnail" // Fallback thumbnail
@@ -227,6 +256,8 @@ export async function fetchChzzkCategoriesLiveTextFirst(
   url: string,
   extraInit: NextFetchOptions = {}
 ): Promise<FetchChzzkCategoriesLiveTextFirstResult> {
+  console.log("[Chzzk Fetch Request URL]:", url)
+
   const response = await fetch(url, {
     method: "GET",
     headers: CHZZK_JSON_BROWSER_HEADERS,
@@ -518,7 +549,7 @@ export async function getPopularCategories(
   size: number = 50
 ): Promise<ChzzkPopularCategory[]> {
   try {
-    const url = `${CHZZK_SERVICE_V1}/categories/live?categoryType=GAME&size=50&sort=POPULAR`
+    const url = buildChzzkCategoriesLiveUrl()
     console.log("[Chzzk Request] Fetching live categories:", url)
 
     const r = await fetchChzzkCategoriesLiveTextFirst(url, {
@@ -553,7 +584,7 @@ export async function getPopularCategories(
  * [라이브 탐색] 탭과 [실시간 트렌딩] 섹션에서 사용.
  * 치지직 categories/live API를 직접 호출하여 현재 시청자 수·방송 수 포함.
  *
- * API: GET /service/v1/categories/live?categoryType=GAME&size=50&sort=POPULAR
+ * API: GET /service/v1/categories/live?categoryType=GAME&size=50 (최대 50)
  * 캐싱: Next.js ISR 60초 (Vercel Edge Cache 활용)
  *
  * @param size - 반환할 게임 수 (기본: 50, 최대: 50)
@@ -561,9 +592,10 @@ export async function getPopularCategories(
  */
 export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]> {
   try {
-    console.log("[Chzzk Request] Fetching top live games:", CHZZK_TOP_LIVE_GAMES_URL)
+    const topUrl = buildChzzkCategoriesLiveUrl()
+    console.log("[Chzzk Request] Fetching top live games:", topUrl)
 
-    const r = await fetchChzzkCategoriesLiveTextFirst(CHZZK_TOP_LIVE_GAMES_URL, {
+    const r = await fetchChzzkCategoriesLiveTextFirst(topUrl, {
       next: { revalidate: REVALIDATE_LIVE },
     })
 

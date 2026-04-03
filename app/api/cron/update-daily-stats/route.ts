@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
 import {
+  buildChzzkCategoriesLiveUrl,
   fetchChzzkCategoriesLiveTextFirst,
   type FetchChzzkCategoriesLiveTextFirstResult,
 } from "@/lib/chzzk"
@@ -23,9 +24,6 @@ import {
  *   concurrentUserCount * (1 + LN(openLiveCount + 1))
  */
 export const maxDuration = 60
-
-const CHZZK_CATEGORIES_URL =
-  "https://api.chzzk.naver.com/service/v1/categories/live?categoryType=GAME&size=200&sort=POPULAR"
 
 interface ChzzkCategoryItem {
   categoryId: string
@@ -78,7 +76,7 @@ export async function GET(request: Request) {
     let chzzkFetch: FetchChzzkCategoriesLiveTextFirstResult | null = null
 
     try {
-      chzzkFetch = await fetchChzzkCategoriesLiveTextFirst(CHZZK_CATEGORIES_URL, {
+      chzzkFetch = await fetchChzzkCategoriesLiveTextFirst(buildChzzkCategoriesLiveUrl(), {
         cache: "no-store",
       })
       categories = chzzkFetch.categories as ChzzkCategoryItem[]
