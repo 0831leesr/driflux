@@ -26,24 +26,24 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://richzem.vercel.app"),
   applicationName: "Richzem",
   title: {
-    default: "Richzem - 치지직 게임 스트리밍 & 스팀 할인",
+    default: "Richzem",
     template: "%s | Richzem",
   },
   description:
-    "치지직 라이브 방송 트렌드, 스팀 할인·메타 정보, 게임·스트리머 탐색을 한곳에서. 한국 스트리밍을 위한 데이터 기반 게임 플랫폼.",
+    "치지직 라이브 방송 트렌드, 게임·스트리머 탐색",
   openGraph: {
     type: "website",
     locale: "ko_KR",
     siteName: "Richzem",
-    title: "Richzem - 치지직 게임 스트리밍 & 스팀 할인",
+    title: "리치젬",
     description:
-      "치지직 라이브 방송 트렌드, 스팀 할인·메타 정보, 게임·스트리머 탐색을 한곳에서. 한국 스트리밍을 위한 데이터 기반 게임 플랫폼.",
+      "치지직 라이브 방송 트렌드, 게임·스트리머 탐색",
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Richzem" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Richzem - 치지직 게임 스트리밍 & 스팀 할인",
-    description: "치지직 라이브 방송 트렌드와 스팀 게임 정보를 한곳에서 탐색하세요.",
+    title: "리치젬",
+    description: "치지직 라이브 방송 트렌드, 게임·스트리머 탐색",
   },
 };
 
