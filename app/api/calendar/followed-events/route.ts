@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase/server"
+import { requireSessionUser } from "@/lib/auth-session"
 
 /**
  * GET /api/calendar/followed-events
  * 로그인한 유저의 팔로우된 upcoming 일정을 upcoming_followed_events 뷰에서 가져옵니다.
- * 비로그인 시 빈 배열 반환.
+ * 비로그인 시 401.
  */
 export async function GET() {
+  const session = await requireSessionUser()
+  if ("response" in session) return session.response
+
   try {
     const supabase = await createServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) return NextResponse.json([])
+    const { user } = session
 
     const { data, error } = await supabase
       .from("upcoming_followed_events")

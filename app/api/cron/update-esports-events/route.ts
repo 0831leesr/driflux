@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
 
 /**
  * 치지직 이스포츠 채널 ID → 게임 카테고리명 매핑
@@ -85,6 +86,7 @@ export const maxDuration = 60
  * Vercel Cron 등으로 주기적 호출 권장.
  */
 export async function GET(request: Request) {
+  // Auth: CRON_SECRET below — not browser session getUser().
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
     const expectedAuth = process.env.CRON_SECRET
@@ -109,6 +111,8 @@ export async function GET(request: Request) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+
+  const startedAt = Date.now()
 
   try {
     const res = await fetchWithRetry(CHZZK_ESPORTS_API)
@@ -207,5 +211,7 @@ export async function GET(request: Request) {
       },
       { status: 500 }
     )
+  } finally {
+    logCronAgainstHobbyTarget("update-esports-events", startedAt)
   }
 }

@@ -7,6 +7,7 @@ import { delay } from "@/lib/utils"
 import { searchIGDBGame, fetchSteamAppIdFromIGDB, fetchEarliestReleaseDateFromIGDB } from "@/lib/igdb"
 import { fetchChzzkGamePosterImage } from "@/lib/chzzk"
 import { TAG_TRANSLATIONS } from "@/lib/constants"
+import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
 
 /** Steam API에서 "not found" 반환하는 알려진 잘못된 app ID (스킵하여 API 호출 절약) */
 const STEAM_SKIP_APP_IDS = new Set([238960, 212200, 495910, 1599340])
@@ -32,6 +33,7 @@ export const maxDuration = 300
  * GET /api/cron/update-steam?appid=1245620
  */
 export async function GET(request: Request) {
+  // Auth: CRON_SECRET below — not browser session getUser().
   // Security: Verify cron secret (skip in development)
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
@@ -483,6 +485,8 @@ export async function GET(request: Request) {
       },
       { status: 500 }
     )
+  } finally {
+    logCronAgainstHobbyTarget("update-steam", startTime)
   }
 }
 

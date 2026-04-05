@@ -3,12 +3,13 @@
 import { usePathname } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { Gamepad2, Tags, UserCircle2, CalendarDays } from "lucide-react"
+import { Gamepad2, Tags, UserCircle2, CalendarDays, Flame, TrendingUp } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers, useFavoritesSession } from "@/contexts/favorites-context"
 import { useEffect, useState } from "react"
 import { fetchGamesByIds, type GameRow } from "@/lib/data"
-import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
+import { getBestGameImage, getDisplayGameTitle, formatViewerCountShort } from "@/lib/utils"
+import type { SidebarSpotlightGame } from "@/lib/sidebar-spotlight"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFollowedEvents } from "@/contexts/followed-events-context"
 
@@ -67,6 +68,37 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
   const [isLoadingGames, setIsLoadingGames] = useState(true)
   const [streamerStatuses, setStreamerStatuses] = useState<Record<string, { isLive: boolean; gameTitle?: string }>>({})
   const [isLoadingStreamers, setIsLoadingStreamers] = useState(false)
+  const [spotlight, setSpotlight] = useState<{ trending: SidebarSpotlightGame[]; rising: SidebarSpotlightGame[] } | null>(
+    null,
+  )
+  const [spotlightLoading, setSpotlightLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/sidebar-spotlight")
+        const json = (await res.json()) as { trending?: SidebarSpotlightGame[]; rising?: SidebarSpotlightGame[] }
+        if (!cancelled) {
+          if (res.ok) {
+            setSpotlight({
+              trending: Array.isArray(json.trending) ? json.trending : [],
+              rising: Array.isArray(json.rising) ? json.rising : [],
+            })
+          } else {
+            setSpotlight({ trending: [], rising: [] })
+          }
+        }
+      } catch {
+        if (!cancelled) setSpotlight({ trending: [], rising: [] })
+      } finally {
+        if (!cancelled) setSpotlightLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Fetch games data when favorite IDs change
   useEffect(() => {
@@ -169,10 +201,10 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
       className={`${embedded ? "flex h-full shrink-0 flex-col border-r border-border bg-card" : "hidden shrink-0 flex-col border-r border-border bg-card lg:flex"} ${sidebarWidth} transition-[width] duration-300 ease-in-out`}
     >
       <ScrollArea className={embedded ? "h-full" : "min-h-0 flex-1"}>
-        <div className={`flex flex-col gap-6 transition-all duration-300 ${isCollapsed ? "p-2" : "p-4"}`}>
-          {!showFollowSidebar ? (
-            <div className="min-h-[1px] shrink-0" aria-hidden />
-          ) : (
+        <div
+          className={`flex min-h-full flex-col gap-6 transition-all duration-300 ${isCollapsed ? "p-2" : "p-4"}`}
+        >
+          {showFollowSidebar && (
             <>
           {/* 팔로우 일정 */}
           {(upcomingFollowedEvents.length > 0 || !isCollapsed) && (
@@ -453,6 +485,147 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
           </section>
             </>
           )}
+          {showFollowSidebar && <div className="min-h-0 flex-1" aria-hidden />}
+          <div
+            className={
+              showFollowSidebar ? "flex flex-col gap-6 border-t border-border pt-4" : "flex flex-col gap-6"
+            }
+          >
+            <section>
+              <h3
+                className={`mb-3 flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground ${
+                  isCollapsed ? "justify-center" : "gap-2"
+                }`}
+              >
+                <Flame className="h-3.5 w-3.5 shrink-0 text-orange-400" />
+                {!isCollapsed && <span>실시간 트렌딩 게임</span>}
+              </h3>
+              <div className="flex flex-col gap-0.5 transition-opacity duration-200">
+                {spotlightLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={`trend-skel-${i}`}
+                      className={`flex items-center gap-2.5 py-1.5 ${isCollapsed ? "justify-center px-0" : "px-2"}`}
+                    >
+                      <Skeleton className="h-8 w-6 shrink-0 rounded-sm" />
+                      {!isCollapsed && <Skeleton className="h-4 flex-1" />}
+                    </div>
+                  ))
+                ) : (spotlight?.trending.length ?? 0) > 0 ? (
+                  spotlight!.trending.map((game) => {
+                    const href = `/game/${game.id}`
+                    const isActive = isGameActive(game.id)
+                    const meta = `${formatViewerCountShort(game.totalViewers)} 시청`
+                    return (
+                      <Link
+                        key={`trend-${game.id}`}
+                        href={href}
+                        title={isCollapsed ? `${game.title} · ${meta}` : undefined}
+                        className={`flex items-center rounded-md py-1.5 text-left transition-all duration-200 animate-in fade-in ${
+                          isCollapsed ? "justify-center px-0" : "gap-2.5 px-2"
+                        } ${
+                          isActive
+                            ? "bg-[hsl(var(--neon-purple))]/15 text-foreground"
+                            : "text-foreground hover:bg-secondary"
+                        }`}
+                      >
+                        <div className="relative h-8 w-6 shrink-0 overflow-hidden rounded-sm">
+                          <Image
+                            src={getBestGameImage(game.header_image_url, game.cover_image_url, "header")}
+                            alt={game.title}
+                            fill
+                            placeholder="empty"
+                            className="object-cover"
+                            sizes="24px"
+                            unoptimized
+                          />
+                        </div>
+                        {!isCollapsed && (
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-sm">{game.title}</span>
+                            <span className="block truncate text-[10px] text-muted-foreground">{meta}</span>
+                          </div>
+                        )}
+                      </Link>
+                    )
+                  })
+                ) : (
+                  <p
+                    className={`py-2 text-center text-xs text-muted-foreground ${isCollapsed ? "hidden" : "px-2"}`}
+                  >
+                    실시간 데이터가 없습니다
+                  </p>
+                )}
+              </div>
+            </section>
+            <section>
+              <h3
+                className={`mb-3 flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground ${
+                  isCollapsed ? "justify-center" : "gap-2"
+                }`}
+              >
+                <TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                {!isCollapsed && <span>인기 급상승 게임</span>}
+              </h3>
+              <div className="flex flex-col gap-0.5 transition-opacity duration-200">
+                {spotlightLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={`rise-skel-${i}`}
+                      className={`flex items-center gap-2.5 py-1.5 ${isCollapsed ? "justify-center px-0" : "px-2"}`}
+                    >
+                      <Skeleton className="h-8 w-6 shrink-0 rounded-sm" />
+                      {!isCollapsed && <Skeleton className="h-4 flex-1" />}
+                    </div>
+                  ))
+                ) : (spotlight?.rising.length ?? 0) > 0 ? (
+                  spotlight!.rising.map((game) => {
+                    const href = `/game/${game.id}`
+                    const isActive = isGameActive(game.id)
+                    const meta = `${formatViewerCountShort(game.totalViewers)} 시청`
+                    return (
+                      <Link
+                        key={`rise-${game.id}`}
+                        href={href}
+                        title={isCollapsed ? `${game.title} · ${meta}` : undefined}
+                        className={`flex items-center rounded-md py-1.5 text-left transition-all duration-200 animate-in fade-in ${
+                          isCollapsed ? "justify-center px-0" : "gap-2.5 px-2"
+                        } ${
+                          isActive
+                            ? "bg-[hsl(var(--neon-purple))]/15 text-foreground"
+                            : "text-foreground hover:bg-secondary"
+                        }`}
+                      >
+                        <div className="relative h-8 w-6 shrink-0 overflow-hidden rounded-sm">
+                          <Image
+                            src={getBestGameImage(game.header_image_url, game.cover_image_url, "header")}
+                            alt={game.title}
+                            fill
+                            placeholder="empty"
+                            className="object-cover"
+                            sizes="24px"
+                            unoptimized
+                          />
+                        </div>
+                        {!isCollapsed && (
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-sm">{game.title}</span>
+                            <span className="block truncate text-[10px] text-muted-foreground">{meta}</span>
+                          </div>
+                        )}
+                      </Link>
+                    )
+                  })
+                ) : (
+                  <p
+                    className={`py-2 text-center text-xs text-muted-foreground ${isCollapsed ? "hidden" : "px-2"}`}
+                  >
+                    급상승 게임이 없습니다
+                  </p>
+                )}
+              </div>
+            </section>
+          </div>
         </div>
       </ScrollArea>
     </aside>

@@ -232,10 +232,10 @@ export default function PrivacyPage() {
             <p className="mt-1">
               <span className="font-medium text-foreground">이메일:</span>{" "}
               <a
-                href="mailto:admin@richzem.com"
+                href="mailto:admin@richzem.xyz"
                 className="underline underline-offset-2 hover:text-foreground"
               >
-                admin@richzem.com
+                admin@richzem.xyz
               </a>
             </p>
           </div>

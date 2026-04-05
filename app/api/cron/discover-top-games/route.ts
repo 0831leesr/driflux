@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getPopularCategories } from "@/lib/chzzk"
+import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
 
 /**
  * Discover Top Game Categories from Chzzk & Upsert to games table.
@@ -15,8 +16,7 @@ import { getPopularCategories } from "@/lib/chzzk"
  * GET /api/cron/discover-top-games?size=100
  */
 export async function GET(request: Request) {
-  console.time("[Top Games Discovery] Total duration")
-
+  // Auth: CRON_SECRET below — not browser session getUser().
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
     const expectedAuth = process.env.CRON_SECRET
@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     }
   }
 
+  console.time("[Top Games Discovery] Total duration")
   const startTime = Date.now()
   const { searchParams } = new URL(request.url)
   const sizeParam = searchParams.get("size")
@@ -116,5 +117,7 @@ export async function GET(request: Request) {
     console.timeEnd("[Top Games Discovery] Total duration")
     console.error("[Top Games Discovery] Fatal error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  } finally {
+    logCronAgainstHobbyTarget("discover-top-games", startTime)
   }
 }

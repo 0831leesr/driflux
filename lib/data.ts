@@ -1,5 +1,11 @@
 "use server"
 
+/**
+ * 세션 검증은 (1) 로그인 필수 API 라우트 `requireSessionUser`, (2) 팔로우 기반 Chzzk 호출
+ * `fetchStreamsForFollowedGames` / `fetchStreamsForFollowedTags` 에서 수행합니다.
+ * 나머지 export는 비회원 홈·검색·ISR용 공개 조회입니다.
+ */
+
 import { unstable_cache } from "next/cache"
 import { createClient, createClientForCache } from "@/lib/supabase/server"
 import type { EventRow } from "@/lib/types"
@@ -159,12 +165,28 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
   if (tagNames.length === 0) return []
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const uniqueTags = [...new Set(tagNames.map((t) => t.trim()).filter(Boolean))]
+  const { data: followRows } = await supabase
+    .from("user_follows")
+    .select("target_id")
+    .eq("user_id", user.id)
+    .eq("target_type", "tag")
+    .in("target_id", uniqueTags)
+
+  const allowed = new Set((followRows ?? []).map((r) => r.target_id as string))
+  const allowedTags = uniqueTags.filter((t) => allowed.has(t))
+  if (allowedTags.length === 0) return []
 
   // 팔로우 태그를 포함한 게임 목록 조회 (태그당 최대 5개, 전체 최대 10개)
   const { data: games } = await supabase
     .from("games")
     .select("id, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate")
-    .or(tagNames.map((tag) => `top_tags.cs.{${tag}}`).join(","))
+    .or(allowedTags.map((tag) => `top_tags.cs.{${tag}}`).join(","))
     .limit(10)
 
   if (!games?.length) return []
@@ -551,10 +573,27 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
   if (gameIds.length === 0) return []
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const idStrings = [...new Set(gameIds.map((id) => String(id)))]
+  const { data: followRows } = await supabase
+    .from("user_follows")
+    .select("target_id")
+    .eq("user_id", user.id)
+    .eq("target_type", "game")
+    .in("target_id", idStrings)
+
+  const allowed = new Set((followRows ?? []).map((r) => r.target_id as string))
+  const filteredIds = gameIds.filter((id) => allowed.has(String(id)))
+  if (filteredIds.length === 0) return []
+
   const { data: games } = await supabase
     .from("games")
     .select("id, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate")
-    .in("id", gameIds)
+    .in("id", filteredIds)
 
   if (!games?.length) return []
 

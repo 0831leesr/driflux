@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { createBrowserClient } from "@/lib/supabase/client"
+import { isSafeInternalRedirect } from "@/lib/safe-redirect"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -17,7 +18,7 @@ export function GoogleLoginButton({ next }: GoogleLoginButtonProps) {
     const supabase = createBrowserClient()
 
     const redirectUrl = new URL(`${location.origin}/auth/callback`)
-    if (next) redirectUrl.searchParams.set("next", next)
+    if (isSafeInternalRedirect(next)) redirectUrl.searchParams.set("next", next)
 
     await supabase.auth.signInWithOAuth({
       provider: "google",

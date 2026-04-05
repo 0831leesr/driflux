@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getGameMappings, resolveMapping } from "@/lib/mappings"
+import { requireSessionUser } from "@/lib/auth-session"
 
 /**
  * Game Mappings API
@@ -12,6 +13,9 @@ import { getGameMappings, resolveMapping } from "@/lib/mappings"
  * GET /api/game-mappings?game=리그 오브 레전드 - 특정 게임 확인
  */
 export async function GET(request: Request) {
+  const session = await requireSessionUser()
+  if ("response" in session) return session.response
+
   const { searchParams } = new URL(request.url)
   const statsOnly = searchParams.get("stats") === "true"
   const gameName = searchParams.get("game")

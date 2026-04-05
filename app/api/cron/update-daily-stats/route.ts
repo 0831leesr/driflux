@@ -5,6 +5,7 @@ import {
   fetchChzzkCategoriesLiveTextFirst,
   type FetchChzzkCategoriesLiveTextFirstResult,
 } from "@/lib/chzzk"
+import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
 
 /**
  * Cron Job API: 일일 피크 통계 + 급상승(Momentum) 갱신
@@ -58,6 +59,7 @@ function buildRawChzzkDebugSnippet(r: FetchChzzkCategoriesLiveTextFirstResult): 
 }
 
 export async function GET(request: Request) {
+  // Auth: CRON_SECRET below — not browser session getUser().
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
     const expectedAuth = process.env.CRON_SECRET
@@ -313,6 +315,8 @@ export async function GET(request: Request) {
       },
       { status: 500 }
     )
+  } finally {
+    logCronAgainstHobbyTarget("update-daily-stats", startTime)
   }
 }
 

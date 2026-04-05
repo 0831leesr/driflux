@@ -29,6 +29,7 @@ function parseCursor(searchParams: URLSearchParams): ChzzkVideoPageCursor | null
  * 다음 페이지: 응답의 `nextCursor`를 `publishDateAt`, `readCount` 쿼리로 전달 (offset 미사용·무시됨).
  */
 export async function GET(request: NextRequest) {
+  // Public proxy: anonymous game/VOD pages depend on this (no getUser).
   const { searchParams } = new URL(request.url)
   const categoryId = searchParams.get("categoryId")?.trim()
   const size = Math.min(50, Math.max(1, parseInt(searchParams.get("size") ?? "20", 10) || 20))

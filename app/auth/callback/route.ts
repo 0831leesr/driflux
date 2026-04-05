@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase/server"
-
-/** Validates that a `next` value is a safe local path (prevents open-redirect). */
-function isSafeRedirect(next: string | null): next is string {
-  return typeof next === "string" && next.startsWith("/") && !next.startsWith("//")
-}
+import { isSafeInternalRedirect } from "@/lib/safe-redirect"
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -26,6 +22,6 @@ export async function GET(request: Request) {
     }
   }
 
-  const destination = isSafeRedirect(next) ? next : "/"
+  const destination = isSafeInternalRedirect(next) ? next : "/"
   return NextResponse.redirect(new URL(destination, requestUrl.origin))
 }

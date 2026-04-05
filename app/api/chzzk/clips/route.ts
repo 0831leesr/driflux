@@ -18,6 +18,7 @@ const ORDER_VALUES: ChzzkClipOrderType[] = ["POPULAR", "RECENT"]
  * Fetches clip list for a Chzzk game category.
  */
 export async function GET(request: NextRequest) {
+  // Public proxy: anonymous pages depend on this (no getUser).
   const { searchParams } = new URL(request.url)
   const categoryId = searchParams.get("categoryId")?.trim()
   const filterType = (searchParams.get("filterType") ?? "WITHIN_THIRTY_DAYS") as ChzzkClipFilterType

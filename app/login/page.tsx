@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { AlertCircle } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { isSafeInternalRedirect } from "@/lib/safe-redirect"
 import { GoogleLoginButton } from "@/components/google-login-button"
 import { LoginBrandLogos } from "@/components/login-brand-logos"
 
@@ -22,7 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   const { next, error } = await searchParams
 
-  if (user) redirect(next && next.startsWith("/") ? next : "/")
+  if (user) redirect(isSafeInternalRedirect(next) ? next : "/")
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-16">

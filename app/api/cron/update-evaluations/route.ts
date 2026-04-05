@@ -4,6 +4,7 @@ import { getSteamReviewSummary } from "@/lib/steam"
 import { getGameMappings, resolveMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
 import { searchIGDBGame } from "@/lib/igdb"
+import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
 
 /** Steam API에서 "not found" 반환하는 알려진 잘못된 app ID */
 const STEAM_SKIP_APP_IDS = new Set([238960, 212200, 495910, 1599340])
@@ -25,6 +26,7 @@ export const maxDuration = 300
  * - criticLimit: 평론가 점수 가져올 최대 수 (기본 30, IGDB 호출 비용 고려)
  */
 export async function GET(request: Request) {
+  // Auth: CRON_SECRET below — not browser session getUser().
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
     const expectedAuth = process.env.CRON_SECRET
@@ -165,6 +167,8 @@ export async function GET(request: Request) {
       { error: "Internal server error", message: error instanceof Error ? error.message : "Unknown" },
       { status: 500 }
     )
+  } finally {
+    logCronAgainstHobbyTarget("update-evaluations", startTime)
   }
 }
 

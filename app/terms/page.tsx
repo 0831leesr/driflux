@@ -90,10 +90,10 @@ export default function TermsPage() {
       <div className="mt-10 rounded-xl border border-border bg-muted/30 px-6 py-4 text-xs leading-relaxed text-muted-foreground">
         문의 사항은{" "}
         <a
-          href="mailto:admin@richzem.com"
+          href="mailto:admin@richzem.xyz"
           className="underline underline-offset-2 hover:text-foreground"
         >
-          admin@richzem.com
+          admin@richzem.xyz
         </a>
         으로 연락해 주세요.
       </div>

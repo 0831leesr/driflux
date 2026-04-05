@@ -39,7 +39,7 @@ export function Footer() {
           </Link>
           <span className="text-border">·</span>
           <a
-            href="mailto:admin@richzem.com"
+            href="mailto:admin@richzem.xyz"
             className="transition-colors hover:text-foreground"
           >
             문의 / 버그 제보

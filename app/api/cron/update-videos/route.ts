@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getChzzkVideosByCategory } from "@/lib/chzzk"
 import { delay } from "@/lib/utils"
+import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
+
+/** 치지직 API 부하 완화: 게임 간 대기 (ms). */
+const INTER_GAME_DELAY_MS = 450
 
 /** Vercel serverless timeout: 300초 (cron 제한) */
 export const maxDuration = 300
@@ -16,13 +20,14 @@ export const maxDuration = 300
  * Should be called daily (e.g., via daily-metadata.yml).
  *
  * Optional Query Parameters:
- * - limit: Number of games to process (default: 30)
+ * - limit: Number of games to process (default: 15, hobby 10s 목표용 — 스케줄에서 자주 호출)
  *
  * Example:
  * GET /api/cron/update-videos
  * GET /api/cron/update-videos?limit=20
  */
 export async function GET(request: Request) {
+  // Auth: CRON_SECRET below — not browser session getUser().
   if (process.env.NODE_ENV !== "development") {
     const authHeader = request.headers.get("authorization")
     const expectedAuth = process.env.CRON_SECRET
@@ -37,7 +42,7 @@ export async function GET(request: Request) {
   const startTime = Date.now()
   const { searchParams } = new URL(request.url)
   const limitParam = searchParams.get("limit")
-  const limit = limitParam ? Math.min(100, Math.max(1, parseInt(limitParam, 10) || 30)) : 30
+  const limit = limitParam ? Math.min(100, Math.max(1, parseInt(limitParam, 10) || 15)) : 15
 
   console.log("[Videos Update] Starting VOD cache update job...")
 
@@ -122,7 +127,7 @@ export async function GET(request: Request) {
       }
 
       if (i < toProcess.length - 1) {
-        await delay(1000)
+        await delay(INTER_GAME_DELAY_MS)
       }
     }
 
@@ -142,5 +147,7 @@ export async function GET(request: Request) {
       },
       { status: 500 }
     )
+  } finally {
+    logCronAgainstHobbyTarget("update-videos", startTime)
   }
 }
