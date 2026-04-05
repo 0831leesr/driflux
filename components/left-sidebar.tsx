@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Gamepad2, Tags, UserCircle2, CalendarDays } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers } from "@/contexts/favorites-context"
+import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers, useFavoritesSession } from "@/contexts/favorites-context"
 import { useEffect, useState } from "react"
 import { fetchGamesByIds, type GameRow } from "@/lib/data"
 import { getBestGameImage, getDisplayGameTitle } from "@/lib/utils"
@@ -57,6 +57,8 @@ function getDDayLabel(eventDate: Date, today: Date): { text: string; color: stri
 
 export function LeftSidebar({ games: _deprecatedGames, embedded = false, isCollapsed = false }: LeftSidebarProps = {}) {
   const pathname = usePathname()
+  const { isAuthenticated, sessionResolved } = useFavoritesSession()
+  const showFollowSidebar = sessionResolved && isAuthenticated
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
   const { favorites: favoriteStreamers, isInitialized: streamersInitialized } = useFavoriteStreamers()
@@ -168,6 +170,10 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
     >
       <ScrollArea className={embedded ? "h-full" : "min-h-0 flex-1"}>
         <div className={`flex flex-col gap-6 transition-all duration-300 ${isCollapsed ? "p-2" : "p-4"}`}>
+          {!showFollowSidebar ? (
+            <div className="min-h-[1px] shrink-0" aria-hidden />
+          ) : (
+            <>
           {/* 팔로우 일정 */}
           {(upcomingFollowedEvents.length > 0 || !isCollapsed) && (
             <section>
@@ -445,6 +451,8 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
               )}
             </div>
           </section>
+            </>
+          )}
         </div>
       </ScrollArea>
     </aside>

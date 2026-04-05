@@ -19,6 +19,7 @@ import { StreamCard, type StreamData } from "@/components/stream-card"
 import { VideoCard, type VideoData } from "@/components/video-card"
 import { ClipCard, type ClipData } from "@/components/clip-card"
 import type { GameRow } from "@/lib/data"
+import { sortChzzkVodList } from "@/lib/chzzk-vod-order"
 import { getDisplayGameTitle, getBestGameImage } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
@@ -65,17 +66,102 @@ function isValidSteamReview(game: { steam_review_desc?: string | null }): boolea
   return true
 }
 
-/* ── Clip filter/order types ── */
-const CLIP_FILTER_OPTIONS = [
-  { value: "WITHIN_THIRTY_DAYS", label: "30일" },
-  { value: "WITHIN_SEVEN_DAYS", label: "7일" },
-  { value: "WITHIN_ONE_DAY", label: "24시간" },
-  { value: "ALL", label: "전체" },
+/* ── 다시보기(v2 videos) 탭: 최신순 / 인기순만 (목록 내 클라이언트 정렬) ── */
+const CHZZK_VOD_SORT_OPTIONS = [
+  { id: "RECENT", label: "최신순" },
+  { id: "POPULAR", label: "인기순" },
 ] as const
-const CLIP_ORDER_OPTIONS = [
-  { value: "POPULAR", label: "인기순" },
-  { value: "RECENT", label: "최신순" },
+
+type ChzzkVodSortId = (typeof CHZZK_VOD_SORT_OPTIONS)[number]["id"]
+
+function chzzkVodSortToApiParams(mode: ChzzkVodSortId): {
+  filterType: "ALL"
+  orderType: "POPULAR" | "RECENT"
+} {
+  return mode === "RECENT"
+    ? { filterType: "ALL", orderType: "RECENT" }
+    : { filterType: "ALL", orderType: "POPULAR" }
+}
+
+/* ── 클립 탭 전용: 기간+정렬 통합 필터 ── */
+const CHZZK_CLIP_UNIFIED_FILTER_OPTIONS = [
+  { id: "RECENT", label: "최신순" },
+  { id: "POPULAR_24H", label: "24시간 인기순" },
+  { id: "POPULAR_7D", label: "7일 인기순" },
+  { id: "POPULAR_30D", label: "30일 인기순" },
+  { id: "POPULAR_ALL", label: "전체 인기순" },
 ] as const
+
+type ChzzkClipUnifiedFilterId = (typeof CHZZK_CLIP_UNIFIED_FILTER_OPTIONS)[number]["id"]
+
+function chzzkClipUnifiedFilterToApiParams(mode: ChzzkClipUnifiedFilterId): {
+  filterType: "WITHIN_THIRTY_DAYS" | "WITHIN_SEVEN_DAYS" | "WITHIN_ONE_DAY" | "ALL"
+  orderType: "POPULAR" | "RECENT"
+} {
+  switch (mode) {
+    case "RECENT":
+      return { filterType: "ALL", orderType: "RECENT" }
+    case "POPULAR_24H":
+      return { filterType: "WITHIN_ONE_DAY", orderType: "POPULAR" }
+    case "POPULAR_7D":
+      return { filterType: "WITHIN_SEVEN_DAYS", orderType: "POPULAR" }
+    case "POPULAR_30D":
+      return { filterType: "WITHIN_THIRTY_DAYS", orderType: "POPULAR" }
+    case "POPULAR_ALL":
+      return { filterType: "ALL", orderType: "POPULAR" }
+  }
+}
+
+function parseVodNextCursor(data: Record<string, unknown>): {
+  publishDateAt: number
+  readCount: number
+} | null {
+  const c = data.nextCursor
+  if (!c || typeof c !== "object") return null
+  const o = c as Record<string, unknown>
+  const publishDateAt = Number(o.publishDateAt)
+  const readCount = Number(o.readCount ?? 0)
+  if (!Number.isFinite(publishDateAt)) return null
+  if (!Number.isFinite(readCount)) return null
+  return { publishDateAt, readCount }
+}
+
+function mapApiVideosToVideoData(
+  items: unknown[],
+  gameCover: string,
+  gameTitle: string,
+  gameId: number
+): VideoData[] {
+  return items.map((v: any) => {
+    const publishDateAtRaw = Number(v.publishDateAt)
+    const livePvRaw = Number(v.livePv)
+    return {
+      videoId: v.videoId ?? "",
+      videoTitle: v.videoTitle ?? "제목 없음",
+      thumbnailImageUrl: v.thumbnailImageUrl ?? "",
+      readCount: Number(v.readCount ?? 0),
+      duration: Number(v.duration ?? 0),
+      publishDate: v.publishDate ?? "",
+      publishDateAt:
+        Number.isFinite(publishDateAtRaw) && publishDateAtRaw > 0 ? publishDateAtRaw : undefined,
+      livePv: Number.isFinite(livePvRaw) ? livePvRaw : 0,
+      channelName: v.channel?.channelName ?? "알 수 없음",
+      channelId: v.channel?.channelId ?? "",
+      gameCover,
+      gameTitle,
+      gameId,
+    }
+  })
+}
+
+function mergeVideosDedupe(sorted: VideoData[]): VideoData[] {
+  const byId = new Map<string, VideoData>()
+  for (const v of sorted) {
+    if (!v.videoId) continue
+    byId.set(v.videoId, v)
+  }
+  return [...byId.values()]
+}
 
 /* ── Skeleton: 메인/탐색 화면처럼 고스트 로딩 카드 ── */
 function CardGridSkeleton({ count = 16 }: { count?: number }) {
@@ -133,11 +219,17 @@ export function GameDetailsClient({
   const [videosLoading, setVideosLoading] = useState(false)
   const [loadMoreLoading, setLoadMoreLoading] = useState(false)
   const [hasMoreVideos, setHasMoreVideos] = useState(true)
+  /** 치지직 v2 videos 다음 페이지 커서(offset 미지원) */
+  const [videoNextCursor, setVideoNextCursor] = useState<{
+    publishDateAt: number
+    readCount: number
+  } | null>(null)
+  const [chzzkVodSort, setChzzkVodSort] = useState<ChzzkVodSortId>("POPULAR")
 
   const [clips, setClips] = useState<ClipData[]>([])
   const [clipsLoading, setClipsLoading] = useState(false)
-  const [clipFilterType, setClipFilterType] = useState<"WITHIN_THIRTY_DAYS" | "WITHIN_SEVEN_DAYS" | "WITHIN_ONE_DAY" | "ALL">("WITHIN_THIRTY_DAYS")
-  const [clipOrderType, setClipOrderType] = useState<"POPULAR" | "RECENT">("POPULAR")
+  const [chzzkClipListFilter, setChzzkClipListFilter] =
+    useState<ChzzkClipUnifiedFilterId>("POPULAR_30D")
   const [displayClipCount, setDisplayClipCount] = useState(16) // 4 rows × 4 cols
   const [displayStreamCount, setDisplayStreamCount] = useState(16) // 4 rows × 4 cols (시청자 기준 16개 우선 로딩)
 
@@ -146,37 +238,33 @@ export function GameDetailsClient({
   const gameCover = getBestGameImage(game.header_image_url, game.cover_image_url)
   const gameTitle = getDisplayGameTitle(game)
 
-  const BATCH_SIZE = 16
+  /** 한 번에 가져올 다시보기 개수(API 최대 50). 늘릴수록 인기순 정렬 풀은 넓어지나 응답이 커짐 */
+  const VOD_FETCH_SIZE = 24
+  const { filterType: vodFilterType, orderType: vodOrderType } = chzzkVodSortToApiParams(chzzkVodSort)
+  const vodSortKey: "POPULAR" | "RECENT" = chzzkVodSort === "RECENT" ? "RECENT" : "POPULAR"
+  const { filterType: clipFilterType, orderType: clipOrderType } =
+    chzzkClipUnifiedFilterToApiParams(chzzkClipListFilter)
 
   useEffect(() => {
     if (activeTab !== "video" || !categoryId) return
     setVideos([])
+    setVideoNextCursor(null)
     setHasMoreVideos(true)
     setVideosLoading(true)
     fetchChzzkProxyJson(
-      `/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=${BATCH_SIZE}&offset=0`,
+      `/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=${VOD_FETCH_SIZE}&filterType=${vodFilterType}&orderType=${vodOrderType}`,
       "GameDetails VOD"
     )
       .then((data) => {
         const items = (data.videos as unknown[] | undefined) ?? []
-        setVideos(
-          items.map((v: any) => ({
-            videoId: v.videoId ?? "",
-            videoTitle: v.videoTitle ?? "제목 없음",
-            thumbnailImageUrl: v.thumbnailImageUrl ?? "",
-            readCount: Number(v.readCount ?? 0),
-            duration: Number(v.duration ?? 0),
-            channelName: v.channel?.channelName ?? "알 수 없음",
-            channelId: v.channel?.channelId ?? "",
-            gameCover,
-            gameTitle,
-            gameId: game.id,
-          }))
-        )
-        setHasMoreVideos(items.length >= BATCH_SIZE)
+        const mapped = mapApiVideosToVideoData(items, gameCover, gameTitle, game.id)
+        setVideos(sortChzzkVodList(mapped, vodSortKey))
+        const next = parseVodNextCursor(data)
+        setVideoNextCursor(next)
+        setHasMoreVideos(next != null && items.length > 0)
       })
       .finally(() => setVideosLoading(false))
-  }, [activeTab, categoryId, gameCover, gameTitle, game.id])
+  }, [activeTab, categoryId, gameCover, gameTitle, game.id, chzzkVodSort])
 
   useEffect(() => {
     if (activeTab !== "clip" || !categoryId) return
@@ -201,38 +289,30 @@ export function GameDetailsClient({
             gameCover,
             gameTitle,
             gameId: game.id,
+            createdDate: c.createdDate ?? "",
           }))
         )
       })
       .finally(() => setClipsLoading(false))
-  }, [activeTab, categoryId, clipFilterType, clipOrderType, gameCover, gameTitle, game.id])
+  }, [activeTab, categoryId, chzzkClipListFilter, gameCover, gameTitle, game.id])
 
   const handleLoadMoreVideos = () => {
-    if (!categoryId || loadMoreLoading || !hasMoreVideos) return
+    if (!categoryId || loadMoreLoading || !hasMoreVideos || !videoNextCursor) return
     setLoadMoreLoading(true)
-    const offset = videos.length
+    const { publishDateAt, readCount } = videoNextCursor
     fetchChzzkProxyJson(
-      `/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=${BATCH_SIZE}&offset=${offset}`,
+      `/api/chzzk/videos?categoryId=${encodeURIComponent(categoryId)}&size=${VOD_FETCH_SIZE}&filterType=${vodFilterType}&orderType=${vodOrderType}&publishDateAt=${publishDateAt}&readCount=${readCount}`,
       "GameDetails VOD load more"
     )
       .then((data) => {
         const items = (data.videos as unknown[] | undefined) ?? []
-        if (items.length > 0) {
-          const newVideos: VideoData[] = items.map((v: any) => ({
-            videoId: v.videoId ?? "",
-            videoTitle: v.videoTitle ?? "제목 없음",
-            thumbnailImageUrl: v.thumbnailImageUrl ?? "",
-            readCount: Number(v.readCount ?? 0),
-            duration: Number(v.duration ?? 0),
-            channelName: v.channel?.channelName ?? "알 수 없음",
-            channelId: v.channel?.channelId ?? "",
-            gameCover,
-            gameTitle,
-            gameId: game.id,
-          }))
-          setVideos((prev) => [...prev, ...newVideos])
-        }
-        setHasMoreVideos(items.length >= BATCH_SIZE)
+        const newVideos = mapApiVideosToVideoData(items, gameCover, gameTitle, game.id)
+        setVideos((prev) =>
+          sortChzzkVodList(mergeVideosDedupe([...prev, ...newVideos]), vodSortKey)
+        )
+        const next = parseVodNextCursor(data)
+        setVideoNextCursor(next)
+        setHasMoreVideos(next != null && items.length > 0)
       })
       .finally(() => setLoadMoreLoading(false))
   }
@@ -518,6 +598,51 @@ export function GameDetailsClient({
           </Button>
         </div>
 
+        {activeTab === "video" && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+            <div className="flex flex-wrap gap-1 rounded-lg border border-border p-0.5">
+              {CHZZK_VOD_SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setChzzkVodSort(opt.id)}
+                  className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    chzzkVodSort === opt.id
+                      ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))]"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="max-w-xl text-xs leading-snug text-muted-foreground sm:text-right">
+              현재 표시되는 다시보기 목록 내에서만 인기 정렬이 적용됩니다.
+            </p>
+          </div>
+        )}
+
+        {activeTab === "clip" && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <div className="flex flex-wrap gap-1 rounded-lg border border-border p-0.5">
+              {CHZZK_CLIP_UNIFIED_FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setChzzkClipListFilter(opt.id)}
+                  className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    chzzkClipListFilter === opt.id
+                      ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))]"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {activeTab === "live" && (
           <div className="space-y-6">
             <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
@@ -573,7 +698,7 @@ export function GameDetailsClient({
                 </div>
               )}
             </div>
-            {hasMoreVideos && videos.length > 0 && (
+            {hasMoreVideos && videoNextCursor != null && videos.length > 0 && (
               <div className="flex justify-center pt-2">
                 <Button
                   variant="outline"
@@ -591,48 +716,6 @@ export function GameDetailsClient({
 
         {activeTab === "clip" && (
           <div className="space-y-6">
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">기간:</span>
-                <div className="flex gap-1 rounded-lg border border-border p-0.5">
-                  {CLIP_FILTER_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setClipFilterType(opt.value)}
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                        clipFilterType === opt.value
-                          ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))]"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">정렬:</span>
-                <div className="flex gap-1 rounded-lg border border-border p-0.5">
-                  {CLIP_ORDER_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setClipOrderType(opt.value)}
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                        clipOrderType === opt.value
-                          ? "bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))]"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
             <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
               {!categoryId ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">

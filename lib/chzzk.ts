@@ -6,6 +6,7 @@
  */
 
 import { delay } from "@/lib/utils"
+import { sortChzzkVodList } from "@/lib/chzzk-vod-order"
 
 /** Next.js fetch 확장 옵션 (revalidate 등) */
 type NextFetchOptions = RequestInit & { next?: { revalidate?: number } }
@@ -90,6 +91,15 @@ export interface SearchedStreamData {
   category?: string | null
   /** 드롭스 활성화 여부 (dropsCampaignNo가 있으면 true) */
   hasDrops?: boolean
+  /** 채널 프로필 이미지 (스트리머 아바타) */
+  channelImageUrl?: string
+}
+
+/** Chzzk CDN URLs often contain `{type}`; replace with pixel size (e.g. 1080 stream poster, 200 avatar). */
+function resolveChzzkTemplateImageUrl(url: string | null | undefined, typeSize: string): string {
+  const u = (url ?? "").trim()
+  if (!u) return ""
+  return u.includes("{type}") ? u.replace(/{type}/g, typeSize) : u
 }
 
 /** 다시보기 영상 API 응답 아이템 */
@@ -99,9 +109,13 @@ export interface ChzzkVideoItem {
   videoTitle: string
   videoType: string
   publishDate: string
+  /** API 밀리초 타임스탬프 (정렬·최신순에 사용) */
+  publishDateAt?: number
   thumbnailImageUrl: string
   duration: number
   readCount: number
+  /** 라이브 VOD 시청자 지표 등 (인기순 보조 키) */
+  livePv?: number
   videoCategory: string
   videoCategoryValue: string
   channel: {
@@ -110,6 +124,11 @@ export interface ChzzkVideoItem {
     channelImageUrl: string
   }
 }
+
+/** filterType for clips API & game category VOD (v2 /videos) — 동일 enum */
+export type ChzzkClipFilterType = "WITHIN_THIRTY_DAYS" | "WITHIN_SEVEN_DAYS" | "WITHIN_ONE_DAY" | "ALL"
+/** orderType for clips API & game category VOD (v2 /videos) — 동일 enum */
+export type ChzzkClipOrderType = "POPULAR" | "RECENT"
 
 /** 라이브 카테고리 API 응답 아이템 (getPopularCategories) */
 export interface ChzzkPopularCategory {
@@ -773,6 +792,7 @@ export async function getChzzkStreamsByCategory(
           thumbnailUrl = thumbnailUrl.replace(/{type}/g, "1080")
         }
         const hasDrops = !!(item.dropsCampaignNo ?? item.dropsCampaignNos?.length)
+        const channelImageUrl = resolveChzzkTemplateImageUrl(item.channel?.channelImageUrl, "200")
         return {
           channelId,
           channelName,
@@ -782,6 +802,7 @@ export async function getChzzkStreamsByCategory(
           openDate: item.openDate ?? new Date().toISOString(),
           category: item.liveCategoryValue ?? item.liveCategory ?? formattedCategoryId,
           hasDrops,
+          ...(channelImageUrl ? { channelImageUrl } : {}),
         }
       })
       .filter((s) => s.channelId)
@@ -794,28 +815,52 @@ export async function getChzzkStreamsByCategory(
   }
 }
 
+/** v2 /videos 다음 페이지 — `offset`은 API에서 무시됨(검증됨). 응답 `content.page.next`만 사용 */
+export type ChzzkVideoPageCursor = { publishDateAt: number; readCount: number }
+
+export type ChzzkVideoCategoryResult = {
+  videos: ChzzkVideoItem[]
+  nextCursor: ChzzkVideoPageCursor | null
+}
+
+function chzzkVideoNextCursorFromContent(content: unknown): ChzzkVideoPageCursor | null {
+  if (!content || typeof content !== "object") return null
+  const next = (content as { page?: { next?: { publishDateAt?: number; readCount?: number } | null } })
+    .page?.next
+  if (!next || typeof next.publishDateAt !== "number" || Number.isNaN(next.publishDateAt)) return null
+  return { publishDateAt: next.publishDateAt, readCount: Number(next.readCount ?? 0) }
+}
+
 /**
  * Get VOD/video list by category ID (game's english_title = Chzzk category)
  *
  * API: GET https://api.chzzk.naver.com/service/v2/categories/GAME/{categoryId}/videos
  *
- * @param categoryId - Chzzk category ID (e.g., "OMORI", "Rimworld")
- * @param size - Number of videos to fetch (default: 20)
- * @param offset - Pagination offset (default: 0)
- * @returns Array of video data
+ * **페이지네이션**: `offset` 미지원(같은 첫 페이지 반복). 이전 응답 `nextCursor`로
+ * `publishDateAt`·`readCount` 쿼리를 붙여 다음 구간을 요청해야 함.
+ *
+ * @param cursor - 첫 요청은 null, 이후 `result.nextCursor`
  */
 export async function getChzzkVideosByCategory(
   categoryId: string,
   size: number = 20,
-  offset: number = 0
-): Promise<ChzzkVideoItem[]> {
+  filterType: ChzzkClipFilterType = "WITHIN_THIRTY_DAYS",
+  orderType: ChzzkClipOrderType = "POPULAR",
+  cursor: ChzzkVideoPageCursor | null = null
+): Promise<ChzzkVideoCategoryResult> {
+  const empty: ChzzkVideoCategoryResult = { videos: [], nextCursor: null }
+
   if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
     console.warn("[Chzzk Videos] Skipping invalid categoryId:", JSON.stringify(categoryId))
-    return []
+    return empty
   }
 
   const formattedCategoryId = formatChzzkGameCategoryIdForApi(categoryId)
-  const url = `${CHZZK_CATEGORY_VIDEOS_URL(formattedCategoryId)}?size=${size}&offset=${offset}`
+  const safeSize = Math.min(50, Math.max(1, size))
+  let url = `${CHZZK_CATEGORY_VIDEOS_URL(formattedCategoryId)}?size=${safeSize}&filterType=${filterType}&orderType=${orderType}`
+  if (cursor && Number.isFinite(cursor.publishDateAt)) {
+    url += `&publishDateAt=${cursor.publishDateAt}&readCount=${cursor.readCount}`
+  }
   console.log("[Chzzk Request] Fetching category videos:", url)
 
   try {
@@ -828,7 +873,7 @@ export async function getChzzkVideosByCategory(
     const rawText = await response.text()
     if (!response.ok) {
       console.error("[Fetch VODs Error]:", rawText)
-      return []
+      return empty
     }
 
     let dataR: { code?: number; content?: unknown }
@@ -836,47 +881,54 @@ export async function getChzzkVideosByCategory(
       dataR = JSON.parse(rawText)
     } catch (e) {
       console.error("[Fetch VODs Error] (JSON parse):", e, rawText)
-      return []
+      return empty
     }
     if (!dataR || dataR.code !== 200) {
       console.error(`[Fetch VODs Error] (API code):`, dataR?.code, rawText)
-      return []
+      return empty
     }
 
     const items = chzzkListFromContent(dataR.content)
+    const nextCursor = chzzkVideoNextCursorFromContent(dataR.content)
     console.log(`[Chzzk] Fetched ${items.length} videos for category "${formattedCategoryId}".`)
 
     if (!Array.isArray(items) || items.length === 0) {
-      return []
+      return { videos: [], nextCursor: null }
     }
 
-    return items.map((item: any) => ({
-      videoNo: item.videoNo ?? 0,
-      videoId: item.videoId ?? "",
-      videoTitle: item.videoTitle ?? "No Title",
-      videoType: item.videoType ?? "UPLOAD",
-      publishDate: item.publishDate ?? "",
-      thumbnailImageUrl: item.thumbnailImageUrl ?? "",
-      duration: Number(item.duration ?? 0),
-      readCount: Number(item.readCount ?? 0),
-      videoCategory: item.videoCategory ?? formattedCategoryId,
-      videoCategoryValue: item.videoCategoryValue ?? "",
-      channel: {
-        channelId: item.channel?.channelId ?? "",
-        channelName: item.channel?.channelName ?? "Unknown",
-        channelImageUrl: item.channel?.channelImageUrl ?? "",
-      },
-    }))
+    const mapped = items.map((item: any) => {
+      const publishDateAtRaw = Number(item.publishDateAt)
+      const livePvRaw = Number(item.livePv)
+      return {
+        videoNo: item.videoNo ?? 0,
+        videoId: item.videoId ?? "",
+        videoTitle: item.videoTitle ?? "No Title",
+        videoType: item.videoType ?? "UPLOAD",
+        publishDate: item.publishDate ?? "",
+        publishDateAt:
+          Number.isFinite(publishDateAtRaw) && publishDateAtRaw > 0 ? publishDateAtRaw : undefined,
+        thumbnailImageUrl: item.thumbnailImageUrl ?? "",
+        duration: Number(item.duration ?? 0),
+        readCount: Number(item.readCount ?? 0),
+        livePv: Number.isFinite(livePvRaw) ? livePvRaw : 0,
+        videoCategory: item.videoCategory ?? formattedCategoryId,
+        videoCategoryValue: item.videoCategoryValue ?? "",
+        channel: {
+          channelId: item.channel?.channelId ?? "",
+          channelName: item.channel?.channelName ?? "Unknown",
+          channelImageUrl: item.channel?.channelImageUrl ?? "",
+        },
+      }
+    })
+    return {
+      videos: sortChzzkVodList(mapped, orderType),
+      nextCursor,
+    }
   } catch (error) {
     console.error(`[Chzzk Videos] ✗ Exception:`, error instanceof Error ? error.message : String(error))
-    return []
+    return empty
   }
 }
-
-/** filterType for clips API */
-export type ChzzkClipFilterType = "WITHIN_THIRTY_DAYS" | "WITHIN_SEVEN_DAYS" | "WITHIN_ONE_DAY" | "ALL"
-/** orderType for clips API */
-export type ChzzkClipOrderType = "POPULAR" | "RECENT"
 
 /**
  * Get clips list by category ID (game's english_title = Chzzk category)
@@ -1085,6 +1137,8 @@ export async function searchChzzkLives(
                              liveData.channelName || 
                              "Unknown"
 
+          const channelImageUrl = resolveChzzkTemplateImageUrl(channelData.channelImageUrl, "200")
+
           const hasDrops = !!(liveData.dropsCampaignNo ?? liveData.dropsCampaignNos?.length)
 
           const result = {
@@ -1096,6 +1150,7 @@ export async function searchChzzkLives(
             openDate: openDate,
             category: category,
             hasDrops,
+            ...(channelImageUrl ? { channelImageUrl } : {}),
           }
 
           return result

@@ -1,13 +1,14 @@
 import type { Metadata } from "next"
 import {
   getTopGameTags,
-  getGamesByTrendScore,
+  getGamesByTrendPeriodForExplore,
   fetchAllGamesForHome,
   getHistoricalTrending,
   fetchTodayDailyGameStatsByGameIds,
   type HistoricalTrendingRow,
   type TagRow,
 } from "@/lib/data"
+import { getHistoricalTrendingDateRange, type HistoricalTrendingRanges } from "@/lib/trending-date-range"
 import { getTopLiveGames } from "@/lib/chzzk"
 import { buildExploreLiveItems, fetchAndMergeHomeGamesForTopLive, type ExploreLiveListItem } from "@/lib/match-top-live-games"
 import { ExploreClient } from "@/components/explore/explore-client"
@@ -32,7 +33,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const selectedTagName = rawTag || undefined
 
   let exploreLiveItems: ExploreLiveListItem[] = []
-  let trendGames: HistoricalTrendingRow[] = []
+  let trendGamesYesterday: HistoricalTrendingRow[] = []
+  let trendGamesWeek: HistoricalTrendingRow[] = []
+  let trendGamesMonth: HistoricalTrendingRow[] = []
   let allTags: TagRow[] = []
   let risingGameIds: number[] = []
 
@@ -42,7 +45,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
   if (mode === "live") {
     const [topLive, dbGamesBase] = await Promise.all([
-      getTopLiveGames(50),
+      getTopLiveGames(48),
       fetchAllGamesForHome(),
     ])
     const dbGames = await fetchAndMergeHomeGamesForTopLive(topLive, dbGamesBase)
@@ -55,19 +58,32 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       risingGameIds = matchedIds.filter((id) => (todayStats.get(String(id))?.momentum_score ?? 0) > 0)
     }
   } else {
-    const [trendData, tags] = await Promise.all([
-      getGamesByTrendScore(selectedTagName),
+    const [yesterday, week, month, tags] = await Promise.all([
+      getGamesByTrendPeriodForExplore("yesterday", selectedTagName),
+      getGamesByTrendPeriodForExplore("week", selectedTagName),
+      getGamesByTrendPeriodForExplore("month", selectedTagName),
       getTopGameTags(16),
     ])
-    trendGames = trendData
+    trendGamesYesterday = yesterday
+    trendGamesWeek = week
+    trendGamesMonth = month
     allTags = tags
+  }
+
+  const historicalTrendingRanges: HistoricalTrendingRanges = {
+    yesterday: getHistoricalTrendingDateRange("yesterday"),
+    week: getHistoricalTrendingDateRange("week"),
+    month: getHistoricalTrendingDateRange("month"),
   }
 
   return (
     <ExploreClient
       initialMode={mode}
       exploreLiveItems={exploreLiveItems}
-      trendGames={trendGames}
+      trendGamesYesterday={trendGamesYesterday}
+      trendGamesWeek={trendGamesWeek}
+      trendGamesMonth={trendGamesMonth}
+      historicalTrendingRanges={historicalTrendingRanges}
       allTags={allTags}
       selectedTagName={selectedTagName}
       yesterdayTrendingIds={yesterdayTrendingIds}

@@ -87,6 +87,14 @@ const FavoriteStreamersContext = createContext<FavoriteStreamersContextType | un
 const FavoriteVideosContext = createContext<FavoriteVideosContextType | undefined>(undefined)
 const FavoriteClipsContext = createContext<FavoriteClipsContextType | undefined>(undefined)
 
+interface FavoritesSessionContextType {
+  isAuthenticated: boolean
+  /** 첫 Supabase getUser / onAuthStateChange 이후 true — UI 깜빡임 방지 */
+  sessionResolved: boolean
+}
+
+const FavoritesSessionContext = createContext<FavoritesSessionContextType | undefined>(undefined)
+
 /* ═══════════════════════════════════════════════════════════════
    localStorage helpers (videos, clips, streamer display metadata)
    ═══════════════════════════════════════════════════════════════ */
@@ -195,6 +203,7 @@ function removeStreamerMeta(channelId: string) {
 
 export function FavoritesProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [sessionResolved, setSessionResolved] = useState(false)
 
   // DB-backed states
   const [favoriteGames, setFavoriteGames] = useState<number[]>([])
@@ -267,26 +276,30 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     const supabase = createBrowserClient()
 
     // Bootstrap auth state then load follows + localStorage-backed data
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setIsAuthenticated(!!user)
-      if (user) {
-        loadFollowsFromDB()
-        // Only load localStorage-backed data for authenticated users
-        setSavedVideos(getStoredVideos())
-        setSavedClips(getStoredClips())
-      } else {
-        setGamesInitialized(true)
-        setTagsInitialized(true)
-        setStreamersInitialized(true)
-      }
-      setVideosInitialized(true)
-      setClipsInitialized(true)
-    })
+    supabase.auth
+      .getUser()
+      .then(({ data: { user } }) => {
+        setIsAuthenticated(!!user)
+        if (user) {
+          loadFollowsFromDB()
+          // Only load localStorage-backed data for authenticated users
+          setSavedVideos(getStoredVideos())
+          setSavedClips(getStoredClips())
+        } else {
+          setGamesInitialized(true)
+          setTagsInitialized(true)
+          setStreamersInitialized(true)
+        }
+        setVideosInitialized(true)
+        setClipsInitialized(true)
+      })
+      .finally(() => setSessionResolved(true))
 
     // Keep in sync with auth events
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionResolved(true)
       const authed = !!session?.user
       setIsAuthenticated(authed)
       if (authed) {
@@ -538,18 +551,25 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     },
   }
 
+  const sessionContextValue: FavoritesSessionContextType = {
+    isAuthenticated,
+    sessionResolved,
+  }
+
   return (
-    <FavoriteGamesContext.Provider value={gamesContextValue}>
-      <FavoriteTagsContext.Provider value={tagsContextValue}>
-        <FavoriteStreamersContext.Provider value={streamersContextValue}>
-          <FavoriteVideosContext.Provider value={videosContextValue}>
-            <FavoriteClipsContext.Provider value={clipsContextValue}>
-              {children}
-            </FavoriteClipsContext.Provider>
-          </FavoriteVideosContext.Provider>
-        </FavoriteStreamersContext.Provider>
-      </FavoriteTagsContext.Provider>
-    </FavoriteGamesContext.Provider>
+    <FavoritesSessionContext.Provider value={sessionContextValue}>
+      <FavoriteGamesContext.Provider value={gamesContextValue}>
+        <FavoriteTagsContext.Provider value={tagsContextValue}>
+          <FavoriteStreamersContext.Provider value={streamersContextValue}>
+            <FavoriteVideosContext.Provider value={videosContextValue}>
+              <FavoriteClipsContext.Provider value={clipsContextValue}>
+                {children}
+              </FavoriteClipsContext.Provider>
+            </FavoriteVideosContext.Provider>
+          </FavoriteStreamersContext.Provider>
+        </FavoriteTagsContext.Provider>
+      </FavoriteGamesContext.Provider>
+    </FavoritesSessionContext.Provider>
   )
 }
 
@@ -584,5 +604,11 @@ export function useFavoriteVideos(): FavoriteVideosContextType {
 export function useFavoriteClips(): FavoriteClipsContextType {
   const context = useContext(FavoriteClipsContext)
   if (!context) throw new Error("useFavoriteClips must be used within a FavoritesProvider")
+  return context
+}
+
+export function useFavoritesSession(): FavoritesSessionContextType {
+  const context = useContext(FavoritesSessionContext)
+  if (!context) throw new Error("useFavoritesSession must be used within a FavoritesProvider")
   return context
 }

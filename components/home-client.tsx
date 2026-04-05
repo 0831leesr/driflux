@@ -29,7 +29,7 @@ import type { VideoData } from "@/components/video-card"
 import type { ClipData } from "@/components/clip-card"
 import { CalendarContent } from "@/components/calendar-content"
 import type { EventRow } from "@/lib/types"
-import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers } from "@/contexts/favorites-context"
+import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers, useFavoritesSession } from "@/contexts/favorites-context"
 import { fetchStreamsForFollowedGames, fetchStreamsForFollowedTags } from "@/lib/data"
 import { formatViewerCountShort } from "@/lib/utils"
 interface HomeClientProps {
@@ -69,6 +69,10 @@ export function HomeClient({
   )
   const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved" | "streamers">("games")
   const [savedSubTab, setSavedSubTab] = useState<"replay" | "clips">("replay")
+  const { isAuthenticated, sessionResolved } = useFavoritesSession()
+  const followEmptyMessage = (authedMessage: string) =>
+    sessionResolved && !isAuthenticated ? "로그인 후 팔로우를 이용 가능합니다." : authedMessage
+
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
   const { favorites: favoriteTags, isInitialized: tagsInitialized } = useFavoriteTags()
   const { favorites: favoriteStreamers, isInitialized: streamersInitialized } = useFavoriteStreamers()
@@ -259,7 +263,9 @@ export function HomeClient({
                     icon={<Gamepad2 className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
                     streams={followingGamesStreams}
                     onStreamClick={handleStreamClick}
-                    emptyMessage="팔로우 중인 게임이 없습니다. 게임을 팔로우하면 여기서 라이브 스트림을 확인할 수 있습니다!"
+                    emptyMessage={followEmptyMessage(
+                      "팔로우 중인 게임이 없습니다. 게임을 팔로우하면 여기서 라이브 스트림을 확인할 수 있습니다!",
+                    )}
                   />
                 )}
                 {followSubTab === "tags" && (
@@ -268,7 +274,9 @@ export function HomeClient({
                     icon={<Tags className="h-5 w-5 text-[hsl(var(--neon-green))]" />}
                     streams={followingTagsStreams}
                     onStreamClick={handleStreamClick}
-                    emptyMessage="팔로우 중인 태그가 없습니다. 태그를 팔로우하면 여기서 라이브 스트림을 확인할 수 있습니다!"
+                    emptyMessage={followEmptyMessage(
+                      "팔로우 중인 태그가 없습니다. 태그를 팔로우하면 여기서 라이브 스트림을 확인할 수 있습니다!",
+                    )}
                   />
                 )}
                 {followSubTab === "streamers" && (
@@ -277,7 +285,9 @@ export function HomeClient({
                     icon={<UserCircle2 className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
                     streams={followingStreamerStreams}
                     onStreamClick={handleStreamClick}
-                    emptyMessage="팔로우 중인 스트리머가 없습니다. 스트리밍 카드에서 팔로우 버튼을 누르면 여기서 라이브 스트림을 확인할 수 있습니다!"
+                    emptyMessage={followEmptyMessage(
+                      "팔로우 중인 스트리머가 없습니다. 스트리밍 카드에서 팔로우 버튼을 누르면 여기서 라이브 스트림을 확인할 수 있습니다!",
+                    )}
                   />
                 )}
                 {followSubTab === "replay" && (
@@ -286,7 +296,9 @@ export function HomeClient({
                     icon={<Video className="h-5 w-5 text-[hsl(var(--neon-purple))]" />}
                     gameIds={favoriteGameIds}
                     onVideoClick={handleVideoClick}
-                    emptyMessage="팔로우 중인 게임이 없습니다. 게임을 팔로우하면 여기서 다시보기 영상을 확인할 수 있습니다!"
+                    emptyMessage={followEmptyMessage(
+                      "팔로우 중인 게임이 없습니다. 게임을 팔로우하면 여기서 다시보기 영상을 확인할 수 있습니다!",
+                    )}
                   />
                 )}
                 {followSubTab === "saved" && (

@@ -9,6 +9,7 @@ import { GameCard, type GameCardData } from "@/components/game-card"
 import { TagSearchInput } from "@/components/explore/tag-search-input"
 import { MainTabNav } from "@/components/main-tab-nav"
 import type { TagRow, HistoricalTrendingRow } from "@/lib/data"
+import type { HistoricalTrendingRanges } from "@/lib/trending-date-range"
 import type { ExploreLiveListItem } from "@/lib/match-top-live-games"
 import { getChzzkGameCategoryWebLivesUrl } from "@/lib/chzzk"
 import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
@@ -16,10 +17,27 @@ import { buildFeatureTags } from "@/lib/feature-tags"
 
 const PAGE_SIZE = 16
 
+type ExploreTrendPeriod = "yesterday" | "week" | "month"
+
+const EXPLORE_TREND_TABS: { id: ExploreTrendPeriod; label: string }[] = [
+  { id: "yesterday", label: "어제" },
+  { id: "week", label: "주간 베스트" },
+  { id: "month", label: "월간 베스트" },
+]
+
+function formatDotDate(isoYmd: string): string {
+  const [y, m, d] = isoYmd.split("-")
+  if (!y || !m || !d) return isoYmd
+  return `${y}.${m}.${d}`
+}
+
 interface ExploreClientProps {
   initialMode: "live" | "trend"
   exploreLiveItems: ExploreLiveListItem[]
-  trendGames: HistoricalTrendingRow[]
+  trendGamesYesterday: HistoricalTrendingRow[]
+  trendGamesWeek: HistoricalTrendingRow[]
+  trendGamesMonth: HistoricalTrendingRow[]
+  historicalTrendingRanges: HistoricalTrendingRanges
   allTags: TagRow[]
   selectedTagName?: string
   /** 어제 기준 트렌딩 게임 ID 목록 (특징 태그 배지용) */
@@ -72,7 +90,11 @@ function exploreLiveItemToCardData(
   }
 }
 
-function trendToCardData(game: HistoricalTrendingRow, yesterdaySet: Set<number>): GameCardData {
+function trendToCardData(
+  game: HistoricalTrendingRow,
+  yesterdaySet: Set<number>,
+  isYesterdayPeriodTab: boolean,
+): GameCardData {
   return {
     id: game.id,
     title: game.title,
@@ -86,14 +108,19 @@ function trendToCardData(game: HistoricalTrendingRow, yesterdaySet: Set<number>)
     topTags: game.top_tags?.slice(0, 2) ?? undefined,
     totalViewers: game.peak_viewers > 0 ? game.peak_viewers : undefined,
     liveStreamCount: 0,
-    featureTags: buildFeatureTags({ isTrending: yesterdaySet.has(game.id) }),
+    featureTags: buildFeatureTags({
+      isTrending: isYesterdayPeriodTab || yesterdaySet.has(game.id),
+    }),
   }
 }
 
 export function ExploreClient({
   initialMode,
   exploreLiveItems,
-  trendGames,
+  trendGamesYesterday,
+  trendGamesWeek,
+  trendGamesMonth,
+  historicalTrendingRanges,
   allTags,
   selectedTagName,
   yesterdayTrendingIds: yesterdayTrendingIdsProp,
@@ -101,6 +128,7 @@ export function ExploreClient({
 }: ExploreClientProps) {
   const router = useRouter()
   const [shownCount, setShownCount] = useState(PAGE_SIZE)
+  const [activeTrendPeriod, setActiveTrendPeriod] = useState<ExploreTrendPeriod>("yesterday")
 
   const yesterdaySet = useMemo(
     () => new Set(yesterdayTrendingIdsProp ?? []),
@@ -114,7 +142,7 @@ export function ExploreClient({
 
   useEffect(() => {
     setShownCount(PAGE_SIZE)
-  }, [initialMode])
+  }, [initialMode, activeTrendPeriod])
 
   const setMode = (mode: "live" | "trend") => {
     const params = new URLSearchParams()
@@ -137,9 +165,26 @@ export function ExploreClient({
   const visibleExploreLive = exploreLiveItems.slice(0, shownCount)
   const hasMoreLive = shownCount < exploreLiveItems.length
 
-  const displayedTrend = trendGames.map((g) => trendToCardData(g, yesterdaySet))
+  const trendGamesForPeriod = (() => {
+    switch (activeTrendPeriod) {
+      case "yesterday":
+        return trendGamesYesterday
+      case "week":
+        return trendGamesWeek
+      case "month":
+        return trendGamesMonth
+    }
+  })()
+
+  const isYesterdayPeriodTab = activeTrendPeriod === "yesterday"
+  const displayedTrend = trendGamesForPeriod.map((g) => trendToCardData(g, yesterdaySet, isYesterdayPeriodTab))
   const visibleTrend = displayedTrend.slice(0, shownCount)
   const hasMoreTrend = shownCount < displayedTrend.length
+
+  const explorePeriodRangeLabel = (() => {
+    const { start, end } = historicalTrendingRanges[activeTrendPeriod]
+    return `${formatDotDate(start)} ~ ${formatDotDate(end)}`
+  })()
 
   return (
     <>
@@ -179,14 +224,6 @@ export function ExploreClient({
         {/* ── LIVE MODE ── */}
         {initialMode === "live" && (
           <>
-            <div className="mb-6 flex items-center gap-2">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-[hsl(var(--live-red))]" />
-              <h2 className="text-lg font-semibold text-foreground">지금 라이브</h2>
-              <span className="rounded-full bg-[hsl(var(--live-red))]/10 px-2 py-0.5 text-xs font-medium text-[hsl(var(--live-red))]">
-                치지직 인기 {exploreLiveItems.length}개
-              </span>
-            </div>
-
             {exploreLiveItems.length === 0 ? (
               <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
                 현재 라이브 정보를 불러오는 중입니다.
@@ -212,7 +249,7 @@ export function ExploreClient({
                       onClick={() => setShownCount((n) => n + PAGE_SIZE)}
                       className="min-w-[160px] border-border"
                     >
-                      더 보기 ({exploreLiveItems.length - shownCount}개 남음)
+                      더 보기
                     </Button>
                   </div>
                 )}
@@ -274,6 +311,29 @@ export function ExploreClient({
               </div>
             </div>
 
+            {/* 기간 분류 — 홈 트렌딩 게임과 동일(실시간 제외) */}
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-xs font-medium tabular-nums text-muted-foreground sm:text-sm">
+                {explorePeriodRangeLabel}
+              </span>
+              <div className="flex gap-1 rounded-lg bg-muted/50 p-1 w-fit">
+                {EXPLORE_TREND_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTrendPeriod(tab.id)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      activeTrendPeriod === tab.id
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Results header — 태그 선택 시에만 표시 */}
             {selectedTagName && (
               <div className="mb-4 flex items-center gap-2">
@@ -330,7 +390,7 @@ export function ExploreClient({
                       onClick={() => setShownCount((n) => n + PAGE_SIZE)}
                       className="min-w-[160px] border-border"
                     >
-                      더 보기 ({displayedTrend.length - shownCount}개 남음)
+                      더 보기
                     </Button>
                   </div>
                 )}

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS game_videos (
   read_count INTEGER DEFAULT 0,
   channel_name TEXT,
   channel_id TEXT,
+  publish_date TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(category_id, video_id)
 );

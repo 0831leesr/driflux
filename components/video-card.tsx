@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import {
   formatViewerCountShort,
   formatDuration,
+  formatVideoPublishDate,
   getGameImageSrc,
   DEFAULT_STREAMING_IMAGE,
 } from "@/lib/utils"
@@ -25,6 +26,12 @@ export interface VideoData {
   gameCover: string
   gameTitle: string
   gameId?: number
+  /** 치지직 API publishDate (ISO) — 게시 시각 표시 */
+  publishDate?: string | null
+  /** API publishDateAt (ms) — 정렬 */
+  publishDateAt?: number
+  /** 인기순 보조 키 (라이브 VOD 등) */
+  livePv?: number
 }
 
 export function VideoCard({
@@ -44,6 +51,7 @@ export function VideoCard({
   const [thumbnailSrc, setThumbnailSrc] = useState(initialThumbnail)
   const readCountDisplay = formatViewerCountShort(video.readCount)
   const durationDisplay = video.duration && video.duration > 0 ? formatDuration(video.duration) : null
+  const publishLabel = formatVideoPublishDate(video.publishDate)
   const isVideoSaved = isSaved(video.videoId)
 
   const handleSaveClick = (e: React.MouseEvent) => {
@@ -187,6 +195,11 @@ export function VideoCard({
         <p className="truncate text-xs leading-snug text-secondary-foreground/70">
           {video.videoTitle}
         </p>
+        {publishLabel && (
+          <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+            게시 {publishLabel}
+          </p>
+        )}
       </div>
     </article>
   )

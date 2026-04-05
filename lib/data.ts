@@ -212,6 +212,7 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
         hasDrops: s.hasDrops ?? false,
         gameId: game.id,
         channelId: s.channelId,
+        channelImageUrl: s.channelImageUrl,
       })
     }
   })
@@ -361,6 +362,7 @@ export async function searchStreams(
       hasDrops: s.hasDrops ?? false,
       gameId,
       channelId: s.channelId,
+      channelImageUrl: s.channelImageUrl,
     })
   }
 
@@ -598,6 +600,7 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
         hasDrops: s.hasDrops ?? false,
         gameId: game.id,
         channelId: s.channelId,
+        channelImageUrl: s.channelImageUrl,
       } as any)
     }
   })
@@ -1312,6 +1315,92 @@ export async function getGamesByTrendScore(tagName?: string): Promise<Historical
   return unstable_cache(
     () => getGamesByTrendScoreImpl(tagName),
     [`games-by-trend-score-${tagName ?? "all"}`],
+    { revalidate: 300 }
+  )()
+}
+
+/**
+ * 탐색 > 트렌드 탭 — `getHistoricalTrending`과 동일한 기간·집계(일자별 trend_score 합산, peak_viewers 최대),
+ * 다만 홈의 상위 8개가 아닌 `getGamesByTrendScore`와 같은 games 조회(최대 500행) 전체를 점수순 정렬해 반환.
+ */
+async function getGamesByTrendPeriodForExploreImpl(
+  period: TrendingPeriod,
+  tagName?: string
+): Promise<HistoricalTrendingRow[]> {
+  const supabase = createClientForCache()
+  const { start: startDateStr, end: yesterdayStr } = getHistoricalTrendingDateRange(period)
+
+  const { data: stats, error: statsErr } = await supabase
+    .from("daily_game_stats")
+    .select("game_id, peak_viewers, trend_score")
+    .gte("record_date", startDateStr)
+    .lte("record_date", yesterdayStr)
+
+  if (statsErr) {
+    console.error("[Trending Fetch Error] getGamesByTrendPeriodForExplore stats:", statsErr.message, statsErr)
+    return []
+  }
+  if (!stats || stats.length === 0) return []
+
+  const gameStats = new Map<string, { peak_viewers: number; trend_score: number }>()
+  for (const row of stats) {
+    const gid = String(row.game_id)
+    const ts = Number(row.trend_score) || 0
+    const pv = Number(row.peak_viewers) || 0
+    const prev = gameStats.get(gid)
+    gameStats.set(gid, {
+      peak_viewers: Math.max(pv, prev?.peak_viewers ?? 0),
+      trend_score: (prev?.trend_score ?? 0) + ts,
+    })
+  }
+
+  const baseQuery = supabase
+    .from("games")
+    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
+    .limit(500)
+
+  const { data: games, error: gamesErr } = tagName
+    ? await baseQuery.contains("top_tags", [tagName])
+    : await baseQuery
+
+  if (gamesErr) {
+    console.error("[Trending Fetch Error] getGamesByTrendPeriodForExplore games:", gamesErr.message, gamesErr)
+    return []
+  }
+  if (!games) return []
+
+  const mappings = await getGameMappings()
+
+  return games
+    .map((g: any) => {
+      const s = gameStats.get(String(g.id))
+      const m = resolveMapping(mappings, g.title ?? "", g.english_title ?? null, g.korean_title ?? null)
+      const mg = applyMappingOverridesToGame(g, m) as any
+      const effectiveDiscount = getEffectiveDiscountRate(mg.discount_rate)
+      return {
+        id: mg.id,
+        title: getDisplayGameTitle({ korean_title: mg.korean_title, title: mg.title }),
+        cover_image_url: mg.cover_image_url,
+        header_image_url: mg.header_image_url ?? mg.cover_image_url,
+        peak_viewers: s?.peak_viewers ?? 0,
+        trend_score: s?.trend_score ?? 0,
+        price_krw: mg.price_krw ?? null,
+        original_price_krw: mg.original_price_krw ?? null,
+        discount_rate: effectiveDiscount > 0 ? effectiveDiscount : null,
+        is_free: mg.is_free ?? null,
+        top_tags: Array.isArray(mg.top_tags) ? mg.top_tags : null,
+      } as HistoricalTrendingRow
+    })
+    .sort((a, b) => b.trend_score - a.trend_score)
+}
+
+export async function getGamesByTrendPeriodForExplore(
+  period: TrendingPeriod,
+  tagName?: string
+): Promise<HistoricalTrendingRow[]> {
+  return unstable_cache(
+    () => getGamesByTrendPeriodForExploreImpl(period, tagName),
+    [`explore-trend-period-${period}-${tagName ?? "all"}`],
     { revalidate: 300 }
   )()
 }

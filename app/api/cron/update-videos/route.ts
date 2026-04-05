@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       const categoryId = game.english_title.trim()
 
       try {
-        const videos = await getChzzkVideosByCategory(categoryId, 20, 0)
+        const { videos } = await getChzzkVideosByCategory(categoryId, 20)
 
         if (videos.length === 0) {
           await adminSupabase.from("game_videos").delete().eq("category_id", categoryId)
@@ -106,6 +106,7 @@ export async function GET(request: Request) {
           read_count: v.readCount || 0,
           channel_name: v.channel?.channelName || null,
           channel_id: v.channel?.channelId || null,
+          publish_date: v.publishDate?.trim() || null,
         }))
 
         const { error: insertError } = await adminSupabase.from("game_videos").insert(rows)

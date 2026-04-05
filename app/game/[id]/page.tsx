@@ -95,7 +95,7 @@ export default async function GamePage({ params }: PageProps) {
     hasDrops: s.hasDrops,
     gameId: game.id,
     channelId: s.channelId,
-    channelImageUrl: null,
+    channelImageUrl: s.channelImageUrl?.trim() || null,
   }))
 
   return (

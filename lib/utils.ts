@@ -85,6 +85,24 @@ export function formatReadCountKorean(count: number | null | undefined): string 
  * @param seconds - Duration in seconds
  * @returns Formatted string (e.g., "04:20:15" or "05:30")
  */
+/**
+ * 치지직 다시보기/영상 게시 시각 표시용 (한국어 로캘)
+ * @param iso - API publishDate 등 ISO 8601 문자열
+ */
+export function formatVideoPublishDate(iso: string | null | undefined): string | null {
+  const raw = iso?.trim()
+  if (!raw) return null
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined || seconds < 0) return "00:00"
   const h = Math.floor(seconds / 3600)
