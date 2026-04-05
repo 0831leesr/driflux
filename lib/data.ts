@@ -6,6 +6,7 @@ import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { getGameMappings, resolveMapping, applyMappingOverridesToGame, type GameMapping } from "@/lib/mappings"
 import { getChzzkStreamsByCategory, searchChzzkLives, getTopLiveGames } from "@/lib/chzzk"
+import { getHistoricalTrendingDateRange } from "@/lib/trending-date-range"
 
 /* ── Cache config (revalidate in seconds) ── */
 const CACHE_REVALIDATE_TRENDING = 30
@@ -1103,23 +1104,7 @@ export async function fetchEsportsChannels(): Promise<EsportsChannel[]> {
 /* ── V2: getHistoricalTrending — daily_game_stats 기반 기간별 트렌딩 ── */
 async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<HistoricalTrendingRow[]> {
   const supabase = createClientForCache()
-
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const yesterdayStr = yesterday.toISOString().slice(0, 10)
-
-  let startDateStr: string
-  if (period === "yesterday") {
-    startDateStr = yesterdayStr
-  } else if (period === "week") {
-    const d = new Date()
-    d.setDate(d.getDate() - 7)
-    startDateStr = d.toISOString().slice(0, 10)
-  } else {
-    const d = new Date()
-    d.setDate(d.getDate() - 30)
-    startDateStr = d.toISOString().slice(0, 10)
-  }
+  const { start: startDateStr, end: yesterdayStr } = getHistoricalTrendingDateRange(period)
 
   const { data: stats, error: statsErr } = await supabase
     .from("daily_game_stats")

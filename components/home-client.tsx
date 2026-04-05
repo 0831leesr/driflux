@@ -19,6 +19,7 @@ import type {
   NewReleasesRow,
   EsportsChannel,
 } from "@/lib/data"
+import type { HistoricalTrendingRanges } from "@/lib/trending-date-range"
 import { FollowStreamGrid } from "@/components/follow-stream-grid"
 import { FollowReplayGrid } from "@/components/follow-replay-grid"
 import { SavedReplayGrid } from "@/components/saved-replay-grid"
@@ -34,6 +35,7 @@ import { formatViewerCountShort } from "@/lib/utils"
 interface HomeClientProps {
   trendingLive: TrendingGameRow[]
   risingTrendingGames: TrendingGameRow[]
+  historicalTrendingRanges: HistoricalTrendingRanges
   yesterdayTrending: HistoricalTrendingRow[]
   weekTrending: HistoricalTrendingRow[]
   monthTrending: HistoricalTrendingRow[]
@@ -47,6 +49,7 @@ interface HomeClientProps {
 export function HomeClient({
   trendingLive,
   risingTrendingGames,
+  historicalTrendingRanges,
   yesterdayTrending,
   weekTrending,
   monthTrending,
@@ -207,6 +210,7 @@ export function HomeClient({
             <div className="flex flex-col gap-8 sm:gap-10">
               <TrendingGames
                 liveGames={trendingLive}
+                historicalTrendingRanges={historicalTrendingRanges}
                 yesterdayGames={yesterdayTrending}
                 weekGames={weekTrending}
                 monthGames={monthTrending}

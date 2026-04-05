@@ -3,12 +3,11 @@ import {
   getTopGameTags,
   getGamesByTrendScore,
   fetchAllGamesForHome,
-  type TrendingGameRow,
   type HistoricalTrendingRow,
   type TagRow,
 } from "@/lib/data"
-import { matchTopLiveGamesToTrendingRows } from "@/lib/match-top-live-games"
 import { getTopLiveGames } from "@/lib/chzzk"
+import { buildExploreLiveItems, type ExploreLiveListItem } from "@/lib/match-top-live-games"
 import { ExploreClient } from "@/components/explore/explore-client"
 
 export const metadata: Metadata = {
@@ -30,7 +29,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     : undefined
   const selectedTagName = rawTag || undefined
 
-  let liveGames: TrendingGameRow[] = []
+  let exploreLiveItems: ExploreLiveListItem[] = []
   let trendGames: HistoricalTrendingRow[] = []
   let allTags: TagRow[] = []
 
@@ -39,7 +38,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       getTopLiveGames(50),
       fetchAllGamesForHome(),
     ])
-    liveGames = matchTopLiveGamesToTrendingRows(topLive, dbGames)
+    exploreLiveItems = buildExploreLiveItems(topLive, dbGames)
   } else {
     const [trendData, tags] = await Promise.all([
       getGamesByTrendScore(selectedTagName),
@@ -52,7 +51,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   return (
     <ExploreClient
       initialMode={mode}
-      liveGames={liveGames}
+      exploreLiveItems={exploreLiveItems}
       trendGames={trendGames}
       allTags={allTags}
       selectedTagName={selectedTagName}

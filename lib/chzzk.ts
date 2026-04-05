@@ -195,6 +195,15 @@ export function formatChzzkGameCategoryIdForApi(categoryId: string): string {
   return categoryId.trim().replace(/ /g, "_")
 }
 
+/**
+ * 치지직 웹 — 게임 카테고리 라이브 탭 URL (시청자 순 랜딩)
+ * 예: https://chzzk.naver.com/category/GAME/League_of_Legends/lives
+ */
+export function getChzzkGameCategoryWebLivesUrl(categoryId: string): string {
+  const slug = formatChzzkGameCategoryIdForApi(categoryId)
+  return `https://chzzk.naver.com/category/GAME/${encodeURIComponent(slug)}/lives`
+}
+
 /** categories/live: 문서상 size 최대 50 — 초과 시 400(잘못된 값) 가능 */
 export const CHZZK_CATEGORIES_LIVE_MAX_SIZE = 50
 

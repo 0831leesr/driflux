@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { Flame } from "lucide-react"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { TrendingGameRow, HistoricalTrendingRow } from "@/lib/data"
+import type { HistoricalTrendingRanges } from "@/lib/trending-date-range"
 
 type TrendTab = "live" | "yesterday" | "week" | "month"
 
@@ -15,6 +16,12 @@ const TABS: { id: TrendTab; label: string }[] = [
 ]
 
 const LIVE_DISPLAY_LIMIT = 8
+
+function formatDotDate(isoYmd: string): string {
+  const [y, m, d] = isoYmd.split("-")
+  if (!y || !m || !d) return isoYmd
+  return `${y}.${m}.${d}`
+}
 
 function liveToCardData(games: TrendingGameRow[]): GameCardData[] {
   return games.map((game) => ({
@@ -50,6 +57,7 @@ function historicalToCardData(games: HistoricalTrendingRow[]): GameCardData[] {
 
 interface TrendingGamesProps {
   liveGames: TrendingGameRow[]
+  historicalTrendingRanges: HistoricalTrendingRanges
   yesterdayGames: HistoricalTrendingRow[]
   weekGames: HistoricalTrendingRow[]
   monthGames: HistoricalTrendingRow[]
@@ -57,6 +65,7 @@ interface TrendingGamesProps {
 
 export function TrendingGames({
   liveGames,
+  historicalTrendingRanges,
   yesterdayGames,
   weekGames,
   monthGames,
@@ -89,13 +98,26 @@ export function TrendingGames({
       ? "현재 라이브 게임 정보를 불러오는 중입니다."
       : "아직 집계된 데이터가 없습니다. 오늘 이후부터 통계가 쌓입니다."
 
+  const periodRangeLabel = (() => {
+    if (activeTab === "live") return null
+    const { start, end } = historicalTrendingRanges[activeTab]
+    return `${formatDotDate(start)} ~ ${formatDotDate(end)}`
+  })()
+
   return (
     <section className="pb-1">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
-          <Flame className="h-5 w-5 text-orange-400" />
-          트렌딩 게임
-        </h2>
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+            <Flame className="h-5 w-5 shrink-0 text-orange-400" />
+            트렌딩 게임
+          </h2>
+          {periodRangeLabel ? (
+            <span className="text-xs font-medium tabular-nums text-muted-foreground sm:text-sm">
+              {periodRangeLabel}
+            </span>
+          ) : null}
+        </div>
 
         <div className="flex gap-1 rounded-lg bg-muted/50 p-1 w-fit">
           {TABS.map((tab) => (

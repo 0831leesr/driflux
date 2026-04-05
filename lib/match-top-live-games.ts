@@ -11,14 +11,13 @@ function formatViewers(count: number | null): string {
   return String(count)
 }
 
-/**
- * TopLiveGame(Chzzk API) 배열을 DB HomeGameRow와 매칭하여 TrendingGameRow 배열로 변환.
- * 매칭 키: 한글 title (소문자) → english_title (소문자, 공백→_) → title (소문자)
- */
-export function matchTopLiveGamesToTrendingRows(
-  topLive: TopLiveGame[],
-  dbGames: HomeGameRow[]
-): TrendingGameRow[] {
+/** Chzzk TopLive ↔ games 홈 행 매칭용 맵 (한 번만 생성) */
+export type TopLiveHomeLookupMaps = {
+  byKorean: Map<string, HomeGameRow>
+  byEnglish: Map<string, HomeGameRow>
+}
+
+export function buildTopLiveHomeLookupMaps(dbGames: HomeGameRow[]): TopLiveHomeLookupMaps {
   const byKorean = new Map<string, HomeGameRow>()
   const byEnglish = new Map<string, HomeGameRow>()
 
@@ -31,12 +30,54 @@ export function matchTopLiveGamesToTrendingRows(
     byKorean.set(g.title.toLowerCase().trim(), g)
   }
 
+  return { byKorean, byEnglish }
+}
+
+/**
+ * 단일 TopLive 항목을 DB HomeGameRow에 매핑.
+ * 매칭 키: 한글 title (소문자) → categoryId ↔ english_title (소문자, 공백→_)
+ */
+export function resolveTopLiveToHomeRow(
+  live: TopLiveGame,
+  maps: TopLiveHomeLookupMaps
+): HomeGameRow | null {
+  return (
+    maps.byKorean.get(live.title.toLowerCase().trim()) ??
+    maps.byEnglish.get(live.categoryId.toLowerCase()) ??
+    null
+  )
+}
+
+/** 탐색 라이브: 치지직 순서 유지 + 매칭 여부 */
+export type ExploreLiveListItem = {
+  live: TopLiveGame
+  db: HomeGameRow | null
+}
+
+export function buildExploreLiveItems(
+  topLive: TopLiveGame[],
+  dbGames: HomeGameRow[]
+): ExploreLiveListItem[] {
+  const maps = buildTopLiveHomeLookupMaps(dbGames)
+  return topLive.map((live) => ({
+    live,
+    db: resolveTopLiveToHomeRow(live, maps),
+  }))
+}
+
+/**
+ * TopLiveGame(Chzzk API) 배열을 DB HomeGameRow와 매칭하여 TrendingGameRow 배열로 변환.
+ * 매칭 키: 한글 title (소문자) → english_title (소문자, 공백→_) → title (소문자)
+ */
+export function matchTopLiveGamesToTrendingRows(
+  topLive: TopLiveGame[],
+  dbGames: HomeGameRow[]
+): TrendingGameRow[] {
+  const maps = buildTopLiveHomeLookupMaps(dbGames)
+
   const result: TrendingGameRow[] = []
   for (const live of topLive) {
-    const db =
-      byKorean.get(live.title.toLowerCase().trim()) ??
-      byEnglish.get(live.categoryId.toLowerCase()) ??
-      null
+    const db = resolveTopLiveToHomeRow(live, maps)
     if (!db) continue
 
     const effectiveDiscount = getEffectiveDiscountRate(db.discount_rate)

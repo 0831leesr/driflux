@@ -36,11 +36,17 @@ export interface GameCardData {
   daysSinceRelease?: number
   /** 급상승 탭 — 시청자 수 옆 붉은 강조 (momentum_score) */
   momentumScore?: number
+  /** 설정 시 이 경로로 이동 (치지직 카테고리 등). 내부 `/game/:id` 대신 사용 */
+  cardHref?: string
+  /** true면 팔로우(하트) 숨김 — 외부 전용 카드용 */
+  hideFavorite?: boolean
 }
 
 export function GameCard({ game, priority }: { game: GameCardData; priority?: boolean }) {
   const hasDiscount = game.discount_rate && game.discount_rate > 0
   const isFree = game.is_free || game.price_krw === 0
+  const href = game.cardHref ?? `/game/${game.id}`
+  const isExternal = Boolean(game.cardHref)
 
   const { isFavorite, toggleFavorite } = useFavoriteGames()
   const isGameFavorite = isFavorite(game.id)
@@ -63,7 +69,10 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
 
   return (
     <Link
-      href={`/game/${game.id}`}
+      href={href}
+      {...(isExternal
+        ? { target: "_blank" as const, rel: "noopener noreferrer" }
+        : {})}
       className="group block overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 transition-all duration-300 hover:border-[hsl(var(--neon-purple))]/50 hover:shadow-[0_0_20px_hsl(var(--neon-purple)_/_0.2)]"
     >
       {/* 3:4 poster — all info overlaid on gradient */}
@@ -102,27 +111,29 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
           </div>
         )}
 
-        {/* Top-right: Follow (Heart) button — glassmorphism */}
-        <div className="absolute right-2 top-2">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={handleFavoriteClick}
-            disabled={isPending}
-            className={`h-8 w-8 rounded-full bg-white/10 backdrop-blur-md transition-all hover:bg-white/20 disabled:opacity-70 ${
-              isGameFavorite
-                ? "text-red-400 hover:text-red-300"
-                : "text-white hover:text-white/90"
-            }`}
-            aria-label={isGameFavorite ? "팔로우 해제" : "팔로우"}
-          >
-            {isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Heart className={`h-4 w-4 ${isGameFavorite ? "fill-current" : ""}`} />
-            )}
-          </Button>
-        </div>
+        {/* Top-right: Follow (Heart) — DB 게임 상세에만 표시 */}
+        {!game.hideFavorite && (
+          <div className="absolute right-2 top-2">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleFavoriteClick}
+              disabled={isPending}
+              className={`h-8 w-8 rounded-full bg-white/10 backdrop-blur-md transition-all hover:bg-white/20 disabled:opacity-70 ${
+                isGameFavorite
+                  ? "text-red-400 hover:text-red-300"
+                  : "text-white hover:text-white/90"
+              }`}
+              aria-label={isGameFavorite ? "팔로우 해제" : "팔로우"}
+            >
+              {isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Heart className={`h-4 w-4 ${isGameFavorite ? "fill-current" : ""}`} />
+              )}
+            </Button>
+          </div>
+        )}
 
         {/* Bottom overlay: stream stats + tags + title + price */}
         <div className="absolute inset-x-0 bottom-0 p-3">

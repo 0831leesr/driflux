@@ -14,6 +14,7 @@ import { matchTopLiveGamesToTrendingRows } from "@/lib/match-top-live-games"
 import { getTopLiveGames, type TopLiveGame } from "@/lib/chzzk"
 import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { HomeClient } from "@/components/home-client"
+import { getHistoricalTrendingDateRange } from "@/lib/trending-date-range"
 
 /* ─────────────────────────────────────────────────────────
    Server-side computation helpers (home-specific)
@@ -162,10 +163,17 @@ export default async function RichzemHome() {
   // games_with_drops DB 뷰 삭제로 인해 라이브 API에서 drops 정보를 가져올 수 없음 → 빈 배열 유지
   const gamesWithDrops: GamesWithDropsRow[] = []
 
+  const historicalTrendingRanges = {
+    yesterday: getHistoricalTrendingDateRange("yesterday"),
+    week: getHistoricalTrendingDateRange("week"),
+    month: getHistoricalTrendingDateRange("month"),
+  }
+
   return (
     <HomeClient
       trendingLive={trendingLive}
       risingTrendingGames={risingTrendingGames}
+      historicalTrendingRanges={historicalTrendingRanges}
       yesterdayTrending={yesterdayTrending}
       weekTrending={weekTrending}
       monthTrending={monthTrending}

@@ -1,39 +1,52 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { TrendingUp, Check } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import { TagSearchInput } from "@/components/explore/tag-search-input"
 import { MainTabNav } from "@/components/main-tab-nav"
-import type { TagRow, TrendingGameRow, HistoricalTrendingRow } from "@/lib/data"
+import type { TagRow, HistoricalTrendingRow } from "@/lib/data"
+import type { ExploreLiveListItem } from "@/lib/match-top-live-games"
+import { getChzzkGameCategoryWebLivesUrl } from "@/lib/chzzk"
+import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 
 const PAGE_SIZE = 16
 
 interface ExploreClientProps {
   initialMode: "live" | "trend"
-  liveGames: TrendingGameRow[]
+  exploreLiveItems: ExploreLiveListItem[]
   trendGames: HistoricalTrendingRow[]
   allTags: TagRow[]
   selectedTagName?: string
 }
 
-function liveToCardData(game: TrendingGameRow): GameCardData {
+function exploreLiveItemToCardData(item: ExploreLiveListItem): GameCardData {
+  const { live, db } = item
+  const cover = db?.cover_image_url ?? live.posterImageUrl
+  const header = (db?.header_image_url ?? db?.cover_image_url) ?? live.posterImageUrl
+  const effectiveDiscount = db ? getEffectiveDiscountRate(db.discount_rate) : 0
+
   return {
-    id: game.id,
-    title: game.title,
-    cover_image_url: game.cover_image_url,
-    header_image_url: game.header_image_url ?? undefined,
-    price_krw: game.price_krw ?? null,
-    original_price_krw: game.original_price_krw ?? null,
-    discount_rate: game.discount_rate ?? null,
-    is_free: game.is_free ?? null,
-    topTag: game.topTag,
-    topTags: Array.isArray((game as any).top_tags) ? (game as any).top_tags.slice(0, 2) : undefined,
-    totalViewers: game.totalViewers,
-    liveStreamCount: game.liveStreamCount,
+    id: db?.id ?? 0,
+    title: db
+      ? getDisplayGameTitle({ korean_title: db.korean_title, title: db.title })
+      : live.title,
+    korean_title: db?.korean_title,
+    cover_image_url: cover,
+    header_image_url: header,
+    price_krw: db?.price_krw ?? null,
+    original_price_krw: db?.original_price_krw ?? null,
+    discount_rate: db && effectiveDiscount > 0 ? effectiveDiscount : null,
+    is_free: db?.is_free ?? null,
+    topTag: db?.top_tags?.[0],
+    topTags: db?.top_tags?.slice(0, 2),
+    totalViewers: live.concurrentUserCount,
+    liveStreamCount: live.openLiveCount,
+    cardHref: db ? undefined : getChzzkGameCategoryWebLivesUrl(live.categoryId),
+    hideFavorite: !db,
   }
 }
 
@@ -56,14 +69,17 @@ function trendToCardData(game: HistoricalTrendingRow): GameCardData {
 
 export function ExploreClient({
   initialMode,
-  liveGames,
+  exploreLiveItems,
   trendGames,
   allTags,
   selectedTagName,
 }: ExploreClientProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [shownCount, setShownCount] = useState(PAGE_SIZE)
+
+  useEffect(() => {
+    setShownCount(PAGE_SIZE)
+  }, [initialMode])
 
   const setMode = (mode: "live" | "trend") => {
     const params = new URLSearchParams()
@@ -83,26 +99,12 @@ export function ExploreClient({
     setTag(tagName)
   }
 
-  const displayedLive = liveGames.map(liveToCardData)
+  const visibleExploreLive = exploreLiveItems.slice(0, shownCount)
+  const hasMoreLive = shownCount < exploreLiveItems.length
+
   const displayedTrend = trendGames.map(trendToCardData)
   const visibleTrend = displayedTrend.slice(0, shownCount)
   const hasMoreTrend = shownCount < displayedTrend.length
-
-  const CardSkeleton = ({ count = 8 }: { count?: number }) => (
-    <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-      <div className="card-grid-4">
-        {Array.from({ length: count }).map((_, i) => (
-          <div key={i} className="overflow-hidden rounded-xl border border-border bg-card animate-pulse">
-            <div className="aspect-[3/4] w-full bg-muted" />
-            <div className="p-3 space-y-2">
-              <div className="h-4 w-3/4 rounded bg-muted" />
-              <div className="h-3 w-1/2 rounded bg-muted" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 
   return (
     <>
@@ -144,25 +146,41 @@ export function ExploreClient({
           <>
             <div className="mb-6 flex items-center gap-2">
               <span className="h-2 w-2 animate-pulse rounded-full bg-[hsl(var(--live-red))]" />
-              <h2 className="text-lg font-semibold text-foreground">
-                지금 라이브
-              </h2>
+              <h2 className="text-lg font-semibold text-foreground">지금 라이브</h2>
               <span className="rounded-full bg-[hsl(var(--live-red))]/10 px-2 py-0.5 text-xs font-medium text-[hsl(var(--live-red))]">
-                상위 {displayedLive.length}
+                치지직 인기 {exploreLiveItems.length}개
               </span>
             </div>
 
-            {displayedLive.length === 0 ? (
+            {exploreLiveItems.length === 0 ? (
               <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
                 현재 라이브 정보를 불러오는 중입니다.
               </div>
             ) : (
-              <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-                <div className="card-grid-4">
-                  {displayedLive.map((game, i) => (
-                    <GameCard key={game.id} game={game} priority={i < 4} />
-                  ))}
+              <div className="space-y-6">
+                <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+                  <div className="card-grid-4">
+                    {visibleExploreLive.map((item, i) => (
+                      <GameCard
+                        key={item.live.categoryId}
+                        game={exploreLiveItemToCardData(item)}
+                        priority={i < 4}
+                      />
+                    ))}
+                  </div>
                 </div>
+                {hasMoreLive && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={() => setShownCount((n) => n + PAGE_SIZE)}
+                      className="min-w-[160px] border-border"
+                    >
+                      더 보기 ({exploreLiveItems.length - shownCount}개 남음)
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -221,24 +239,20 @@ export function ExploreClient({
               </div>
             </div>
 
-            {/* Results header */}
-            <div className="mb-4 flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-foreground">
-                {selectedTagName ? (
-                  <>
-                    <span className="text-[hsl(var(--neon-purple))]"># {selectedTagName}</span>{" "}
-                    트렌드
-                  </>
-                ) : (
-                  "전체 게임 트렌드"
-                )}
-              </h2>
-              <span className="text-sm text-muted-foreground">
-                {displayedTrend.length > 0
-                  ? `${displayedTrend.length}개`
-                  : "데이터 없음"}
-              </span>
-            </div>
+            {/* Results header — 태그 선택 시에만 표시 */}
+            {selectedTagName && (
+              <div className="mb-4 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-foreground">
+                  <span className="text-[hsl(var(--neon-purple))]"># {selectedTagName}</span>{" "}
+                  트렌드
+                </h2>
+                <span className="text-sm text-muted-foreground">
+                  {displayedTrend.length > 0
+                    ? `${displayedTrend.length}개`
+                    : "데이터 없음"}
+                </span>
+              </div>
+            )}
 
             {displayedTrend.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20 text-center">
