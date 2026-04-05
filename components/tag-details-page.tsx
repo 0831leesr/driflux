@@ -8,6 +8,7 @@ import { GameCard, type GameCardData } from "@/components/game-card"
 import { useFavoriteTags } from "@/contexts/favorites-context"
 import type { HistoricalTrendingRow, TrendingGameRow } from "@/lib/data"
 import { buildFeatureTags } from "@/lib/feature-tags"
+import { newReleaseDPlusForBadge } from "@/lib/release-date"
 
 const PAGE_SIZE = 16
 
@@ -51,7 +52,10 @@ function liveToCardData(game: TrendingGameRow, yesterdaySet: Set<number>): GameC
     topTags: Array.isArray((game as any).top_tags) ? (game as any).top_tags.slice(0, 2) : undefined,
     totalViewers: game.totalViewers,
     liveStreamCount: game.liveStreamCount,
-    featureTags: buildFeatureTags({ isTrending: yesterdaySet.has(game.id) }),
+    featureTags: buildFeatureTags({
+      newReleaseDPlus: newReleaseDPlusForBadge(game.release_date ?? null),
+      isTrending: yesterdaySet.has(game.id),
+    }),
   }
 }
 

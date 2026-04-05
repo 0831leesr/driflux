@@ -6,6 +6,7 @@ import { GameCard, type GameCardData } from "@/components/game-card"
 import type { TrendingGameRow, HistoricalTrendingRow } from "@/lib/data"
 import type { HistoricalTrendingRanges } from "@/lib/trending-date-range"
 import { buildFeatureTags } from "@/lib/feature-tags"
+import { newReleaseDPlusForBadge } from "@/lib/release-date"
 
 type TrendTab = "live" | "yesterday" | "week" | "month"
 
@@ -39,6 +40,7 @@ function liveToCardData(games: TrendingGameRow[], yesterdayTrendingIds: Set<numb
     topTag: game.topTag,
     topTags: (game as { top_tags?: string[] | null }).top_tags?.slice(0, 2),
     featureTags: buildFeatureTags({
+      newReleaseDPlus: newReleaseDPlusForBadge(game.release_date ?? null),
       isTrending: yesterdayTrendingIds.has(game.id),
       isRising: (game.momentum_score ?? 0) > 0,
     }),

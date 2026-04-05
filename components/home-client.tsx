@@ -212,8 +212,8 @@ export function HomeClient({
         onTabChange={setActiveTab}
       />
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      {/* Main Content — 스크롤은 app-shell 단일 영역에 위임 (탭 전환 시 높이 튐 방지) */}
+      <main className="w-full min-w-0">
         {activeTab === "main" ? (
           <div className="flex flex-col gap-8 p-4 lg:p-6">
             <div className="flex flex-col gap-8 sm:gap-10">

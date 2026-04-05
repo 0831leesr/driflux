@@ -4,6 +4,7 @@ import { Gamepad2 } from "lucide-react"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { GameWithTags } from "@/lib/data"
 import { buildFeatureTags } from "@/lib/feature-tags"
+import { newReleaseDPlusForBadge } from "@/lib/release-date"
 
 interface StreamStats {
   totalViewers: number
@@ -49,7 +50,10 @@ function toGameCardData(
     liveStreamCount: stats?.liveStreamCount,
     topTag: topTags?.[0],
     topTags,
-    featureTags: buildFeatureTags({ isTrending: yesterdaySet.has(game.id) }),
+    featureTags: buildFeatureTags({
+      newReleaseDPlus: newReleaseDPlusForBadge(game.release_date ?? null),
+      isTrending: yesterdaySet.has(game.id),
+    }),
   }
 }
 

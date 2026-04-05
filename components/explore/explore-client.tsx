@@ -14,6 +14,7 @@ import type { ExploreLiveListItem } from "@/lib/match-top-live-games"
 import { getChzzkGameCategoryWebLivesUrl } from "@/lib/chzzk"
 import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { buildFeatureTags } from "@/lib/feature-tags"
+import { newReleaseDPlusForBadge } from "@/lib/release-date"
 
 const PAGE_SIZE = 16
 
@@ -46,8 +47,6 @@ interface ExploreClientProps {
   risingGameIds?: number[]
 }
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
-
 function exploreLiveItemToCardData(
   item: ExploreLiveListItem,
   yesterdaySet: Set<number>,
@@ -58,9 +57,9 @@ function exploreLiveItemToCardData(
   const header = (db?.header_image_url ?? db?.cover_image_url) ?? live.posterImageUrl
   const effectiveDiscount = db ? getEffectiveDiscountRate(db.discount_rate) : 0
 
-  const isNew = db?.release_date
-    ? Date.now() - new Date(db.release_date).getTime() <= THIRTY_DAYS_MS
-    : false
+  const newReleaseDPlus = db?.release_date
+    ? newReleaseDPlusForBadge(db.release_date)
+    : undefined
 
   return {
     id: db?.id ?? 0,
@@ -82,7 +81,7 @@ function exploreLiveItemToCardData(
     hideFavorite: !db,
     featureTags: db
       ? buildFeatureTags({
-          isNew,
+          newReleaseDPlus,
           isTrending: yesterdaySet.has(db.id),
           isRising: risingSet.has(db.id),
         })
@@ -189,7 +188,7 @@ export function ExploreClient({
   return (
     <>
       <MainTabNav activeTab="explore" />
-    <div className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
+    <div className="w-full bg-background px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         {/* Mode Toggle */}
         <div className="mb-8 flex gap-2">

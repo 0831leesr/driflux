@@ -201,6 +201,7 @@ export function matchTopLiveGamesToTrendingRows(
       currency: null,
       is_free: db.is_free,
       top_tags: db.top_tags,
+      release_date: db.release_date,
       short_description: null,
       developer: null,
       publisher: null,

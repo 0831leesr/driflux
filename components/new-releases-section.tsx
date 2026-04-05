@@ -18,7 +18,7 @@ function toCardData(games: NewReleasesRow[], yesterdayTrendingIds: Set<number>):
     totalViewers: game.totalViewers,
     liveStreamCount: game.liveStreamCount,
     featureTags: buildFeatureTags({
-      isNew: true,
+      newReleaseDPlus: game.daysSinceRelease,
       isTrending: yesterdayTrendingIds.has(game.id),
     }),
   }))

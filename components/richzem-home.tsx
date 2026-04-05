@@ -15,6 +15,10 @@ import { getTopLiveGames, type TopLiveGame } from "@/lib/chzzk"
 import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { HomeClient } from "@/components/home-client"
 import { getHistoricalTrendingDateRange } from "@/lib/trending-date-range"
+import {
+  kstCalendarDaysSinceRelease,
+  NEW_RELEASE_MAX_CALENDAR_DAYS,
+} from "@/lib/release-date"
 
 /* ─────────────────────────────────────────────────────────
    Server-side computation helpers (home-specific)
@@ -86,17 +90,20 @@ function computeNewReleases(
   liveGames: TopLiveGame[],
   lookup: (l: TopLiveGame) => HomeGameRow | null
 ): NewReleasesRow[] {
-  const thirtyDaysAgoMs = Date.now() - 30 * 24 * 60 * 60 * 1000
-
   return liveGames
     .flatMap((live) => {
       const db = lookup(live)
       if (!db || !db.release_date) return []
 
-      const releaseMs = new Date(db.release_date).getTime()
-      if (isNaN(releaseMs) || releaseMs < thirtyDaysAgoMs) return []
+      const daysSinceRelease = kstCalendarDaysSinceRelease(db.release_date)
+      if (
+        daysSinceRelease === null ||
+        daysSinceRelease < 0 ||
+        daysSinceRelease > NEW_RELEASE_MAX_CALENDAR_DAYS
+      ) {
+        return []
+      }
 
-      const daysSinceRelease = Math.max(0, Math.floor((Date.now() - releaseMs) / 86_400_000))
       const score = live.concurrentUserCount / Math.sqrt(daysSinceRelease + 1)
 
       return [

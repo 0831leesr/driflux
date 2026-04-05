@@ -13,7 +13,7 @@ import {
 import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import { Button } from "@/components/ui/button"
-import type { FeatureTag } from "@/lib/feature-tags"
+import type { FeatureTagItem, FeatureTagPreset } from "@/lib/feature-tags"
 
 export interface GameCardData {
   id: number
@@ -32,22 +32,23 @@ export interface GameCardData {
   /** 상위 태그 최대 2개 (topTag보다 우선) */
   topTags?: string[]
   /**
-   * 좌상단 특징 태그 — 최대 3개, 우선순위 순(신작>트렌딩>급상승>드롭스).
+   * 좌상단 특징 태그 — 최대 3개, 우선순위 순(신작 D+N>트렌딩>급상승>드롭스).
    * buildFeatureTags() 헬퍼로 생성하세요. (lib/feature-tags.ts)
    */
-  featureTags?: FeatureTag[]
+  featureTags?: FeatureTagItem[]
   /** 설정 시 이 경로로 이동 (치지직 카테고리 등). 내부 `/game/:id` 대신 사용 */
   cardHref?: string
   /** true면 팔로우(하트) 숨김 — 외부 전용 카드용 */
   hideFavorite?: boolean
 }
 
-const FEATURE_TAG_CONFIG: Record<FeatureTag, { icon: LucideIcon; className: string }> = {
-  신작:    { icon: Sparkles,   className: "bg-amber-500" },
+const PRESET_FEATURE_CONFIG: Record<FeatureTagPreset, { icon: LucideIcon; className: string }> = {
   트렌딩:  { icon: TrendingUp, className: "bg-[hsl(var(--neon-purple))]" },
   급상승:  { icon: Flame,      className: "bg-red-500" },
   드롭스:  { icon: Gift,       className: "bg-violet-500" },
 }
+
+const NEW_RELEASE_BADGE_CLASS = "bg-amber-500"
 
 export function GameCard({ game, priority }: { game: GameCardData; priority?: boolean }) {
   const hasDiscount = game.discount_rate && game.discount_rate > 0
@@ -103,16 +104,27 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
         {/* Top-left: feature tags — max 3, stacked vertically */}
         {game.featureTags && game.featureTags.length > 0 && (
           <div className="absolute left-2 top-2 flex flex-col gap-1">
-            {game.featureTags.slice(0, 3).map((tag) => {
-              const cfg = FEATURE_TAG_CONFIG[tag]
+            {game.featureTags.slice(0, 3).map((item) => {
+              if (item.kind === "new") {
+                return (
+                  <Badge
+                    key={`new-${item.dPlus}`}
+                    className={`w-fit border-0 ${NEW_RELEASE_BADGE_CLASS} px-2 py-0.5 text-[10px] font-semibold text-white shadow-md`}
+                  >
+                    <Sparkles className="mr-1 inline h-2.5 w-2.5" />
+                    신작 D+{item.dPlus}
+                  </Badge>
+                )
+              }
+              const cfg = PRESET_FEATURE_CONFIG[item.tag]
               const Icon = cfg.icon
               return (
                 <Badge
-                  key={tag}
+                  key={item.tag}
                   className={`w-fit border-0 ${cfg.className} px-2 py-0.5 text-[10px] font-semibold text-white shadow-md`}
                 >
                   <Icon className="mr-1 inline h-2.5 w-2.5" />
-                  {tag}
+                  {item.tag}
                 </Badge>
               )
             })}

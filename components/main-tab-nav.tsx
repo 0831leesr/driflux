@@ -25,7 +25,7 @@ export function MainTabNav({ activeTab, onTabChange }: MainTabNavProps) {
   }
 
   return (
-    <div className="flex items-center gap-2 border-b border-border/50 bg-card/80 backdrop-blur-xl px-4 lg:px-6">
+    <div className="flex shrink-0 items-center gap-2 border-b border-border/50 bg-card/80 backdrop-blur-xl px-4 lg:px-6">
       <Tabs value={activeTab} onValueChange={handleValueChange} className="w-full">
         <TabsList className="h-10 bg-transparent p-0">
           <TabsTrigger value="main" className={triggerClass}>

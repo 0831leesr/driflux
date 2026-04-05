@@ -6,6 +6,7 @@ import { GameCardSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { TrendingGameRow } from "@/lib/data"
 import { buildFeatureTags } from "@/lib/feature-tags"
+import { newReleaseDPlusForBadge } from "@/lib/release-date"
 
 function toCardData(games: TrendingGameRow[], yesterdayTrendingIds: Set<number>): GameCardData[] {
   return games.map((game) => ({
@@ -22,6 +23,7 @@ function toCardData(games: TrendingGameRow[], yesterdayTrendingIds: Set<number>)
     topTag: game.topTag,
     topTags: (game as { top_tags?: string[] | null }).top_tags?.slice(0, 2),
     featureTags: buildFeatureTags({
+      newReleaseDPlus: newReleaseDPlusForBadge(game.release_date ?? null),
       isTrending: yesterdayTrendingIds.has(game.id),
       isRising: true,
     }),
