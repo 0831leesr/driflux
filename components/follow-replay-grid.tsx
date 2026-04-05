@@ -80,10 +80,10 @@ export function FollowReplayGrid({
 
               videoMap.set(videoId, {
                 videoId,
-                videoTitle: v.videoTitle ?? "No Title",
+                videoTitle: v.videoTitle ?? "제목 없음",
                 thumbnailImageUrl: v.thumbnailImageUrl ?? "",
                 readCount: Number(v.readCount ?? 0),
-                channelName: v.channel?.channelName ?? "Unknown",
+                channelName: v.channel?.channelName ?? "알 수 없음",
                 channelId: v.channel?.channelId ?? "",
                 gameCover,
                 gameTitle,

@@ -23,16 +23,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const gameId = parseInt(id, 10)
 
   if (isNaN(gameId) || gameId <= 0) {
-    return { title: "Game Not Found" }
+    return { title: "게임을 찾을 수 없음" }
   }
 
   const game = await fetchGameById(gameId)
   if (!game) {
-    return { title: "Game Not Found" }
+    return { title: "게임을 찾을 수 없음" }
   }
 
   const displayTitle = getDisplayGameTitle(game)
-  const title = `${displayTitle} - Live on Richzem`
+  const title = `${displayTitle} - Richzem 라이브`
   const description = `Richzem에서 ${displayTitle}의 실시간 방송, 다시보기, 클립을 확인하세요.`
   const ogImage = getBestGameImage(game.header_image_url, game.cover_image_url, "header")
 

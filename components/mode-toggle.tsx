@@ -26,7 +26,7 @@ export function ModeToggle() {
           variant="ghost"
           size="icon"
           className="h-9 w-9 text-muted-foreground hover:text-foreground"
-          aria-label="Toggle theme"
+          aria-label="테마 전환"
         >
           {!mounted ? (
             <span className="h-4 w-4" />
@@ -42,15 +42,15 @@ export function ModeToggle() {
       <DropdownMenuContent align="end" sideOffset={8}>
         <DropdownMenuItem onClick={() => setTheme("light")}>
           <Sun className="mr-2 h-4 w-4" />
-          Light
+          라이트
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme("dark")}>
           <Moon className="mr-2 h-4 w-4" />
-          Dark
+          다크
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme("system")}>
           <Monitor className="mr-2 h-4 w-4" />
-          System
+          시스템 설정
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

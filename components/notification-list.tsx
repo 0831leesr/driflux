@@ -10,9 +10,9 @@ import { Bell } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const DUMMY_NOTIFICATIONS = [
-  { id: "1", message: "Welcome to Richzem!", unread: true },
-  { id: "2", message: "Data updated successfully.", unread: true },
-  { id: "3", message: "New features added.", unread: true },
+  { id: "1", message: "Richzem에 오신 것을 환영합니다!", unread: true },
+  { id: "2", message: "데이터가 성공적으로 갱신되었습니다.", unread: true },
+  { id: "3", message: "새로운 기능이 추가되었습니다.", unread: true },
 ]
 
 export function NotificationCenter() {
@@ -22,7 +22,7 @@ export function NotificationCenter() {
         <button
           type="button"
           className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--neon-purple))] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          aria-label="Notifications"
+          aria-label="알림"
         >
           <Bell className="h-5 w-5" />
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[hsl(var(--neon-green))]" />

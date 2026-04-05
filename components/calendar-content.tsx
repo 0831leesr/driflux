@@ -187,9 +187,9 @@ function mapCustomEventsToGameEvents(customEvents: import("@/contexts/custom-eve
 }
 
 /* ── Helpers ── */
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-const MONTHS_SHORT = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+const DAYS = ["일", "월", "화", "수", "목", "금", "토"]
+const MONTHS_SHORT = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"]
+const MONTHS_FULL = MONTHS_SHORT
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()
@@ -222,8 +222,8 @@ function getEffectiveEndDate(ev: GameEvent): Date {
 }
 
 function formatDateRange(start: Date, end: Date): string {
-  const s = `${MONTHS_SHORT[start.getMonth()]} ${start.getDate()}`
-  const e = `${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}`
+  const s = `${MONTHS_SHORT[start.getMonth()]} ${start.getDate()}일`
+  const e = `${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}일`
   return s === e ? s : `${s} – ${e}`
 }
 
@@ -278,7 +278,9 @@ function MiniCalendar({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-sm font-semibold text-foreground">{MONTHS_FULL[month]} {year}</span>
+        <span className="text-sm font-semibold text-foreground">
+          {year}년 {MONTHS_FULL[month]}
+        </span>
         <Button
           variant="ghost"
           size="icon"
@@ -353,7 +355,7 @@ function HeroCard({ event, today }: { event: GameEvent; today: Date }) {
           <Badge className={`mt-1.5 w-fit border-transparent text-[10px] ${config.bgColor} ${config.color}`}>
             {event.endDate
               ? formatDateRange(event.date, event.endDate)
-              : `${MONTHS_SHORT[event.date.getMonth()]} ${event.date.getDate()}`}
+              : `${MONTHS_SHORT[event.date.getMonth()]} ${event.date.getDate()}일`}
           </Badge>
         </div>
       </div>
@@ -440,7 +442,7 @@ function EventCard({
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            aria-label="View details"
+            aria-label="상세 보기"
             onClick={handleExternalClick}
           >
             <ExternalLink className="h-4 w-4" />
@@ -454,7 +456,7 @@ function EventCard({
           >
             <Image
               src={event.gameCover}
-              alt={event.subtitle || "Game cover"}
+              alt={event.subtitle || "게임 표지"}
               fill
               className="object-cover"
               sizes="44px"
@@ -623,7 +625,7 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
     for (const ev of filteredEvents) {
       const monthKey = `${ev.date.getFullYear()}-${ev.date.getMonth()}`
       const weekKey = `${monthKey}-w${Math.ceil(ev.date.getDate() / 7)}`
-      const monthLabel = `${MONTHS_FULL[ev.date.getMonth()]} ${ev.date.getFullYear()}`
+      const monthLabel = `${ev.date.getFullYear()}년 ${MONTHS_FULL[ev.date.getMonth()]}`
       const weekLabel = getWeekLabel(ev.date)
 
       if (monthKey !== lastMonthKey || weekKey !== lastWeekKey) {
@@ -794,7 +796,7 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
       {/* This Month's Highlights + 일정 추가 (같은 줄) */}
       <div className="flex items-center justify-between gap-4">
         {heroEvents.length > 0 ? (
-          <h2 className="text-lg font-bold text-foreground">This Month{"'"}s Highlights</h2>
+          <h2 className="text-lg font-bold text-foreground">이번 달 하이라이트</h2>
         ) : (
           <div className="flex-1" />
         )}
@@ -827,7 +829,7 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
         {categoryFilterUI}
         <div className="rounded-xl border border-border bg-card p-4">
           <label className="flex cursor-pointer items-center justify-between">
-            <span className="text-sm text-foreground">Show Past Events</span>
+            <span className="text-sm text-foreground">지난 일정 표시</span>
             <Switch
               checked={showPast}
               onCheckedChange={setShowPast}
@@ -866,7 +868,7 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
             {/* Past Events Toggle */}
             <div className="rounded-xl border border-border bg-card p-4">
               <label className="flex cursor-pointer items-center justify-between">
-                <span className="text-sm text-foreground">Show Past Events</span>
+                <span className="text-sm text-foreground">지난 일정 표시</span>
                 <Switch
                   checked={showPast}
                   onCheckedChange={setShowPast}
@@ -885,7 +887,7 @@ export function CalendarContent({ events, esportsChannels = [] }: CalendarConten
               <p className="text-sm text-muted-foreground">
                 {gameEvents.length === 0
                   ? "예정된 이벤트가 없습니다."
-                  : "No upcoming events match your filters."}
+                  : "필터에 맞는 예정 일정이 없습니다."}
               </p>
             </div>
           ) : (

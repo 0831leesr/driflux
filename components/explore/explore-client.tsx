@@ -148,7 +148,7 @@ export function ExploreClient({
                 지금 라이브
               </h2>
               <span className="rounded-full bg-[hsl(var(--live-red))]/10 px-2 py-0.5 text-xs font-medium text-[hsl(var(--live-red))]">
-                Top {displayedLive.length}
+                상위 {displayedLive.length}
               </span>
             </div>
 

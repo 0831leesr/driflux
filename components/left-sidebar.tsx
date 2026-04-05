@@ -233,7 +233,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
               }`}
             >
               <Gamepad2 className="h-3.5 w-3.5 shrink-0" />
-              {!isCollapsed && <span>My Followed Games</span>}
+              {!isCollapsed && <span>팔로우한 게임</span>}
             </h3>
             <div className="flex flex-col gap-0.5 transition-opacity duration-200">
               {isLoadingGames ? (
@@ -281,7 +281,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                           <span className="truncate text-sm text-foreground">{getDisplayGameTitle(game)}</span>
                           <span
                             className="ml-auto h-2 w-2 shrink-0 animate-pulse rounded-full bg-[hsl(var(--live-red))]"
-                            aria-label="Live"
+                            aria-label="라이브"
                           />
                         </>
                       )}
@@ -292,7 +292,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                 <p
                   className={`py-4 text-center text-xs text-muted-foreground ${isCollapsed ? "px-0" : "px-2"}`}
                 >
-                  {!isCollapsed && "No favorite games yet"}
+                  {!isCollapsed && "팔로우한 게임이 없습니다"}
                 </p>
               )}
             </div>
@@ -306,7 +306,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
               }`}
             >
               <Tags className="h-3.5 w-3.5 shrink-0" />
-              {!isCollapsed && <span>My Followed Tags</span>}
+              {!isCollapsed && <span>팔로우한 태그</span>}
             </h3>
             <div className="flex flex-col gap-0.5 transition-opacity duration-200">
               {!tagsInitialized ? (
@@ -355,7 +355,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                 <p
                   className={`py-4 text-center text-xs text-muted-foreground ${isCollapsed ? "px-0" : "px-2"}`}
                 >
-                  {!isCollapsed && "No favorite tags yet"}
+                  {!isCollapsed && "팔로우한 태그가 없습니다"}
                 </p>
               )}
             </div>
@@ -369,7 +369,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
               }`}
             >
               <UserCircle2 className="h-3.5 w-3.5 shrink-0" />
-              {!isCollapsed && <span>My Followed Streamers</span>}
+              {!isCollapsed && <span>팔로우한 스트리머</span>}
             </h3>
             <div className="flex flex-col gap-0.5 transition-opacity duration-200">
               {!streamersInitialized ? (
@@ -422,13 +422,13 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                           <div className="min-w-0 flex-1">
                             <span className="block truncate text-sm">{streamer.streamerName}</span>
                             <span className="block truncate text-[10px] text-muted-foreground">
-                              {isLoadingStreamers ? "..." : isLive ? gameTitle ?? "Live" : "오프라인"}
+                              {isLoadingStreamers ? "..." : isLive ? gameTitle ?? "라이브" : "오프라인"}
                             </span>
                           </div>
                           {isLive && (
                             <span
                               className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[hsl(var(--live-red))]"
-                              aria-label="Live"
+                              aria-label="라이브"
                             />
                           )}
                         </>
@@ -440,7 +440,7 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
                 <p
                   className={`py-4 text-center text-xs text-muted-foreground ${isCollapsed ? "px-0" : "px-2"}`}
                 >
-                  {!isCollapsed && "No followed streamers yet"}
+                  {!isCollapsed && "팔로우한 스트리머가 없습니다"}
                 </p>
               )}
             </div>

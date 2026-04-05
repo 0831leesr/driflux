@@ -26,22 +26,24 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://richzem.vercel.app"),
   applicationName: "Richzem",
   title: {
-    default: "Richzem - Discover Game Streams & Sales",
+    default: "Richzem - 치지직 게임 스트리밍 & 스팀 할인",
     template: "%s | Richzem",
   },
-  description: "Watch live game streams, find Steam sales, and discover new games. Your ultimate gaming streaming platform.",
+  description:
+    "치지직 라이브 방송 트렌드, 스팀 할인·메타 정보, 게임·스트리머 탐색을 한곳에서. 한국 스트리밍을 위한 데이터 기반 게임 플랫폼.",
   openGraph: {
     type: "website",
-    locale: "en_US",
+    locale: "ko_KR",
     siteName: "Richzem",
-    title: "Richzem - Discover Game Streams & Sales",
-    description: "Watch live game streams, find Steam sales, and discover new games. Your ultimate gaming streaming platform.",
+    title: "Richzem - 치지직 게임 스트리밍 & 스팀 할인",
+    description:
+      "치지직 라이브 방송 트렌드, 스팀 할인·메타 정보, 게임·스트리머 탐색을 한곳에서. 한국 스트리밍을 위한 데이터 기반 게임 플랫폼.",
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Richzem" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Richzem - Discover Game Streams & Sales",
-    description: "Watch live game streams, find Steam sales, and discover new games.",
+    title: "Richzem - 치지직 게임 스트리밍 & 스팀 할인",
+    description: "치지직 라이브 방송 트렌드와 스팀 게임 정보를 한곳에서 탐색하세요.",
   },
 };
 
@@ -53,7 +55,7 @@ export default function RootLayout({
   const headerAuth = <AppHeaderAuth />;
 
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
+    <html lang="ko" className="h-full" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen flex flex-col antialiased bg-background`}
         suppressHydrationWarning

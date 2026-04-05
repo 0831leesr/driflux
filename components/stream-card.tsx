@@ -111,12 +111,12 @@ export function StreamCard({
           onError={handleThumbnailError}
         />
 
-        {/* Top-LEFT: blinking 🔴 LIVE badge */}
+        {/* Top-LEFT: blinking 🔴 라이브 뱃지 */}
         {isLive && (
           <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-[hsl(var(--live-red))] px-2 py-1">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-            <span className="text-[11px] font-bold uppercase tracking-wide text-white">
-              LIVE
+            <span className="text-[11px] font-bold tracking-wide text-white">
+              라이브
             </span>
           </div>
         )}
@@ -200,7 +200,7 @@ export function StreamCard({
             {hasChannelId && (
               <button
                 type="button"
-                aria-label={isFollowing ? "Unfollow" : "Follow"}
+                aria-label={isFollowing ? "팔로우 해제" : "팔로우"}
                 disabled={isPending}
                 className="streamer-follow-btn ml-auto shrink-0 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-[hsl(var(--neon-purple))]/15 hover:text-[hsl(var(--neon-purple))] disabled:opacity-60"
                 onClick={handleFollowClick}

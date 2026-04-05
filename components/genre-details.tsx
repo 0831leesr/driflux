@@ -26,76 +26,76 @@ interface GenreInfo {
 
 const GENRE_DB: Record<string, GenreInfo> = {
   horror: {
-    name: "Horror",
+    name: "공포",
     viewers: "15.2K",
     activeStreams: 120,
-    description: "Face your fears with terrifying gameplay and spine-chilling atmospheres.",
+    description: "긴장감 넘치는 연출과 공포 분위기로 스릴을 만끽하는 장르입니다.",
   },
   "co-op": {
-    name: "Co-op",
+    name: "협동",
     viewers: "28.4K",
     activeStreams: 340,
-    description: "Team up with friends and conquer challenges together.",
+    description: "친구들과 팀을 이루어 목표를 함께 달성하는 플레이가 핵심입니다.",
   },
   soulslike: {
-    name: "Soulslike",
+    name: "소울라이크",
     viewers: "19.7K",
     activeStreams: 185,
-    description: "Punishing difficulty, rewarding mastery. Only the dedicated survive.",
+    description: "높은 난이도와 반복 도전, 숙련의 쾌감이 특징인 하드코어 액션입니다.",
   },
   indie: {
-    name: "Indie",
+    name: "인디",
     viewers: "11.3K",
     activeStreams: 210,
-    description: "Discover hidden gems from passionate independent developers.",
+    description: "소규모 스튜디오의 독창적인 시도와 실험 정신이 돋보이는 게임들입니다.",
   },
   rpg: {
     name: "RPG",
     viewers: "35.6K",
     activeStreams: 420,
-    description: "Epic stories, deep character systems, and sprawling worlds to explore.",
+    description: "서사와 캐릭터 성장, 넓은 세계를 탐험하는 재미가 중심입니다.",
   },
   "open world": {
-    name: "Open World",
+    name: "오픈 월드",
     viewers: "22.1K",
     activeStreams: 280,
-    description: "Boundless exploration across vast, immersive landscapes.",
+    description: "거대한 맵을 자유롭게 누비며 발견과 모험을 즐길 수 있습니다.",
   },
   fps: {
     name: "FPS",
     viewers: "52.8K",
     activeStreams: 580,
-    description: "Fast-paced action and precision aiming in competitive shooters.",
+    description: "빠른 템포의 액션과 정교한 조준이 승부를 가르는 슈팅 게임입니다.",
   },
   roguelike: {
-    name: "Roguelike",
+    name: "로그라이크",
     viewers: "8.9K",
     activeStreams: 95,
-    description: "Procedurally generated runs where every attempt is unique.",
+    description: "매 판마다 달라지는 구성과 도전을 반복하며 빌드를 다듬어 나갑니다.",
   },
   strategy: {
-    name: "Strategy",
+    name: "전략",
     viewers: "12.4K",
     activeStreams: 150,
-    description: "Outsmart your opponents with tactical thinking and careful planning.",
+    description: "판단과 계획으로 상대를 제압하는 두뇌 싸움이 매력입니다.",
   },
   simulation: {
-    name: "Simulation",
+    name: "시뮬레이션",
     viewers: "9.1K",
     activeStreams: 110,
-    description: "Realistic experiences that let you build, manage, and simulate.",
+    description: "현실감 있는 운영·건설·관리 경험을 다루는 장르입니다.",
   },
   "action rpg": {
-    name: "Action RPG",
+    name: "액션 RPG",
     viewers: "29.3K",
     activeStreams: 310,
-    description: "Combine intense combat with deep progression and loot systems.",
+    description: "박진감 있는 전투와 성장·수집 요소가 어우러진 하이브리드입니다.",
   },
   adventure: {
-    name: "Adventure",
+    name: "어드벤처",
     viewers: "14.7K",
     activeStreams: 175,
-    description: "Embark on unforgettable journeys filled with discovery and wonder.",
+    description: "이야기와 탐험, 발견의 기쁨을 중심으로 한 여정을 담습니다.",
   },
 }
 
@@ -155,17 +155,24 @@ function getGenreStreams(genreSlug: string): StreamData[] {
 
   const covers = ["/games/elden-ring.jpg", "/games/cyberpunk.jpg", "/games/valorant.jpg", "/games/baldurs-gate.jpg", "/games/helldivers.jpg", "/games/hollow-knight.jpg"]
   const thumbs = ["/streams/stream-1.jpg", "/streams/stream-2.jpg", "/streams/stream-3.jpg", "/streams/stream-4.jpg", "/streams/stream-5.jpg", "/streams/stream-6.jpg", "/streams/stream-7.jpg", "/streams/stream-8.jpg"]
-  const names = ["NightOwlGamer", "ProGamerX", "CasualVibes", "SpeedRunner99", "TwitchLegend", "ChillStreamer", "DarkSoulsVet", "BugHunterPro"]
-  const gameTitles = [`${genre.name} Master`, `${genre.name} Run`, `${genre.name} Challenge`, `Chill ${genre.name}`, `Hardcore ${genre.name}`, `New to ${genre.name}`]
+  const names = ["나이트올", "프로게이머K", "캐주얼채널", "스피드러너99", "치지직레전드", "릴스토리머", "하드코어베테랑", "버그헌터"]
+  const gameTitles = [
+    `${genre.name} 마스터`,
+    `${genre.name} 런`,
+    `${genre.name} 챌린지`,
+    `여유 ${genre.name}`,
+    `하드코어 ${genre.name}`,
+    `${genre.name} 입문`,
+  ]
   const streamTitles = [
-    "All Bosses No-Hit Attempt",
-    "Blind First Playthrough - Day 1",
-    "Speedrun WR Practice",
-    "Chill Vibes + Chat Picks the Build",
-    "100% Completion Marathon",
-    "Hardest Difficulty Solo",
-    "Community Challenge Run",
-    "Exploring Every Secret",
+    "전 보스 노히트 도전",
+    "처음 해보는 공략 — 1일차",
+    "스피드런 기록 연습",
+    "힐링 + 시청자 빌드 뽑기",
+    "100% 클리어 마라톤",
+    "최난이도 솔로",
+    "시청자 참여 챌린지",
+    "히든 요소 전부 탐험",
   ]
   const playtimes = ["600h", "3h", "450h", "12h", "1800h", "280h", "45h", "920h"]
 
@@ -200,10 +207,10 @@ export function GenreDetails({
   if (!genre) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 p-12">
-        <p className="text-muted-foreground">Genre not found.</p>
+        <p className="text-muted-foreground">장르를 찾을 수 없습니다.</p>
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
+          뒤로
         </Button>
       </div>
     )
@@ -231,7 +238,7 @@ export function GenreDetails({
           className="gap-1.5 text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          뒤로
         </Button>
       </div>
 
@@ -248,7 +255,7 @@ export function GenreDetails({
             </Badge>
           </div>
           <h1 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            {genre.name} Games
+            {genre.name} 게임
           </h1>
           <p className="max-w-xl text-sm text-muted-foreground">
             {genre.description}
@@ -259,12 +266,12 @@ export function GenreDetails({
             <span className="flex items-center gap-1.5 text-foreground">
               <Users className="h-4 w-4 text-[hsl(var(--neon-purple))]" />
               <span className="font-semibold">{genre.viewers}</span>
-              <span className="text-muted-foreground">Viewers Watching</span>
+              <span className="text-muted-foreground">시청 중</span>
             </span>
             <span className="flex items-center gap-1.5 text-foreground">
               <Radio className="h-4 w-4 text-[hsl(var(--live-red))]" />
               <span className="font-semibold">{genre.activeStreams}</span>
-              <span className="text-muted-foreground">Active Streams</span>
+              <span className="text-muted-foreground">라이브 방송</span>
             </span>
           </div>
         </div>
@@ -275,7 +282,7 @@ export function GenreDetails({
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
             <Flame className="h-5 w-5 text-amber-400" />
-            {"Top Rated " + genre.name + " Games"}
+            {`인기 ${genre.name} 게임`}
           </h2>
           <div className="flex items-center gap-1">
             <Button
@@ -283,7 +290,7 @@ export function GenreDetails({
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               onClick={() => scroll("left")}
-              aria-label="Scroll left"
+              aria-label="왼쪽으로 스크롤"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -292,7 +299,7 @@ export function GenreDetails({
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               onClick={() => scroll("right")}
-              aria-label="Scroll right"
+              aria-label="오른쪽으로 스크롤"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -348,10 +355,10 @@ export function GenreDetails({
       <section className="mt-8 px-4 pb-8 lg:px-6">
         <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-foreground">
           <Radio className="h-5 w-5 text-[hsl(var(--live-red))]" />
-          {"Live " + genre.name + " Streams"}
+          {`${genre.name} 라이브 방송`}
         </h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          {"Watch " + genre.activeStreams + " streamers playing " + genre.name + " games right now."}
+          {`지금 ${genre.activeStreams}명의 스트리머가 ${genre.name} 관련 게임을 방송 중입니다.`}
         </p>
         <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
           <div className="card-grid-4">

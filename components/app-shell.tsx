@@ -53,7 +53,7 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
             size="icon"
             className="lg:hidden -ml-2"
             onClick={() => setMobileMenuOpen(true)}
-            aria-label="Open menu"
+            aria-label="메뉴 열기"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -63,7 +63,7 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
             size="icon"
             className="hidden -ml-2 lg:flex h-8 w-8"
             onClick={() => setSidebarCollapsed((prev) => !prev)}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
           >
             {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
@@ -90,7 +90,7 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search games, streamers, tags..."
+                placeholder="게임, 스트리머, 태그 검색..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-9 w-full border-border bg-secondary pl-9 text-foreground placeholder:text-muted-foreground focus-visible:ring-[hsl(var(--neon-purple))]"

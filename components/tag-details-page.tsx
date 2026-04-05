@@ -77,7 +77,7 @@ export function TagDetailsPage({ tagName, trendGames, hotLiveGames }: TagDetails
         >
           <Link href="/">
             <ArrowLeft className="h-4 w-4" />
-            Back to Home
+            홈으로
           </Link>
         </Button>
       </div>
@@ -126,7 +126,7 @@ export function TagDetailsPage({ tagName, trendGames, hotLiveGames }: TagDetails
                 ) : (
                   <Heart className={`mr-2 h-4 w-4 ${isFollowing ? "fill-current" : ""}`} />
                 )}
-                {isFollowing ? "Following" : "Follow Tag"}
+                {isFollowing ? "팔로우 중" : "태그 팔로우"}
               </Button>
             </div>
           </div>
@@ -145,7 +145,7 @@ export function TagDetailsPage({ tagName, trendGames, hotLiveGames }: TagDetails
               </h2>
               <span className="flex items-center gap-1 rounded-full bg-[hsl(var(--live-red))]/10 px-2 py-0.5 text-xs font-medium text-[hsl(var(--live-red))]">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--live-red))]" />
-                LIVE {hotLiveGames.length}
+                라이브 {hotLiveGames.length}
               </span>
             </div>
             <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">

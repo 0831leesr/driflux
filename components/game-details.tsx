@@ -162,11 +162,11 @@ export function GameDetailsClient({
         setVideos(
           items.map((v: any) => ({
             videoId: v.videoId ?? "",
-            videoTitle: v.videoTitle ?? "No Title",
+            videoTitle: v.videoTitle ?? "제목 없음",
             thumbnailImageUrl: v.thumbnailImageUrl ?? "",
             readCount: Number(v.readCount ?? 0),
             duration: Number(v.duration ?? 0),
-            channelName: v.channel?.channelName ?? "Unknown",
+            channelName: v.channel?.channelName ?? "알 수 없음",
             channelId: v.channel?.channelId ?? "",
             gameCover,
             gameTitle,
@@ -192,11 +192,11 @@ export function GameDetailsClient({
         setClips(
           items.map((c: any) => ({
             clipUID: c.clipUID ?? "",
-            clipTitle: c.clipTitle ?? "No Title",
+            clipTitle: c.clipTitle ?? "제목 없음",
             thumbnailImageUrl: c.thumbnailImageUrl ?? "",
             readCount: Number(c.readCount ?? 0),
             duration: Number(c.duration ?? 0),
-            channelName: c.ownerChannel?.channelName ?? "Unknown",
+            channelName: c.ownerChannel?.channelName ?? "알 수 없음",
             channelId: c.ownerChannel?.channelId ?? c.ownerChannelId ?? "",
             gameCover,
             gameTitle,
@@ -220,11 +220,11 @@ export function GameDetailsClient({
         if (items.length > 0) {
           const newVideos: VideoData[] = items.map((v: any) => ({
             videoId: v.videoId ?? "",
-            videoTitle: v.videoTitle ?? "No Title",
+            videoTitle: v.videoTitle ?? "제목 없음",
             thumbnailImageUrl: v.thumbnailImageUrl ?? "",
             readCount: Number(v.readCount ?? 0),
             duration: Number(v.duration ?? 0),
-            channelName: v.channel?.channelName ?? "Unknown",
+            channelName: v.channel?.channelName ?? "알 수 없음",
             channelId: v.channel?.channelId ?? "",
             gameCover,
             gameTitle,
@@ -292,7 +292,7 @@ export function GameDetailsClient({
           className="gap-1.5 text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          뒤로
         </Button>
       </div>
 
@@ -339,18 +339,18 @@ export function GameDetailsClient({
               <span className="flex items-center gap-1.5 text-foreground">
                 <Radio className="h-4 w-4 text-[hsl(var(--live-red))]" />
                 <span className="font-semibold">{headerStreamCount}</span>
-                <span className="text-muted-foreground">Live Channels</span>
+                <span className="text-muted-foreground">라이브 채널</span>
               </span>
               <span className="flex items-center gap-1.5 text-foreground">
                 <Users className="h-4 w-4 text-[hsl(var(--neon-purple))]" />
                 <span className="font-semibold">{viewersFormatted}</span>
-                <span className="text-muted-foreground">Viewers</span>
+                <span className="text-muted-foreground">시청자</span>
               </span>
               {game.discount_rate != null && game.discount_rate > 0 && (
                 <span className="flex items-center gap-1.5">
                   <Tag className="h-4 w-4 text-amber-400" />
                   <Badge className="border-transparent bg-gradient-to-r from-amber-500 to-red-500 px-2 py-0.5 text-xs font-bold text-[hsl(var(--primary-foreground))]">
-                    -{game.discount_rate}% Steam Sale
+                    -{game.discount_rate}% 스팀 할인
                   </Badge>
                 </span>
               )}
@@ -389,7 +389,7 @@ export function GameDetailsClient({
                 ) : (
                   <Heart className={`mr-2 h-4 w-4 ${isFollowing ? "fill-current" : ""}`} />
                 )}
-                {isFollowing ? "Following" : "Follow Game"}
+                {isFollowing ? "팔로우 중" : "게임 팔로우"}
               </Button>
               {game.steam_appid != null && (
                 <Button
@@ -398,7 +398,7 @@ export function GameDetailsClient({
                   onClick={handleVisitStoreClick}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
-                  Visit Store
+                  스토어 열기
                 </Button>
               )}
             </div>
@@ -455,22 +455,20 @@ export function GameDetailsClient({
             <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--neon-purple))]/15">
               <ExternalLink className="h-6 w-6 text-[hsl(var(--neon-purple))]" />
             </div>
-            <AlertDialogTitle className="text-foreground">
-              Visit Steam Store?
-            </AlertDialogTitle>
+            <AlertDialogTitle className="text-foreground">Steam 스토어로 이동할까요?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              You are being redirected to the Steam store. Do you want to continue?
+              Steam 스토어 페이지로 이동합니다. 계속하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80 hover:text-foreground">
-              Cancel
+              취소
             </AlertDialogCancel>
             <AlertDialogAction
               className="bg-[hsl(var(--neon-purple))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--neon-purple))]/80"
               onClick={handleContinueToSteam}
             >
-              Continue
+              이동
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

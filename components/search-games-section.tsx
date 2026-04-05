@@ -52,7 +52,7 @@ export function SearchGamesSection({ games, streamStats, query }: SearchGamesSec
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-semibold text-foreground">
-        Games matching &apos;{query}&apos;
+        &apos;{query}&apos; 검색 결과 (게임)
       </h2>
       {games.length > 0 ? (
         <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">

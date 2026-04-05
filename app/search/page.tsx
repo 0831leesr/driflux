@@ -13,14 +13,14 @@ export async function generateMetadata({ searchParams }: PageProps) {
 
   if (query) {
     return {
-      title: `Search: ${query} | Richzem`,
-      description: `Search results for "${query}" - Find games and live streams on Richzem.`,
+      title: `검색: ${query} | Richzem`,
+      description: `「${query}」 검색 결과 — Richzem에서 게임과 라이브 방송을 찾아보세요.`,
     }
   }
 
   return {
-    title: "Search | Richzem",
-    description: "Search for games, streamers, and live content on Richzem.",
+    title: "검색 | Richzem",
+    description: "Richzem에서 게임, 스트리머, 라이브 콘텐츠를 검색하세요.",
   }
 }
 

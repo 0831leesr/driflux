@@ -77,8 +77,8 @@ function userDisplayName(user: User): string {
   if (typeof fullName === "string" && fullName.length > 0) return fullName
   if (typeof name === "string" && name.length > 0) return name
   const email = user.email
-  if (email) return email.split("@")[0] ?? "User"
-  return "User"
+  if (email) return email.split("@")[0] ?? "사용자"
+  return "사용자"
 }
 
 function userAvatarUrl(user: User): string | undefined {
