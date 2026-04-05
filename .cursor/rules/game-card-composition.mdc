@@ -1,0 +1,57 @@
+---
+description: 게임 카드(GameCard) 구성 규칙 — 모든 섹션에서 동일한 카드 레이아웃 유지
+globs: components/**/*.tsx
+alwaysApply: false
+---
+
+# GameCard 구성 규칙
+
+모든 섹션의 게임 카드는 **`components/game-card.tsx`의 `GameCard` + `GameCardData`** 를 사용하고,
+아래 구성을 일관되게 유지해야 합니다.
+
+## 표시 항목 (항상)
+
+- 게임 표지 이미지 (`cover_image_url` → `header_image_url` 폴백)
+- 게임 제목 (`getDisplayGameTitle`: `korean_title` 우선)
+- 가격 정보 (무료 / 할인가 / 정가 / 가격 정보 없음)
+- 팔로우 버튼 우상단 (`hideFavorite: true` 일 때만 숨김)
+- 게임 태그 최대 2개 (`topTags`)
+
+## 표시 항목 (조건부)
+
+- 스트리밍 수 + 시청자 수: `liveStreamCount > 0` / `totalViewers > 0` 일 때만
+- 특징 태그 배지 좌상단: `featureTags` 배열이 있을 때 최대 3개 세로 배열
+
+## 특징 태그 (featureTags)
+
+`lib/feature-tags.ts`의 `buildFeatureTags()` 헬퍼로 생성합니다.  
+우선순위: **신작 > 트렌딩 > 급상승 > 드롭스**
+
+```ts
+// ✅ GOOD — 각 섹션의 변환 함수 예시
+featureTags: buildFeatureTags({
+  isNew: game.daysSinceRelease !== undefined,
+  isTrending: yesterdayTrendingIds.has(game.id),
+  isRising: (game.momentum_score ?? 0) > 0,
+  hasDrops: game.hasDrops,
+})
+```
+
+"트렌딩" 배지는 **어제 기준 트렌딩** 여부입니다.  
+서버 컴포넌트에서 `getHistoricalTrending("yesterday")`를 패치하여  
+`yesterdayTrendingIds: number[]` 로 클라이언트 컴포넌트에 전달하세요.
+
+### 치지직 라이브 ↔ DB 매칭
+
+탐색/홈의 Top 라이브는 **`fetchAndMergeHomeGamesForTopLive(topLive, baseGames?)`** 로 DB 행을 보강한 뒤  
+`buildExploreLiveItems` / `matchTopLiveGamesToTrendingRows`에 넘기세요.  
+`fetchAllGamesForHome()`만 쓰면 500행 한도 때문에 인기 게임이 빠질 수 있습니다.  
+`game_mappings`(치지직 표기명) + steam_appid/정확 제목으로 누락 행을 추가 조회합니다.
+
+## 금지 사항
+
+- `GameCardData`에 없는 별도 배지 UI를 카드 내부에 직접 추가하지 마세요.
+- `showDropsBadge`, `daysSinceRelease` 필드는 제거되었으므로 사용하지 마세요.  
+  대신 `featureTags`를 사용하세요.
+- 새 섹션 추가 시 `GameCard` 컴포넌트를 직접 수정하지 말고,  
+  `GameCardData`를 올바르게 채워 전달하세요.

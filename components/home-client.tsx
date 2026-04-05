@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { Gamepad2, Tags, Video, Bookmark, UserCircle2, Scissors } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -62,6 +62,11 @@ export function HomeClient({
   const searchParams = useSearchParams()
   const initialTab = searchParams.get("tab") ?? "main"
   const [activeTab, setActiveTab] = useState(initialTab)
+
+  const yesterdayTrendingIds = useMemo(
+    () => new Set(yesterdayTrending.map((g) => g.id)),
+    [yesterdayTrending],
+  )
   const [followSubTab, setFollowSubTab] = useState<"games" | "tags" | "replay" | "saved" | "streamers">("games")
   const [savedSubTab, setSavedSubTab] = useState<"replay" | "clips">("replay")
   const { favorites: favoriteGameIds, isInitialized: gamesInitialized } = useFavoriteGames()
@@ -214,12 +219,13 @@ export function HomeClient({
                 yesterdayGames={yesterdayTrending}
                 weekGames={weekTrending}
                 monthGames={monthTrending}
+                yesterdayTrendingIds={yesterdayTrendingIds}
               />
-              <RisingGames games={risingTrendingGames} />
+              <RisingGames games={risingTrendingGames} yesterdayTrendingIds={yesterdayTrendingIds} />
             </div>
-            <DropsSection games={gamesWithDrops} />
-            <HiddenGemsSection games={hiddenGemsGames} />
-            <NewReleasesSection games={newReleasesGames} />
+            <DropsSection games={gamesWithDrops} yesterdayTrendingIds={yesterdayTrendingIds} />
+            <HiddenGemsSection games={hiddenGemsGames} yesterdayTrendingIds={yesterdayTrendingIds} />
+            <NewReleasesSection games={newReleasesGames} yesterdayTrendingIds={yesterdayTrendingIds} />
           </div>
         ) : activeTab === "follow" ? (
           <div className="flex flex-col p-4 lg:p-6">

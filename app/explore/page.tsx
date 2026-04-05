@@ -3,11 +3,13 @@ import {
   getTopGameTags,
   getGamesByTrendScore,
   fetchAllGamesForHome,
+  getHistoricalTrending,
+  fetchTodayDailyGameStatsByGameIds,
   type HistoricalTrendingRow,
   type TagRow,
 } from "@/lib/data"
 import { getTopLiveGames } from "@/lib/chzzk"
-import { buildExploreLiveItems, type ExploreLiveListItem } from "@/lib/match-top-live-games"
+import { buildExploreLiveItems, fetchAndMergeHomeGamesForTopLive, type ExploreLiveListItem } from "@/lib/match-top-live-games"
 import { ExploreClient } from "@/components/explore/explore-client"
 
 export const metadata: Metadata = {
@@ -32,13 +34,26 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   let exploreLiveItems: ExploreLiveListItem[] = []
   let trendGames: HistoricalTrendingRow[] = []
   let allTags: TagRow[] = []
+  let risingGameIds: number[] = []
+
+  // 어제 트렌딩 IDs — 모드 관계없이 항상 패치 (특징 태그 배지용)
+  const yesterdayTrending = await getHistoricalTrending("yesterday")
+  const yesterdayTrendingIds = yesterdayTrending.map((g) => g.id)
 
   if (mode === "live") {
-    const [topLive, dbGames] = await Promise.all([
+    const [topLive, dbGamesBase] = await Promise.all([
       getTopLiveGames(50),
       fetchAllGamesForHome(),
     ])
+    const dbGames = await fetchAndMergeHomeGamesForTopLive(topLive, dbGamesBase)
     exploreLiveItems = buildExploreLiveItems(topLive, dbGames)
+
+    // 급상승 판별을 위한 오늘 stats 페치
+    const matchedIds = exploreLiveItems.flatMap((item) => (item.db ? [item.db.id] : []))
+    if (matchedIds.length > 0) {
+      const todayStats = await fetchTodayDailyGameStatsByGameIds(matchedIds)
+      risingGameIds = matchedIds.filter((id) => (todayStats.get(String(id))?.momentum_score ?? 0) > 0)
+    }
   } else {
     const [trendData, tags] = await Promise.all([
       getGamesByTrendScore(selectedTagName),
@@ -55,6 +70,8 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       trendGames={trendGames}
       allTags={allTags}
       selectedTagName={selectedTagName}
+      yesterdayTrendingIds={yesterdayTrendingIds}
+      risingGameIds={risingGameIds}
     />
   )
 }

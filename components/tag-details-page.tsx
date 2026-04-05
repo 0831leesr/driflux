@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useMemo } from "react"
 import Link from "next/link"
 import { ArrowLeft, TrendingUp, Heart, Users, Flame, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import { useFavoriteTags } from "@/contexts/favorites-context"
 import type { HistoricalTrendingRow, TrendingGameRow } from "@/lib/data"
+import { buildFeatureTags } from "@/lib/feature-tags"
 
 const PAGE_SIZE = 16
 
@@ -14,9 +15,11 @@ interface TagDetailsPageProps {
   tagName: string
   trendGames: HistoricalTrendingRow[]
   hotLiveGames: TrendingGameRow[]
+  /** 어제 기준 트렌딩 게임 ID 목록 (서버에서 number[] 로 전달) */
+  yesterdayTrendingIds?: number[]
 }
 
-function trendToCardData(game: HistoricalTrendingRow): GameCardData {
+function trendToCardData(game: HistoricalTrendingRow, yesterdaySet: Set<number>): GameCardData {
   return {
     id: game.id,
     title: game.title,
@@ -30,10 +33,11 @@ function trendToCardData(game: HistoricalTrendingRow): GameCardData {
     topTags: game.top_tags?.slice(0, 2) ?? undefined,
     totalViewers: game.peak_viewers > 0 ? game.peak_viewers : undefined,
     liveStreamCount: 0,
+    featureTags: buildFeatureTags({ isTrending: yesterdaySet.has(game.id) }),
   }
 }
 
-function liveToCardData(game: TrendingGameRow): GameCardData {
+function liveToCardData(game: TrendingGameRow, yesterdaySet: Set<number>): GameCardData {
   return {
     id: game.id,
     title: game.title,
@@ -47,12 +51,18 @@ function liveToCardData(game: TrendingGameRow): GameCardData {
     topTags: Array.isArray((game as any).top_tags) ? (game as any).top_tags.slice(0, 2) : undefined,
     totalViewers: game.totalViewers,
     liveStreamCount: game.liveStreamCount,
+    featureTags: buildFeatureTags({ isTrending: yesterdaySet.has(game.id) }),
   }
 }
 
-export function TagDetailsPage({ tagName, trendGames, hotLiveGames }: TagDetailsPageProps) {
+export function TagDetailsPage({ tagName, trendGames, hotLiveGames, yesterdayTrendingIds }: TagDetailsPageProps) {
   const [shownCount, setShownCount] = useState(PAGE_SIZE)
   const { isFavorite, toggleFavorite } = useFavoriteTags()
+
+  const yesterdaySet = useMemo(
+    () => new Set(yesterdayTrendingIds ?? []),
+    [yesterdayTrendingIds],
+  )
   const isFollowing = isFavorite(tagName)
   const [isPending, startTransition] = useTransition()
 
@@ -62,7 +72,7 @@ export function TagDetailsPage({ tagName, trendGames, hotLiveGames }: TagDetails
       ? `${(totalHotViewers / 1000).toFixed(1)}K`
       : String(totalHotViewers)
 
-  const visibleTrend = trendGames.slice(0, shownCount).map(trendToCardData)
+  const visibleTrend = trendGames.slice(0, shownCount).map((g) => trendToCardData(g, yesterdaySet))
   const hasMoreTrend = shownCount < trendGames.length
 
   return (
@@ -151,7 +161,7 @@ export function TagDetailsPage({ tagName, trendGames, hotLiveGames }: TagDetails
             <div className="card-grid-4-wrapper -mx-4 px-4 lg:-mx-6 lg:px-6">
               <div className="card-grid-4">
                 {hotLiveGames.map((game, i) => (
-                  <GameCard key={game.id} game={liveToCardData(game)} priority={i < 4} />
+                  <GameCard key={game.id} game={liveToCardData(game, yesterdaySet)} priority={i < 4} />
                 ))}
               </div>
             </div>

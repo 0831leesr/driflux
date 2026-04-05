@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { TrendingUp, Check } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,7 @@ import type { TagRow, HistoricalTrendingRow } from "@/lib/data"
 import type { ExploreLiveListItem } from "@/lib/match-top-live-games"
 import { getChzzkGameCategoryWebLivesUrl } from "@/lib/chzzk"
 import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
+import { buildFeatureTags } from "@/lib/feature-tags"
 
 const PAGE_SIZE = 16
 
@@ -21,13 +22,27 @@ interface ExploreClientProps {
   trendGames: HistoricalTrendingRow[]
   allTags: TagRow[]
   selectedTagName?: string
+  /** 어제 기준 트렌딩 게임 ID 목록 (특징 태그 배지용) */
+  yesterdayTrendingIds?: number[]
+  /** 오늘 기준 급상승(momentum_score > 0) 게임 ID 목록 (특징 태그 배지용) */
+  risingGameIds?: number[]
 }
 
-function exploreLiveItemToCardData(item: ExploreLiveListItem): GameCardData {
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+
+function exploreLiveItemToCardData(
+  item: ExploreLiveListItem,
+  yesterdaySet: Set<number>,
+  risingSet: Set<number>,
+): GameCardData {
   const { live, db } = item
   const cover = db?.cover_image_url ?? live.posterImageUrl
   const header = (db?.header_image_url ?? db?.cover_image_url) ?? live.posterImageUrl
   const effectiveDiscount = db ? getEffectiveDiscountRate(db.discount_rate) : 0
+
+  const isNew = db?.release_date
+    ? Date.now() - new Date(db.release_date).getTime() <= THIRTY_DAYS_MS
+    : false
 
   return {
     id: db?.id ?? 0,
@@ -47,10 +62,17 @@ function exploreLiveItemToCardData(item: ExploreLiveListItem): GameCardData {
     liveStreamCount: live.openLiveCount,
     cardHref: db ? undefined : getChzzkGameCategoryWebLivesUrl(live.categoryId),
     hideFavorite: !db,
+    featureTags: db
+      ? buildFeatureTags({
+          isNew,
+          isTrending: yesterdaySet.has(db.id),
+          isRising: risingSet.has(db.id),
+        })
+      : undefined,
   }
 }
 
-function trendToCardData(game: HistoricalTrendingRow): GameCardData {
+function trendToCardData(game: HistoricalTrendingRow, yesterdaySet: Set<number>): GameCardData {
   return {
     id: game.id,
     title: game.title,
@@ -64,6 +86,7 @@ function trendToCardData(game: HistoricalTrendingRow): GameCardData {
     topTags: game.top_tags?.slice(0, 2) ?? undefined,
     totalViewers: game.peak_viewers > 0 ? game.peak_viewers : undefined,
     liveStreamCount: 0,
+    featureTags: buildFeatureTags({ isTrending: yesterdaySet.has(game.id) }),
   }
 }
 
@@ -73,9 +96,21 @@ export function ExploreClient({
   trendGames,
   allTags,
   selectedTagName,
+  yesterdayTrendingIds: yesterdayTrendingIdsProp,
+  risingGameIds: risingGameIdsProp,
 }: ExploreClientProps) {
   const router = useRouter()
   const [shownCount, setShownCount] = useState(PAGE_SIZE)
+
+  const yesterdaySet = useMemo(
+    () => new Set(yesterdayTrendingIdsProp ?? []),
+    [yesterdayTrendingIdsProp],
+  )
+
+  const risingSet = useMemo(
+    () => new Set(risingGameIdsProp ?? []),
+    [risingGameIdsProp],
+  )
 
   useEffect(() => {
     setShownCount(PAGE_SIZE)
@@ -102,7 +137,7 @@ export function ExploreClient({
   const visibleExploreLive = exploreLiveItems.slice(0, shownCount)
   const hasMoreLive = shownCount < exploreLiveItems.length
 
-  const displayedTrend = trendGames.map(trendToCardData)
+  const displayedTrend = trendGames.map((g) => trendToCardData(g, yesterdaySet))
   const visibleTrend = displayedTrend.slice(0, shownCount)
   const hasMoreTrend = shownCount < displayedTrend.length
 
@@ -163,7 +198,7 @@ export function ExploreClient({
                     {visibleExploreLive.map((item, i) => (
                       <GameCard
                         key={item.live.categoryId}
-                        game={exploreLiveItemToCardData(item)}
+                        game={exploreLiveItemToCardData(item, yesterdaySet, risingSet)}
                         priority={i < 4}
                       />
                     ))}

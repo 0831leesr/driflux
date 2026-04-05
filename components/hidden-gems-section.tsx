@@ -3,8 +3,9 @@
 import { Gem } from "lucide-react"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { HiddenGemsRow } from "@/lib/data"
+import { buildFeatureTags } from "@/lib/feature-tags"
 
-function toCardData(games: HiddenGemsRow[]): GameCardData[] {
+function toCardData(games: HiddenGemsRow[], yesterdayTrendingIds: Set<number>): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
     title: game.title,
@@ -16,13 +17,16 @@ function toCardData(games: HiddenGemsRow[]): GameCardData[] {
     is_free: null,
     totalViewers: game.totalViewers,
     liveStreamCount: game.liveStreamCount,
+    featureTags: buildFeatureTags({
+      isTrending: yesterdayTrendingIds.has(game.id),
+    }),
   }))
 }
 
-export function HiddenGemsSection({ games }: { games: HiddenGemsRow[] }) {
+export function HiddenGemsSection({ games, yesterdayTrendingIds }: { games: HiddenGemsRow[]; yesterdayTrendingIds: Set<number> }) {
   if (!games || games.length === 0) return null
 
-  const cardData = toCardData(games)
+  const cardData = toCardData(games, yesterdayTrendingIds)
 
   return (
     <section>

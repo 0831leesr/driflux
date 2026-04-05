@@ -10,7 +10,7 @@ import {
   type TrendingGameRow,
   type GamesWithDropsRow,
 } from "@/lib/data"
-import { matchTopLiveGamesToTrendingRows } from "@/lib/match-top-live-games"
+import { matchTopLiveGamesToTrendingRows, fetchAndMergeHomeGamesForTopLive } from "@/lib/match-top-live-games"
 import { getTopLiveGames, type TopLiveGame } from "@/lib/chzzk"
 import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { HomeClient } from "@/components/home-client"
@@ -144,7 +144,8 @@ export default async function RichzemHome() {
   const lookup = buildGameLookup(dbGames)
 
   // 서버 사이드 컨퓨테이션 — 라이브 매칭 전체 + 당일 daily_game_stats 병합 (클라이언트에서 트렌드/급상승 정렬)
-  const allMatchedLive = matchTopLiveGamesToTrendingRows(topLiveGames, dbGames)
+  const dbGamesForLiveMatch = await fetchAndMergeHomeGamesForTopLive(topLiveGames, dbGames)
+  const allMatchedLive = matchTopLiveGamesToTrendingRows(topLiveGames, dbGamesForLiveMatch)
   const todayStatsMap = await fetchTodayDailyGameStatsByGameIds(allMatchedLive.map((g) => g.id))
   const trendingLive: TrendingGameRow[] = allMatchedLive.map((g) => {
     const s = todayStatsMap.get(String(g.id))

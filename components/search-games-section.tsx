@@ -3,6 +3,7 @@
 import { Gamepad2 } from "lucide-react"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { GameWithTags } from "@/lib/data"
+import { buildFeatureTags } from "@/lib/feature-tags"
 
 interface StreamStats {
   totalViewers: number
@@ -13,6 +14,8 @@ interface SearchGamesSectionProps {
   games: GameWithTags[]
   streamStats: Record<number, StreamStats>
   query: string
+  /** 어제 기준 트렌딩 게임 ID 목록 */
+  yesterdayTrendingIds?: number[]
 }
 
 function getTopTags(game: GameWithTags): string[] | undefined {
@@ -27,7 +30,8 @@ function getTopTags(game: GameWithTags): string[] | undefined {
 
 function toGameCardData(
   game: GameWithTags,
-  streamStats: Record<number, StreamStats>
+  streamStats: Record<number, StreamStats>,
+  yesterdaySet: Set<number>,
 ): GameCardData {
   const stats = streamStats[game.id]
   const topTags = getTopTags(game)
@@ -45,10 +49,12 @@ function toGameCardData(
     liveStreamCount: stats?.liveStreamCount,
     topTag: topTags?.[0],
     topTags,
+    featureTags: buildFeatureTags({ isTrending: yesterdaySet.has(game.id) }),
   }
 }
 
-export function SearchGamesSection({ games, streamStats, query }: SearchGamesSectionProps) {
+export function SearchGamesSection({ games, streamStats, query, yesterdayTrendingIds }: SearchGamesSectionProps) {
+  const yesterdaySet = new Set(yesterdayTrendingIds ?? [])
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-semibold text-foreground">
@@ -58,7 +64,7 @@ export function SearchGamesSection({ games, streamStats, query }: SearchGamesSec
         <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="card-grid-4">
           {games.map((game) => (
-            <GameCard key={game.id} game={toGameCardData(game, streamStats)} />
+            <GameCard key={game.id} game={toGameCardData(game, streamStats, yesterdaySet)} />
           ))}
           </div>
         </div>

@@ -3,7 +3,7 @@
 import { useTransition } from "react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { Heart, Eye, Gift, Sparkles, Loader2 } from "lucide-react"
+import { Heart, Eye, Gift, Sparkles, Loader2, TrendingUp, Flame, type LucideIcon } from "lucide-react"
 import {
   formatKRW,
   formatDiscountRate,
@@ -13,6 +13,7 @@ import {
 import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import { Button } from "@/components/ui/button"
+import type { FeatureTag } from "@/lib/feature-tags"
 
 export interface GameCardData {
   id: number
@@ -30,16 +31,22 @@ export interface GameCardData {
   topTag?: string
   /** 상위 태그 최대 2개 (topTag보다 우선) */
   topTags?: string[]
-  /** 드롭스 진행 중 뱃지 표시 (드롭스 섹션용) */
-  showDropsBadge?: boolean
-  /** 출시 N일차 (신작 섹션용, 0이면 NEW, 1이상이면 D-N) */
-  daysSinceRelease?: number
-  /** 급상승 탭 — 시청자 수 옆 붉은 강조 (momentum_score) */
-  momentumScore?: number
+  /**
+   * 좌상단 특징 태그 — 최대 3개, 우선순위 순(신작>트렌딩>급상승>드롭스).
+   * buildFeatureTags() 헬퍼로 생성하세요. (lib/feature-tags.ts)
+   */
+  featureTags?: FeatureTag[]
   /** 설정 시 이 경로로 이동 (치지직 카테고리 등). 내부 `/game/:id` 대신 사용 */
   cardHref?: string
   /** true면 팔로우(하트) 숨김 — 외부 전용 카드용 */
   hideFavorite?: boolean
+}
+
+const FEATURE_TAG_CONFIG: Record<FeatureTag, { icon: LucideIcon; className: string }> = {
+  신작:    { icon: Sparkles,   className: "bg-amber-500" },
+  트렌딩:  { icon: TrendingUp, className: "bg-[hsl(var(--neon-purple))]" },
+  급상승:  { icon: Flame,      className: "bg-red-500" },
+  드롭스:  { icon: Gift,       className: "bg-violet-500" },
 }
 
 export function GameCard({ game, priority }: { game: GameCardData; priority?: boolean }) {
@@ -93,21 +100,22 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
           aria-hidden
         />
 
-        {/* Top-left: contextual badge */}
-        {game.showDropsBadge && (
-          <div className="absolute left-2 top-2">
-            <Badge className="border-0 bg-violet-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-md">
-              <Gift className="mr-1 inline h-2.5 w-2.5" />
-              드롭스
-            </Badge>
-          </div>
-        )}
-        {game.daysSinceRelease !== undefined && !game.showDropsBadge && (
-          <div className="absolute left-2 top-2">
-            <Badge className="border-0 bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-md">
-              <Sparkles className="mr-1 inline h-2.5 w-2.5" />
-              {game.daysSinceRelease === 0 ? "신작" : `D-${game.daysSinceRelease}`}
-            </Badge>
+        {/* Top-left: feature tags — max 3, stacked vertically */}
+        {game.featureTags && game.featureTags.length > 0 && (
+          <div className="absolute left-2 top-2 flex flex-col gap-1">
+            {game.featureTags.slice(0, 3).map((tag) => {
+              const cfg = FEATURE_TAG_CONFIG[tag]
+              const Icon = cfg.icon
+              return (
+                <Badge
+                  key={tag}
+                  className={`w-fit border-0 ${cfg.className} px-2 py-0.5 text-[10px] font-semibold text-white shadow-md`}
+                >
+                  <Icon className="mr-1 inline h-2.5 w-2.5" />
+                  {tag}
+                </Badge>
+              )
+            })}
           </div>
         )}
 
@@ -157,14 +165,6 @@ export function GameCard({ game, priority }: { game: GameCardData; priority?: bo
                   <Eye className="h-3 w-3" />
                   {formatViewerCountShort(game.totalViewers)}
                 </span>
-              )}
-              {game.momentumScore !== undefined && game.momentumScore > 0 && (
-                <>
-                  <span className="text-white/50">·</span>
-                  <span className="font-semibold text-red-500">
-                    (▲ {game.momentumScore.toLocaleString("ko-KR")}명 급증)
-                  </span>
-                </>
               )}
             </div>
           )}

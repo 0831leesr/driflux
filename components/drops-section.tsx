@@ -3,8 +3,9 @@
 import { Gift } from "lucide-react"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { GamesWithDropsRow } from "@/lib/data"
+import { buildFeatureTags } from "@/lib/feature-tags"
 
-function toCardData(games: GamesWithDropsRow[]): GameCardData[] {
+function toCardData(games: GamesWithDropsRow[], yesterdayTrendingIds: Set<number>): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
     title: game.title,
@@ -15,14 +16,17 @@ function toCardData(games: GamesWithDropsRow[]): GameCardData[] {
     discount_rate: null,
     is_free: null,
     totalViewers: game.totalViewers,
-    showDropsBadge: true,
+    featureTags: buildFeatureTags({
+      isTrending: yesterdayTrendingIds.has(game.id),
+      hasDrops: true,
+    }),
   }))
 }
 
-export function DropsSection({ games }: { games: GamesWithDropsRow[] }) {
+export function DropsSection({ games, yesterdayTrendingIds }: { games: GamesWithDropsRow[]; yesterdayTrendingIds: Set<number> }) {
   if (!games || games.length === 0) return null
 
-  const cardData = toCardData(games)
+  const cardData = toCardData(games, yesterdayTrendingIds)
 
   return (
     <section>

@@ -1,5 +1,5 @@
 import { Gamepad2 } from "lucide-react"
-import { searchGames, searchStreams, getStreamStatsMatchingGameDetails } from "@/lib/data"
+import { searchGames, searchStreams, getStreamStatsMatchingGameDetails, getHistoricalTrending } from "@/lib/data"
 import { SearchStreamsSection } from "@/components/search-streams-section"
 import { SearchGamesSection } from "@/components/search-games-section"
 
@@ -41,23 +41,25 @@ export default async function SearchPage({ searchParams }: PageProps) {
     )
   }
 
-  // Fetch games first, then stream stats and streams in parallel (게임 상세와 동일한 stats 로직)
+  // Fetch games first, then stream stats / streams / yesterday trending in parallel
   const games = await searchGames(query)
   const gameIds = games.map((g) => g.id)
-  const [streamStatsMap, streams] = await Promise.all([
+  const [streamStatsMap, streams, yesterdayTrending] = await Promise.all([
     getStreamStatsMatchingGameDetails(games.map((g) => ({ id: g.id, title: g.title, korean_title: g.korean_title, english_title: g.english_title }))),
     searchStreams(query, gameIds),
+    getHistoricalTrending("yesterday"),
   ])
   // Convert Map to plain object for client component (Map is not JSON-serializable)
   const streamStatsObj: Record<number, { totalViewers: number; liveStreamCount: number }> = {}
   streamStatsMap.forEach((v, k) => {
     streamStatsObj[k] = v
   })
+  const yesterdayTrendingIds = yesterdayTrending.map((g) => g.id)
 
   return (
     <div className="flex flex-col gap-10 p-4 lg:p-6">
       {/* Section 1: Games (using GameCard - same as Explore/Now Trending) */}
-      <SearchGamesSection games={games} streamStats={streamStatsObj} query={query} />
+      <SearchGamesSection games={games} streamStats={streamStatsObj} query={query} yesterdayTrendingIds={yesterdayTrendingIds} />
 
       {/* Section 2: Related Live Streams */}
       <SearchStreamsSection streams={streams} />

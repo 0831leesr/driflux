@@ -3,8 +3,9 @@
 import { Sparkles } from "lucide-react"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { NewReleasesRow } from "@/lib/data"
+import { buildFeatureTags } from "@/lib/feature-tags"
 
-function toCardData(games: NewReleasesRow[]): GameCardData[] {
+function toCardData(games: NewReleasesRow[], yesterdayTrendingIds: Set<number>): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
     title: game.title,
@@ -16,14 +17,17 @@ function toCardData(games: NewReleasesRow[]): GameCardData[] {
     is_free: null,
     totalViewers: game.totalViewers,
     liveStreamCount: game.liveStreamCount,
-    daysSinceRelease: game.daysSinceRelease,
+    featureTags: buildFeatureTags({
+      isNew: true,
+      isTrending: yesterdayTrendingIds.has(game.id),
+    }),
   }))
 }
 
-export function NewReleasesSection({ games }: { games: NewReleasesRow[] }) {
+export function NewReleasesSection({ games, yesterdayTrendingIds }: { games: NewReleasesRow[]; yesterdayTrendingIds: Set<number> }) {
   if (!games || games.length === 0) return null
 
-  const cardData = toCardData(games)
+  const cardData = toCardData(games, yesterdayTrendingIds)
 
   return (
     <section>

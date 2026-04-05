@@ -5,8 +5,9 @@ import { GameCard, type GameCardData } from "@/components/game-card"
 import { GameCardSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { TrendingGameRow } from "@/lib/data"
+import { buildFeatureTags } from "@/lib/feature-tags"
 
-function toCardData(games: TrendingGameRow[]): GameCardData[] {
+function toCardData(games: TrendingGameRow[], yesterdayTrendingIds: Set<number>): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
     title: game.title,
@@ -20,14 +21,17 @@ function toCardData(games: TrendingGameRow[]): GameCardData[] {
     liveStreamCount: game.liveStreamCount,
     topTag: game.topTag,
     topTags: (game as { top_tags?: string[] | null }).top_tags?.slice(0, 2),
-    momentumScore:
-      (game.momentum_score ?? 0) > 0 ? game.momentum_score : undefined,
+    featureTags: buildFeatureTags({
+      isTrending: yesterdayTrendingIds.has(game.id),
+      isRising: true,
+    }),
   }))
 }
 
 interface RisingGamesProps {
   /** 서버에서 momentum_score > 0 기준 정렬·상위 8개로 필터링된 목록 */
   games: TrendingGameRow[]
+  yesterdayTrendingIds: Set<number>
   /** true면 스켈레톤만 표시 (Suspense fallback 등) */
   isLoading?: boolean
 }
@@ -52,12 +56,12 @@ export function RisingGamesSkeleton() {
   )
 }
 
-export function RisingGames({ games, isLoading }: RisingGamesProps) {
+export function RisingGames({ games, yesterdayTrendingIds, isLoading }: RisingGamesProps) {
   if (isLoading) {
     return <RisingGamesSkeleton />
   }
 
-  const cardData = toCardData(games)
+  const cardData = toCardData(games, yesterdayTrendingIds)
   const isEmpty = cardData.length === 0
 
   return (

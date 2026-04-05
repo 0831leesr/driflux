@@ -5,6 +5,7 @@ import { Flame } from "lucide-react"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import type { TrendingGameRow, HistoricalTrendingRow } from "@/lib/data"
 import type { HistoricalTrendingRanges } from "@/lib/trending-date-range"
+import { buildFeatureTags } from "@/lib/feature-tags"
 
 type TrendTab = "live" | "yesterday" | "week" | "month"
 
@@ -23,7 +24,7 @@ function formatDotDate(isoYmd: string): string {
   return `${y}.${m}.${d}`
 }
 
-function liveToCardData(games: TrendingGameRow[]): GameCardData[] {
+function liveToCardData(games: TrendingGameRow[], yesterdayTrendingIds: Set<number>): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
     title: game.title,
@@ -37,10 +38,18 @@ function liveToCardData(games: TrendingGameRow[]): GameCardData[] {
     liveStreamCount: game.liveStreamCount,
     topTag: game.topTag,
     topTags: (game as { top_tags?: string[] | null }).top_tags?.slice(0, 2),
+    featureTags: buildFeatureTags({
+      isTrending: yesterdayTrendingIds.has(game.id),
+      isRising: (game.momentum_score ?? 0) > 0,
+    }),
   }))
 }
 
-function historicalToCardData(games: HistoricalTrendingRow[]): GameCardData[] {
+function historicalToCardData(
+  games: HistoricalTrendingRow[],
+  isYesterdayTab: boolean,
+  yesterdayTrendingIds: Set<number>,
+): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
     title: game.title,
@@ -52,6 +61,9 @@ function historicalToCardData(games: HistoricalTrendingRow[]): GameCardData[] {
     is_free: game.is_free ?? null,
     totalViewers: game.peak_viewers,
     topTags: game.top_tags?.slice(0, 2),
+    featureTags: buildFeatureTags({
+      isTrending: isYesterdayTab || yesterdayTrendingIds.has(game.id),
+    }),
   }))
 }
 
@@ -61,6 +73,7 @@ interface TrendingGamesProps {
   yesterdayGames: HistoricalTrendingRow[]
   weekGames: HistoricalTrendingRow[]
   monthGames: HistoricalTrendingRow[]
+  yesterdayTrendingIds: Set<number>
 }
 
 export function TrendingGames({
@@ -69,6 +82,7 @@ export function TrendingGames({
   yesterdayGames,
   weekGames,
   monthGames,
+  yesterdayTrendingIds,
 }: TrendingGamesProps) {
   const [activeTab, setActiveTab] = useState<TrendTab>("live")
 
@@ -82,13 +96,13 @@ export function TrendingGames({
   const cardData: GameCardData[] = (() => {
     switch (activeTab) {
       case "live":
-        return liveToCardData(sortedLiveGames)
+        return liveToCardData(sortedLiveGames, yesterdayTrendingIds)
       case "yesterday":
-        return historicalToCardData(yesterdayGames)
+        return historicalToCardData(yesterdayGames, true, yesterdayTrendingIds)
       case "week":
-        return historicalToCardData(weekGames)
+        return historicalToCardData(weekGames, false, yesterdayTrendingIds)
       case "month":
-        return historicalToCardData(monthGames)
+        return historicalToCardData(monthGames, false, yesterdayTrendingIds)
     }
   })()
 
