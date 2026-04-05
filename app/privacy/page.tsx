@@ -11,8 +11,8 @@ export default function PrivacyPage() {
       <div className="mb-10">
         <h1 className="text-3xl font-black tracking-tight text-foreground">개인정보처리방침</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          최종 업데이트: 2026년 4월 1일 &nbsp;·&nbsp; Richzem은 이용자의 개인정보를 소중히
-          여기며, 관련 법령을 준수합니다.
+          최종 업데이트: 2026년 4월 5일 &nbsp;·&nbsp; Richzem은 「개인정보 보호법」 등 관련 법령을
+          준수하기 위해 본 방침을 두고 있습니다.
         </p>
       </div>
 
@@ -31,6 +31,7 @@ export default function PrivacyPage() {
               "회원 가입 및 본인 확인 (소셜 로그인 인증)",
               "개인화 서비스 제공 (팔로우, 즐겨찾기 등 사용자 설정 유지)",
               "서비스 이상 및 부정 이용 방지",
+              "이용 통계·트래픽·성능 지표 수집을 통한 서비스 품질 유지",
             ].map((item, i) => (
               <li key={i} className="flex gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
@@ -46,8 +47,10 @@ export default function PrivacyPage() {
             제2조 (수집하는 개인정보 항목 및 수집 방법)
           </h2>
           <p className="mt-3 text-sm leading-7 text-muted-foreground">
-            Richzem은 Google OAuth 소셜 로그인을 통해서만 개인정보를 수집합니다. 별도의 회원가입
-            양식이나 이메일·비밀번호 기반 로그인은 제공하지 않습니다.
+            Google OAuth로 로그인하는 경우 아래 표의 항목이 인증 제공자(Google) 및 Supabase를
+            경유해 수집·저장될 수 있습니다. 별도의 이메일·비밀번호 회원가입 양식은 사용하지 않습니다.
+            비회원도 서비스를 열람할 수 있으며, 이 때에는 표에 적은 회원 식별 정보 대신 아래
+            자동 수집·브라우저 저장 항목이 주로 적용됩니다.
           </p>
           <div className="mt-4 overflow-hidden rounded-xl border border-border">
             <table className="w-full text-sm">
@@ -88,6 +91,19 @@ export default function PrivacyPage() {
               </tbody>
             </table>
           </div>
+          <p className="mt-4 text-sm leading-7 text-muted-foreground">
+            이와 별도로, 서비스 접속 시 IP 주소, 브라우저·기기 유형, 접속 시각, 참조 경로 등
+            이용 기록이 자동으로 생성되어 서버 로그 또는 호스팅·분석 도구에 저장될 수 있습니다. 웹
+            분석·성능 측정 도구(Vercel Analytics, Speed Insights 등)가 페이지 조회·응답 시간 등의
+            이벤트를 수집할 수 있으며, 해당 업체의 정책에 따라 익명화·집계된 형태로 처리될 수
+            있습니다.
+          </p>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            이용자 단말의 브라우저 저장소(localStorage 등)에는 화면 테마(다크/라이트) 설정, 북마크한
+            다시보기·클립 식별 정보, 스트리머 카드 표시용 보조 데이터 등이 디바이스에 남을 수
+            있습니다. 이 정보는 이용자 브라우저에 보관되며, 로그인 후 서버에 동기화되는 팔로우
+            데이터와는 구분됩니다.
+          </p>
         </section>
 
         {/* 3 */}
@@ -107,7 +123,8 @@ export default function PrivacyPage() {
             </li>
             <li className="flex gap-2">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
-              서비스 접속 로그: 3개월 (통신비밀보호법)
+              서비스 접속 로그: 관련 법령이 정한 기간(예: 통신비밀보호법상 3개월)을 원칙으로 하되,
+              실제 보관 기간은 호스팅·분석 서비스 설정에 따를 수 있습니다.
             </li>
           </ul>
         </section>
@@ -158,6 +175,10 @@ export default function PrivacyPage() {
                   <td className="px-4 py-2.5">Google LLC</td>
                   <td className="px-4 py-2.5">소셜 로그인(OAuth 2.0) 인증 처리</td>
                 </tr>
+                <tr>
+                  <td className="px-4 py-2.5">Vercel, Inc.</td>
+                  <td className="px-4 py-2.5">웹 애플리케이션 호스팅 및 방문·성능 통계 수집</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -170,8 +191,9 @@ export default function PrivacyPage() {
           </h2>
           <p className="mt-3 text-sm leading-7 text-muted-foreground">
             이용자는 언제든지 자신의 개인정보를 조회하거나 수정, 삭제, 처리 정지를 요청할 수
-            있습니다. 계정 삭제는 서비스 내 '회원 탈퇴' 기능을 통해 즉시 처리되며, 그 외
-            문의 사항은 아래 개인정보 보호책임자에게 연락하시기 바랍니다.
+            있습니다. 계정 삭제는 상단 헤더의 프로필(계정) 메뉴에 있는 '회원 탈퇴'를 통해
+            요청할 수 있습니다. 브라우저에 저장된 테마·북마크 등은 브라우저 설정에서 직접 삭제해야
+            할 수 있습니다. 그 외 문의는 아래 개인정보 보호책임자에게 연락하시기 바랍니다.
           </p>
         </section>
 

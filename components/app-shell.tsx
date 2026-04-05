@@ -4,7 +4,7 @@ import { useState, FormEvent, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import Link from "next/link"
-import { Search, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { Search, Menu, PanelLeftClose, PanelLeftOpen, Info } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -67,22 +67,34 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
           >
             {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
-          <Link href="/" className="flex h-8 items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={logoMiniSrc}
-              alt=""
-              className="h-8 w-auto object-contain"
-              fetchPriority="high"
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={logoTextSrc}
-              alt="Richzem"
-              className="h-5 w-auto object-contain"
-              fetchPriority="high"
-            />
-          </Link>
+          <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+            <Link href="/" className="flex h-8 shrink-0 items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoMiniSrc}
+                alt=""
+                className="h-8 w-auto object-contain"
+                fetchPriority="high"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoTextSrc}
+                alt="Richzem"
+                className="h-5 w-auto object-contain"
+                fetchPriority="high"
+              />
+            </Link>
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <Link href="/about-richzem" aria-label="리치젬에 관하여" title="리치젬에 관하여">
+                <Info className="h-4 w-4" strokeWidth={2} />
+              </Link>
+            </Button>
+          </div>
           </div>
 
           <form onSubmit={handleSearch} className="mx-4 hidden max-w-xl flex-1 md:flex">

@@ -4,8 +4,14 @@ export function Footer() {
   return (
     <footer className="mt-auto shrink-0 border-t border-border bg-card/30 py-8 text-center text-xs text-muted-foreground">
       <div className="mx-auto max-w-2xl px-4">
-        {/* Disclaimer */}
+        {/* Chzzk data timing */}
         <p className="leading-relaxed">
+          Richzem(리치젬)에 표시되는 치지직 라이브·시청자 등 정보는 수집·갱신 시점에 따라 치지직
+          앱/웹 화면과 실시간으로 완전히 일치하지 않을 수 있습니다.
+        </p>
+
+        {/* Disclaimer */}
+        <p className="mt-2 leading-relaxed">
           Richzem is an independent project and is not affiliated with, endorsed by, or sponsored
           by NAVER Corp., Valve Corporation, or Twitch Interactive, Inc.
         </p>

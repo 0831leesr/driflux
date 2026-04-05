@@ -1,48 +1,49 @@
 import type { Metadata } from "next"
-import { BarChart2, Gem, Search, Star, TrendingUp, Tv2 } from "lucide-react"
+import { BarChart2, Layers, Search, Star, TrendingUp, Tv2 } from "lucide-react"
+import { LoginBrandLogos } from "@/components/login-brand-logos"
 
 export const metadata: Metadata = {
   title: "서비스 소개 | Richzem",
   description:
-    "Richzem(리치젬)은 치지직 스트리밍 트렌드를 분석하고 숨겨진 보석 같은 방송을 발굴하는 서비스입니다.",
+    "Richzem(리치젬)은 치지직 라이브 데이터와 Steam·게임 DB 정보를 모아 게임·방송을 찾아볼 수 있는 웹 서비스입니다.",
 }
 
 const features = [
   {
     icon: TrendingUp,
-    title: "실시간 트렌드 차트",
+    title: "트렌드 목록",
     description:
-      "지금 이 순간 치지직에서 가장 많이 방송되는 게임을 실시간 시청자 수 기준으로 한눈에 파악합니다.",
+      "실시간·어제·주간·월간 등 구간을 탭으로 바꿔 가며, 치지직 라이브 집계와 DB에 매칭된 게임 카드 목록을 볼 수 있습니다.",
   },
   {
     icon: Tv2,
-    title: "게임별 라이브 현황",
+    title: "게임별 라이브 목록",
     description:
-      "특정 게임을 선택하면 현재 방송 중인 스트리머 목록과 시청자 수를 바로 확인할 수 있습니다.",
+      "게임 상세에서 해당 카테고리 방송 카드, 시청자 수·채널 수 요약, 치지직 라이브 페이지 링크를 제공합니다.",
   },
   {
-    icon: Gem,
-    title: "숨겨진 보석 발굴",
+    icon: Layers,
+    title: "조건부 추천 섹션",
     description:
-      "시청자는 많지 않지만 가파르게 성장 중인 게임과 스트리머를 발굴해 남들보다 먼저 발견하세요.",
+      "메인 화면에는 시청자·동시 방송 수 등 조건과 내부 점수에 따라 정렬된 부가 목록(예: 급상승, 조건에 맞는 중소 규모 라이브, 최근 출시 타이틀)이 있습니다.",
   },
   {
     icon: Search,
-    title: "게임 & 스트리머 탐색",
+    title: "검색·태그",
     description:
-      "장르, 태그, 게임 이름으로 원하는 방송을 빠르게 찾고, 즐겨찾기로 저장해 언제든 다시 볼 수 있습니다.",
+      "게임 이름·태그 등으로 검색하고, 태그 페이지에서 같은 태그가 붙은 게임을 이어서 볼 수 있습니다.",
   },
   {
     icon: BarChart2,
-    title: "스팀 연동 메타데이터",
+    title: "Steam·메타 정보",
     description:
-      "Steam 게임 정보(평점, 장르, 출시일)와 치지직 방송 데이터를 결합해 더 풍부한 맥락을 제공합니다.",
+      "가격·할인, 사용자 평가 요약, 장르·태그, 출시일 등 DB와 Steam에 저장된 필드를 화면에 표시합니다. 일부 필드는 IGDB·동기화 작업을 거친 값입니다.",
   },
   {
     icon: Star,
-    title: "팔로우 & 개인화",
+    title: "계정·팔로우",
     description:
-      "관심 있는 게임과 스트리머를 팔로우하면 맞춤 피드로 최신 동향을 놓치지 않고 확인합니다.",
+      "Google 로그인 후 게임·태그·스트리머 팔로우, 다시보기·클립 북마크, 캘린더 일정 팔로우 등 설정을 서버에 저장할 수 있습니다. 저장한 영상 일부는 브라우저에도 남을 수 있습니다.",
   },
 ]
 
@@ -51,42 +52,32 @@ export default function AboutPage() {
     <main className="mx-auto max-w-3xl px-4 py-14">
       {/* Hero */}
       <div className="text-center">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-[hsl(var(--neon-purple))]/15 mb-5">
-          <span className="text-3xl font-black text-[hsl(var(--neon-purple))]">R</span>
-        </div>
+        <LoginBrandLogos className="mb-5" />
         <h1 className="text-4xl font-black tracking-tight text-foreground">
           Richzem
           <span className="ml-2 text-[hsl(var(--neon-purple))]">리치젬</span>
         </h1>
-        <p className="mt-3 text-lg font-medium text-muted-foreground">
-          풍부한 재미에 도달하다
-        </p>
       </div>
 
       {/* Mission */}
       <section className="mt-12 rounded-2xl border border-border bg-card p-7">
-        <h2 className="text-xl font-bold text-foreground">서비스 미션</h2>
+        <h2 className="text-xl font-bold text-foreground">서비스 소개</h2>
         <div className="mt-4 space-y-3 text-sm leading-7 text-muted-foreground">
           <p>
-            <strong className="text-foreground">Richzem(리치젬)</strong>은{" "}
-            <em>"Rich(풍부한) + Gem(보석)"</em>의 합성어로,{" "}
-            <strong className="text-foreground">풍부한 재미에 도달한다</strong>는 의미를 담고
-            있습니다.
+            <strong className="text-foreground">Richzem(리치젬)</strong>은 네이버 치지직(CHZZK)에서 가져온
+            라이브·VOD·클립 API 응답과, 내부 DB에 적재한 Steam·IGDB·수동 매핑 등의 게임 메타데이터를 조합해, 웹에서
+            목록·검색·상세 화면을 제공합니다.
           </p>
           <p>
-            네이버 치지직(CHZZK)의 실시간 스트리밍 데이터와 Steam·IGDB의 게임 메타데이터를
-            결합하여, 아직 발견되지 않은 숨겨진 보석 같은 방송과 게임을 찾아드립니다.
-          </p>
-          <p>
-            리치젬은 화려한 대형 스트리머뿐 아니라 막 성장하는 신인, 마니아층이 즐기는 니치
-            게임까지 스트리밍 생태계 전체를 한눈에 조망할 수 있도록 돕는 데이터 기반 탐색 서비스입니다.
+            스트리밍과 스토어 정보를 한 화면에서 대조할 수 있도록 하는 것이 목적이며, 특정 스트리머나 게임을 보장하거나
+            순위를 공식적으로 인증하지는 않습니다.
           </p>
         </div>
       </section>
 
       {/* Feature cards */}
       <section className="mt-12">
-        <h2 className="text-xl font-bold text-foreground">주요 기능</h2>
+        <h2 className="text-xl font-bold text-foreground">주요 화면·기능</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           {features.map(({ icon: Icon, title, description }) => (
             <div
@@ -110,9 +101,12 @@ export default function AboutPage() {
       {/* Note */}
       <section className="mt-12 rounded-xl border border-border bg-muted/30 px-6 py-5 text-sm leading-relaxed text-muted-foreground">
         <p>
-          본 서비스는 비상업적 목적의 개인 프로젝트로 운영되며, 네이버(치지직), Valve(스팀),
-          IGDB와 공식 제휴 관계가 없습니다. 서비스 내 표시되는 게임 이미지 및 스트리머 정보의
-          저작권은 원작자 및 해당 플랫폼에 있습니다.
+          Richzem(리치젬)에 표시되는 치지직 라이브·시청자 등 정보는 수집·갱신 시점에 따라 치지직 앱/웹 화면과 실시간으로
+          완전히 일치하지 않을 수 있습니다.
+        </p>
+        <p className="mt-3">
+          Richzem(리치젬)은 네이버(치지직), Valve(스팀), IGDB와 공식 제휴 관계가 없습니다. 서비스 내 표시되는 게임
+          이미지 및 스트리머 정보의 저작권은 원작자 및 해당 플랫폼에 있습니다.
         </p>
       </section>
     </main>

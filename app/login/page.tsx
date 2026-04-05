@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { AlertCircle } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { GoogleLoginButton } from "@/components/google-login-button"
+import { LoginBrandLogos } from "@/components/login-brand-logos"
 
 export const metadata: Metadata = {
   title: "로그인",
@@ -26,15 +27,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-16">
       <div className="w-full max-w-sm">
-        {/* Logo / brand mark */}
         <div className="mb-8 text-center">
-          <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[hsl(var(--neon-purple))]/15">
-            <span className="text-2xl font-black text-[hsl(var(--neon-purple))]">R</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Richzem에 로그인
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <LoginBrandLogos />
+          <p className="text-sm text-muted-foreground">
             로그인하여 더 많은 기능을 경험하세요
           </p>
         </div>
