@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { TrendingUp, Check } from "lucide-react"
+import { TrendingUp, Check, Flame, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { GameCard, type GameCardData } from "@/components/game-card"
 import { TagSearchInput } from "@/components/explore/tag-search-input"
-import { MainTabNav } from "@/components/main-tab-nav"
 import type { TagRow, HistoricalTrendingRow } from "@/lib/data"
 import type { HistoricalTrendingRanges } from "@/lib/trending-date-range"
 import type { ExploreLiveListItem } from "@/lib/match-top-live-games"
@@ -15,6 +14,12 @@ import { getChzzkGameCategoryWebLivesUrl } from "@/lib/chzzk"
 import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { buildFeatureTags } from "@/lib/feature-tags"
 import { newReleaseDPlusForBadge } from "@/lib/release-date"
+import {
+  EXPLORE_TREND_BADGE_LABELS,
+  serializeExploreTrendBadges,
+  historicalTrendRowMatchesExploreBadges,
+  type ExploreTrendBadgeKey,
+} from "@/lib/explore-trend-badges"
 
 const PAGE_SIZE = 16
 
@@ -25,6 +30,14 @@ const EXPLORE_TREND_TABS: { id: ExploreTrendPeriod; label: string }[] = [
   { id: "week", label: "주간 베스트" },
   { id: "month", label: "월간 베스트" },
 ]
+
+const EXPLORE_TREND_BADGE_ORDER: ExploreTrendBadgeKey[] = ["trending", "rising", "new"]
+
+const TREND_BADGE_ICON: Record<ExploreTrendBadgeKey, typeof TrendingUp> = {
+  trending: TrendingUp,
+  rising: Flame,
+  new: Sparkles,
+}
 
 function formatDotDate(isoYmd: string): string {
   const [y, m, d] = isoYmd.split("-")
@@ -45,6 +58,8 @@ interface ExploreClientProps {
   yesterdayTrendingIds?: number[]
   /** 오늘 기준 급상승(momentum_score > 0) 게임 ID 목록 (특징 태그 배지용) */
   risingGameIds?: number[]
+  /** 트렌드 탐색 — 카드 특징 배지 기준 필터(URL badges 쿼리와 동기) */
+  trendFeatureBadgeFilters?: ExploreTrendBadgeKey[]
 }
 
 function exploreLiveItemToCardData(
@@ -93,6 +108,7 @@ function trendToCardData(
   game: HistoricalTrendingRow,
   yesterdaySet: Set<number>,
   isYesterdayPeriodTab: boolean,
+  risingSet: Set<number>,
 ): GameCardData {
   return {
     id: game.id,
@@ -108,7 +124,9 @@ function trendToCardData(
     totalViewers: game.peak_viewers > 0 ? game.peak_viewers : undefined,
     liveStreamCount: 0,
     featureTags: buildFeatureTags({
+      newReleaseDPlus: newReleaseDPlusForBadge(game.release_date ?? null),
       isTrending: isYesterdayPeriodTab || yesterdaySet.has(game.id),
+      isRising: risingSet.has(game.id),
     }),
   }
 }
@@ -124,6 +142,7 @@ export function ExploreClient({
   selectedTagName,
   yesterdayTrendingIds: yesterdayTrendingIdsProp,
   risingGameIds: risingGameIdsProp,
+  trendFeatureBadgeFilters: trendFeatureBadgeFiltersProp = [],
 }: ExploreClientProps) {
   const router = useRouter()
   const [shownCount, setShownCount] = useState(PAGE_SIZE)
@@ -139,22 +158,48 @@ export function ExploreClient({
     [risingGameIdsProp],
   )
 
+  const trendFeatureBadgeFilters = trendFeatureBadgeFiltersProp
+
   useEffect(() => {
     setShownCount(PAGE_SIZE)
-  }, [initialMode, activeTrendPeriod])
+  }, [initialMode, activeTrendPeriod, trendFeatureBadgeFilters.join(","), selectedTagName])
+
+  const pushTrendExplore = (patch: {
+    tagName?: string | null
+    badges?: ExploreTrendBadgeKey[]
+  }) => {
+    const params = new URLSearchParams()
+    params.set("mode", "trend")
+    const tag =
+      patch.tagName !== undefined ? patch.tagName : selectedTagName
+    if (tag) params.set("tags", encodeURIComponent(tag))
+    const badges = patch.badges ?? trendFeatureBadgeFilters
+    const badgesStr = serializeExploreTrendBadges(badges)
+    if (badgesStr) params.set("badges", badgesStr)
+    router.push(`/explore?${params.toString()}`, { scroll: false })
+    setShownCount(PAGE_SIZE)
+  }
 
   const setMode = (mode: "live" | "trend") => {
-    const params = new URLSearchParams()
-    params.set("mode", mode)
-    router.push(`/explore?${params.toString()}`, { scroll: false })
+    if (mode === "live") {
+      router.push(`/explore?mode=live`, { scroll: false })
+      return
+    }
+    pushTrendExplore({})
   }
 
   const setTag = (tagName: string | undefined) => {
-    const params = new URLSearchParams()
-    params.set("mode", "trend")
-    if (tagName) params.set("tags", encodeURIComponent(tagName))
-    router.push(`/explore?${params.toString()}`, { scroll: false })
-    setShownCount(PAGE_SIZE)
+    pushTrendExplore({
+      tagName: tagName === undefined ? null : tagName,
+      badges: trendFeatureBadgeFilters,
+    })
+  }
+
+  const toggleTrendFeatureBadge = (key: ExploreTrendBadgeKey) => {
+    const next = trendFeatureBadgeFilters.includes(key)
+      ? trendFeatureBadgeFilters.filter((k) => k !== key)
+      : [...trendFeatureBadgeFilters, key]
+    pushTrendExplore({ badges: next })
   }
 
   const handleAddTag = (tagName: string) => {
@@ -176,7 +221,27 @@ export function ExploreClient({
   })()
 
   const isYesterdayPeriodTab = activeTrendPeriod === "yesterday"
-  const displayedTrend = trendGamesForPeriod.map((g) => trendToCardData(g, yesterdaySet, isYesterdayPeriodTab))
+
+  const filteredTrendGames = useMemo(() => {
+    if (trendFeatureBadgeFilters.length === 0) return trendGamesForPeriod
+    return trendGamesForPeriod.filter((g) =>
+      historicalTrendRowMatchesExploreBadges(g, trendFeatureBadgeFilters, {
+        yesterdayTrendingIds: yesterdaySet,
+        risingGameIds: risingSet,
+        isYesterdayPeriodTab,
+      }),
+    )
+  }, [
+    trendGamesForPeriod,
+    trendFeatureBadgeFilters,
+    yesterdaySet,
+    risingSet,
+    isYesterdayPeriodTab,
+  ])
+
+  const displayedTrend = filteredTrendGames.map((g) =>
+    trendToCardData(g, yesterdaySet, isYesterdayPeriodTab, risingSet),
+  )
   const visibleTrend = displayedTrend.slice(0, shownCount)
   const hasMoreTrend = shownCount < displayedTrend.length
 
@@ -186,8 +251,6 @@ export function ExploreClient({
   })()
 
   return (
-    <>
-      <MainTabNav activeTab="explore" />
     <div className="w-full bg-background px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         {/* Mode Toggle */}
@@ -266,10 +329,11 @@ export function ExploreClient({
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">장르 / 태그 필터</h2>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    태그를 선택하면 해당 장르의 게임을 트렌드 점수 순으로 확인합니다
+                    태그를 선택하면 해당 장르의 게임을 트렌드 점수 순으로 확인합니다. 특징 배지는 카드 좌상단과
+                    동일한 기준으로, 여러 개 선택 시 모두 해당하는 게임만 골라 보여 줍니다.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {selectedTagName && (
                     <Button
                       variant="ghost"
@@ -277,7 +341,17 @@ export function ExploreClient({
                       onClick={() => setTag(undefined)}
                       className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
-                      필터 해제
+                      태그 필터 해제
+                    </Button>
+                  )}
+                  {trendFeatureBadgeFilters.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => pushTrendExplore({ badges: [] })}
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      특징 필터 해제
                     </Button>
                   )}
                   <TagSearchInput
@@ -288,7 +362,7 @@ export function ExploreClient({
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="mb-5 flex flex-wrap gap-2">
                 {allTags.map((tag) => {
                   const isSelected = selectedTagName === tag.name
                   return (
@@ -307,6 +381,32 @@ export function ExploreClient({
                     </Badge>
                   )
                 })}
+              </div>
+
+              <div className="border-t border-border/80 pt-4">
+                <div className="flex flex-wrap gap-2">
+                  {EXPLORE_TREND_BADGE_ORDER.map((key) => {
+                    const Icon = TREND_BADGE_ICON[key]
+                    const isOn = trendFeatureBadgeFilters.includes(key)
+                    const label = EXPLORE_TREND_BADGE_LABELS[key]
+                    return (
+                      <Badge
+                        key={key}
+                        variant={isOn ? "default" : "outline"}
+                        className={`cursor-pointer select-none gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all hover:scale-[1.02] ${
+                          isOn
+                            ? "border-2 border-amber-500/80 bg-amber-600 !text-white shadow-sm hover:bg-amber-600/90"
+                            : "border border-border bg-card/50 text-muted-foreground hover:border-amber-500/40 hover:text-foreground"
+                        }`}
+                        onClick={() => toggleTrendFeatureBadge(key)}
+                      >
+                        {isOn && <Check className="h-3 w-3 shrink-0" />}
+                        <Icon className="h-3 w-3 shrink-0 opacity-90" />
+                        {label}
+                      </Badge>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
@@ -333,17 +433,26 @@ export function ExploreClient({
               </div>
             </div>
 
-            {/* Results header — 태그 선택 시에만 표시 */}
-            {selectedTagName && (
-              <div className="mb-4 flex items-center gap-2">
+            {/* Results header — 태그·특징 필터 적용 시 */}
+            {(selectedTagName || trendFeatureBadgeFilters.length > 0) && (
+              <div className="mb-4 flex flex-wrap items-center gap-2 gap-y-1">
                 <h2 className="text-lg font-semibold text-foreground">
-                  <span className="text-[hsl(var(--neon-purple))]"># {selectedTagName}</span>{" "}
-                  트렌드
+                  {selectedTagName ? (
+                    <>
+                      <span className="text-[hsl(var(--neon-purple))]"># {selectedTagName}</span> 트렌드
+                    </>
+                  ) : (
+                    <>전체 트렌드</>
+                  )}
                 </h2>
+                {trendFeatureBadgeFilters.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    · 특징:{" "}
+                    {trendFeatureBadgeFilters.map((k) => EXPLORE_TREND_BADGE_LABELS[k]).join(" · ")}
+                  </span>
+                )}
                 <span className="text-sm text-muted-foreground">
-                  {displayedTrend.length > 0
-                    ? `${displayedTrend.length}개`
-                    : "데이터 없음"}
+                  {displayedTrend.length > 0 ? `${displayedTrend.length}개` : "데이터 없음"}
                 </span>
               </div>
             )}
@@ -352,24 +461,44 @@ export function ExploreClient({
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20 text-center">
                 <TrendingUp className="mb-4 h-12 w-12 text-muted-foreground/40" />
                 <p className="text-lg font-medium text-muted-foreground">
-                  {selectedTagName
-                    ? `#${selectedTagName} 태그를 가진 게임이 없습니다`
-                    : "아직 집계된 트렌드 데이터가 없습니다"}
+                  {trendGamesForPeriod.length === 0
+                    ? selectedTagName
+                      ? `#${selectedTagName} 태그를 가진 게임이 없습니다`
+                      : "아직 집계된 트렌드 데이터가 없습니다"
+                    : trendFeatureBadgeFilters.length > 0
+                      ? "선택한 특징 배지를 모두 만족하는 게임이 없습니다"
+                      : selectedTagName
+                        ? `#${selectedTagName} 태그를 가진 게임이 없습니다`
+                        : "아직 집계된 트렌드 데이터가 없습니다"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {selectedTagName
-                    ? "다른 태그를 선택해 보세요."
-                    : "daily_game_stats가 쌓이면 여기에 데이터가 표시됩니다."}
+                  {trendGamesForPeriod.length === 0
+                    ? selectedTagName
+                      ? "다른 태그를 선택해 보세요."
+                      : "daily_game_stats가 쌓이면 여기에 데이터가 표시됩니다."
+                    : trendFeatureBadgeFilters.length > 0
+                      ? "특징 필터를 줄이거나 해제해 보세요."
+                      : selectedTagName
+                        ? "다른 태그를 선택해 보세요."
+                        : "daily_game_stats가 쌓이면 여기에 데이터가 표시됩니다."}
                 </p>
-                {selectedTagName && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setTag(undefined)}
-                    className="mt-4"
-                  >
-                    전체 보기
-                  </Button>
+                {(selectedTagName || trendFeatureBadgeFilters.length > 0) && (
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    {selectedTagName && (
+                      <Button variant="outline" size="sm" onClick={() => setTag(undefined)}>
+                        태그 전체 보기
+                      </Button>
+                    )}
+                    {trendFeatureBadgeFilters.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => pushTrendExplore({ badges: [] })}
+                      >
+                        특징 필터 해제
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
@@ -399,6 +528,5 @@ export function ExploreClient({
         )}
       </div>
     </div>
-    </>
   )
 }

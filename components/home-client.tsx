@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation"
 import { Gamepad2, Tags, Video, Bookmark, UserCircle2, Scissors } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MainTabNav } from "@/components/main-tab-nav"
 import { TrendingGames } from "@/components/trending-games"
 import { RisingGames } from "@/components/rising-games"
 import { DropsSection } from "@/components/drops-section"
@@ -60,8 +59,8 @@ export function HomeClient({
   esportsChannels,
 }: HomeClientProps) {
   const searchParams = useSearchParams()
-  const initialTab = searchParams.get("tab") ?? "main"
-  const [activeTab, setActiveTab] = useState(initialTab)
+  const tabParam = searchParams.get("tab")
+  const activeTab = tabParam === "follow" || tabParam === "calendar" ? tabParam : "main"
 
   const yesterdayTrendingIds = useMemo(
     () => new Set(yesterdayTrending.map((g) => g.id)),
@@ -205,15 +204,7 @@ export function HomeClient({
   const followingStreamerStreams = followedStreamerStreams
 
   return (
-    <>
-      {/* Tab Navigation */}
-      <MainTabNav
-        activeTab={activeTab as "main" | "follow" | "explore" | "calendar"}
-        onTabChange={setActiveTab}
-      />
-
-      {/* Main Content — 스크롤은 app-shell 단일 영역에 위임 (탭 전환 시 높이 튐 방지) */}
-      <main className="w-full min-w-0">
+      <div className="w-full min-w-0">
         {activeTab === "main" ? (
           <div className="flex flex-col gap-8 p-4 lg:p-6">
             <div className="flex flex-col gap-8 sm:gap-10">
@@ -343,7 +334,6 @@ export function HomeClient({
         ) : activeTab === "calendar" ? (
           <CalendarContent events={upcomingEvents} esportsChannels={esportsChannels} />
         ) : null}
-      </main>
-    </>
+      </div>
   )
 }

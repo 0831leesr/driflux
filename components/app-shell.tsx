@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { LeftSidebar } from "@/components/left-sidebar"
 import { Footer } from "@/components/footer"
+import { MainTabNavShell } from "@/components/main-tab-nav"
 
 interface AppShellProps {
   children: React.ReactNode
@@ -40,6 +41,8 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
       setSearchQuery("")
     }
   }
+
+  const showMainTabs = pathname === "/" || pathname.startsWith("/explore")
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -129,6 +132,7 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
         <LeftSidebar isCollapsed={sidebarCollapsed} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] transition-[margin] duration-300 ease-in-out">
           <main className="flex min-h-full min-w-0 flex-1 flex-col">
+            {showMainTabs ? <MainTabNavShell /> : null}
             {children}
             <Footer />
           </main>

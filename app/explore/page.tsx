@@ -12,6 +12,7 @@ import { getHistoricalTrendingDateRange, type HistoricalTrendingRanges } from "@
 import { getTopLiveGames } from "@/lib/chzzk"
 import { buildExploreLiveItems, fetchAndMergeHomeGamesForTopLive, type ExploreLiveListItem } from "@/lib/match-top-live-games"
 import { ExploreClient } from "@/components/explore/explore-client"
+import { parseExploreTrendBadgesParam } from "@/lib/explore-trend-badges"
 
 export const metadata: Metadata = {
   title: "게임 탐색 | Richzem",
@@ -21,16 +22,17 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 interface ExplorePageProps {
-  searchParams: Promise<{ mode?: string; tags?: string }>
+  searchParams: Promise<{ mode?: string; tags?: string; badges?: string }>
 }
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
-  const { mode: modeParam, tags: tagsParam } = await searchParams
+  const { mode: modeParam, tags: tagsParam, badges: badgesParam } = await searchParams
   const mode = modeParam === "trend" ? "trend" : "live"
   const rawTag = tagsParam
     ? decodeURIComponent(tagsParam.split(",")[0].trim())
     : undefined
   const selectedTagName = rawTag || undefined
+  const trendFeatureBadgeFilters = parseExploreTrendBadgesParam(badgesParam)
 
   let exploreLiveItems: ExploreLiveListItem[] = []
   let trendGamesYesterday: HistoricalTrendingRow[] = []
@@ -68,6 +70,18 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     trendGamesWeek = week
     trendGamesMonth = month
     allTags = tags
+
+    const trendIdSet = new Set<number>()
+    for (const g of yesterday) trendIdSet.add(g.id)
+    for (const g of week) trendIdSet.add(g.id)
+    for (const g of month) trendIdSet.add(g.id)
+    const trendUnionIds = [...trendIdSet]
+    if (trendUnionIds.length > 0) {
+      const todayStats = await fetchTodayDailyGameStatsByGameIds(trendUnionIds)
+      risingGameIds = trendUnionIds.filter(
+        (id) => (todayStats.get(String(id))?.momentum_score ?? 0) > 0,
+      )
+    }
   }
 
   const historicalTrendingRanges: HistoricalTrendingRanges = {
@@ -88,6 +102,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       selectedTagName={selectedTagName}
       yesterdayTrendingIds={yesterdayTrendingIds}
       risingGameIds={risingGameIds}
+      trendFeatureBadgeFilters={trendFeatureBadgeFilters}
     />
   )
 }

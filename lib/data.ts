@@ -492,6 +492,8 @@ export interface HistoricalTrendingRow {
   discount_rate: number | null
   is_free: boolean | null
   top_tags: string[] | null
+  /** 탐색 트렌드 등 일부 조회에서만 채워짐 */
+  release_date?: string | null
 }
 
 /** 오늘 날짜 `daily_game_stats` — 홈 실시간 탭 트렌드/급상승 정렬용. 키는 BIGINT 정합을 위해 문자열 game_id. */
@@ -1395,7 +1397,9 @@ async function getGamesByTrendPeriodForExploreImpl(
 
   const baseQuery = supabase
     .from("games")
-    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
+    .select(
+      "id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags, release_date"
+    )
     .limit(500)
 
   const { data: games, error: gamesErr } = tagName
@@ -1428,6 +1432,7 @@ async function getGamesByTrendPeriodForExploreImpl(
         discount_rate: effectiveDiscount > 0 ? effectiveDiscount : null,
         is_free: mg.is_free ?? null,
         top_tags: Array.isArray(mg.top_tags) ? mg.top_tags : null,
+        release_date: mg.release_date ?? null,
       } as HistoricalTrendingRow
     })
     .sort((a, b) => b.trend_score - a.trend_score)
