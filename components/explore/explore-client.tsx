@@ -18,6 +18,7 @@ import {
   EXPLORE_TREND_BADGE_LABELS,
   serializeExploreTrendBadges,
   historicalTrendRowMatchesExploreBadges,
+  exploreLiveItemMatchesExploreBadges,
   type ExploreTrendBadgeKey,
 } from "@/lib/explore-trend-badges"
 
@@ -164,6 +165,15 @@ export function ExploreClient({
     setShownCount(PAGE_SIZE)
   }, [initialMode, activeTrendPeriod, trendFeatureBadgeFilters.join(","), selectedTagName])
 
+  const pushLiveExplore = (badges: ExploreTrendBadgeKey[]) => {
+    const params = new URLSearchParams()
+    params.set("mode", "live")
+    const badgesStr = serializeExploreTrendBadges(badges)
+    if (badgesStr) params.set("badges", badgesStr)
+    router.push(`/explore?${params.toString()}`, { scroll: false })
+    setShownCount(PAGE_SIZE)
+  }
+
   const pushTrendExplore = (patch: {
     tagName?: string | null
     badges?: ExploreTrendBadgeKey[]
@@ -182,7 +192,7 @@ export function ExploreClient({
 
   const setMode = (mode: "live" | "trend") => {
     if (mode === "live") {
-      router.push(`/explore?mode=live`, { scroll: false })
+      pushLiveExplore(trendFeatureBadgeFilters)
       return
     }
     pushTrendExplore({})
@@ -195,19 +205,33 @@ export function ExploreClient({
     })
   }
 
-  const toggleTrendFeatureBadge = (key: ExploreTrendBadgeKey) => {
+  const toggleFeatureBadge = (key: ExploreTrendBadgeKey) => {
     const next = trendFeatureBadgeFilters.includes(key)
       ? trendFeatureBadgeFilters.filter((k) => k !== key)
       : [...trendFeatureBadgeFilters, key]
-    pushTrendExplore({ badges: next })
+    if (initialMode === "live") {
+      pushLiveExplore(next)
+    } else {
+      pushTrendExplore({ badges: next })
+    }
   }
 
   const handleAddTag = (tagName: string) => {
     setTag(tagName)
   }
 
-  const visibleExploreLive = exploreLiveItems.slice(0, shownCount)
-  const hasMoreLive = shownCount < exploreLiveItems.length
+  const filteredExploreLive = useMemo(() => {
+    if (trendFeatureBadgeFilters.length === 0) return exploreLiveItems
+    return exploreLiveItems.filter((item) =>
+      exploreLiveItemMatchesExploreBadges(item, trendFeatureBadgeFilters, {
+        yesterdayTrendingIds: yesterdaySet,
+        risingGameIds: risingSet,
+      }),
+    )
+  }, [exploreLiveItems, trendFeatureBadgeFilters, yesterdaySet, risingSet])
+
+  const visibleExploreLive = filteredExploreLive.slice(0, shownCount)
+  const hasMoreLive = shownCount < filteredExploreLive.length
 
   const trendGamesForPeriod = (() => {
     switch (activeTrendPeriod) {
@@ -292,28 +316,60 @@ export function ExploreClient({
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-                  <div className="card-grid-4">
-                    {visibleExploreLive.map((item, i) => (
-                      <GameCard
-                        key={item.live.categoryId}
-                        game={exploreLiveItemToCardData(item, yesterdaySet, risingSet)}
-                        priority={i < 4}
-                      />
-                    ))}
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  {EXPLORE_TREND_BADGE_ORDER.map((key) => {
+                    const Icon = TREND_BADGE_ICON[key]
+                    const isOn = trendFeatureBadgeFilters.includes(key)
+                    const label = EXPLORE_TREND_BADGE_LABELS[key]
+                    return (
+                      <Badge
+                        key={key}
+                        variant={isOn ? "default" : "outline"}
+                        className={`cursor-pointer select-none gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all hover:scale-[1.02] ${
+                          isOn
+                            ? "border-2 border-amber-500/80 bg-amber-600 !text-white shadow-sm hover:bg-amber-600/90"
+                            : "border border-border bg-card/50 text-muted-foreground hover:border-amber-500/40 hover:text-foreground"
+                        }`}
+                        onClick={() => toggleFeatureBadge(key)}
+                      >
+                        {isOn && <Check className="h-3 w-3 shrink-0" />}
+                        <Icon className="h-3 w-3 shrink-0 opacity-90" />
+                        {label}
+                      </Badge>
+                    )
+                  })}
                 </div>
-                {hasMoreLive && (
-                  <div className="flex justify-center pt-2">
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => setShownCount((n) => n + PAGE_SIZE)}
-                      className="min-w-[160px] border-border"
-                    >
-                      더 보기
-                    </Button>
-                  </div>
+                {filteredExploreLive.length === 0 ? (
+                  <div
+                    className="flex min-h-[12rem] items-center justify-center rounded-xl border border-dashed border-border"
+                    aria-hidden
+                  />
+                ) : (
+                  <>
+                    <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+                      <div className="card-grid-4">
+                        {visibleExploreLive.map((item, i) => (
+                          <GameCard
+                            key={item.live.categoryId}
+                            game={exploreLiveItemToCardData(item, yesterdaySet, risingSet)}
+                            priority={i < 4}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    {hasMoreLive && (
+                      <div className="flex justify-center pt-2">
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          onClick={() => setShownCount((n) => n + PAGE_SIZE)}
+                          className="min-w-[160px] border-border"
+                        >
+                          더 보기
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -324,7 +380,7 @@ export function ExploreClient({
         {initialMode === "trend" && (
           <>
             {/* Tag Filter Panel */}
-            <div className="mb-6 rounded-xl border border-border bg-card p-5">
+            <div className="mb-6">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">장르 / 태그 필터</h2>
@@ -398,7 +454,7 @@ export function ExploreClient({
                             ? "border-2 border-amber-500/80 bg-amber-600 !text-white shadow-sm hover:bg-amber-600/90"
                             : "border border-border bg-card/50 text-muted-foreground hover:border-amber-500/40 hover:text-foreground"
                         }`}
-                        onClick={() => toggleTrendFeatureBadge(key)}
+                        onClick={() => toggleFeatureBadge(key)}
                       >
                         {isOn && <Check className="h-3 w-3 shrink-0" />}
                         <Icon className="h-3 w-3 shrink-0 opacity-90" />

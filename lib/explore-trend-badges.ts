@@ -1,4 +1,5 @@
 import type { HistoricalTrendingRow } from "@/lib/data"
+import type { ExploreLiveListItem } from "@/lib/match-top-live-games"
 import { newReleaseDPlusForBadge } from "@/lib/release-date"
 
 /** 트렌드 탐색 — URL `badges` 쿼리 및 카드 특징 필터 키 */
@@ -46,6 +47,32 @@ export function historicalTrendRowMatchesExploreBadges(
       if (!ctx.risingGameIds.has(game.id)) return false
     } else if (f === "new") {
       if (newReleaseDPlusForBadge(game.release_date ?? null) === undefined) return false
+    }
+  }
+  return true
+}
+
+/**
+ * 라이브 탐색 카드 특징 배지와 동일 규칙(DB 매칭 행 기준). 여러 개 선택 시 AND.
+ */
+export function exploreLiveItemMatchesExploreBadges(
+  item: ExploreLiveListItem,
+  filters: ExploreTrendBadgeKey[],
+  ctx: {
+    yesterdayTrendingIds: Set<number>
+    risingGameIds: Set<number>
+  },
+): boolean {
+  if (filters.length === 0) return true
+  const db = item.db
+  if (!db) return false
+  for (const f of filters) {
+    if (f === "trending") {
+      if (!ctx.yesterdayTrendingIds.has(db.id)) return false
+    } else if (f === "rising") {
+      if (!ctx.risingGameIds.has(db.id)) return false
+    } else if (f === "new") {
+      if (newReleaseDPlusForBadge(db.release_date ?? null) === undefined) return false
     }
   }
   return true
