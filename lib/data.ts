@@ -469,11 +469,17 @@ export interface HistoricalTrendingRow {
   top_tags: string[] | null
 }
 
-/** 오늘 날짜 `daily_game_stats` — 홈 실시간 탭 트렌드/급상승 정렬용 */
+/** 오늘 날짜 `daily_game_stats` — 홈 실시간 탭 트렌드/급상승 정렬용. 키는 BIGINT 정합을 위해 문자열 game_id. */
+export type TodayGameStatRow = {
+  trend_score: number
+  momentum_score: number
+  current_viewers: number
+}
+
 export async function fetchTodayDailyGameStatsByGameIds(
   gameIds: number[]
-): Promise<Map<number, { trend_score: number; momentum_score: number; current_viewers: number }>> {
-  const map = new Map<number, { trend_score: number; momentum_score: number; current_viewers: number }>()
+): Promise<Map<string, TodayGameStatRow>> {
+  const map = new Map<string, TodayGameStatRow>()
   if (gameIds.length === 0) return map
 
   const supabase = createClientForCache()
@@ -485,13 +491,17 @@ export async function fetchTodayDailyGameStatsByGameIds(
     .eq("record_date", today)
     .in("game_id", gameIds)
 
-  if (error || !data) {
-    if (error) console.error("fetchTodayDailyGameStatsByGameIds:", error.message)
+  if (error) {
+    console.error("[Trending Fetch Error] fetchTodayDailyGameStatsByGameIds:", error.message, error)
+    return map
+  }
+  if (!data) {
+    console.error("[Trending Fetch Error] fetchTodayDailyGameStatsByGameIds: null data")
     return map
   }
 
   for (const row of data) {
-    const id = row.game_id as number
+    const id = String(row.game_id)
     map.set(id, {
       trend_score: Number(row.trend_score) || 0,
       momentum_score: Number((row as { momentum_score?: number }).momentum_score) || 0,
@@ -1117,16 +1127,23 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
     .gte("record_date", startDateStr)
     .lte("record_date", yesterdayStr)
 
-  if (statsErr || !stats || stats.length === 0) return []
+  if (statsErr) {
+    console.error("[Trending Fetch Error] getHistoricalTrending daily_game_stats:", statsErr.message, statsErr)
+    return []
+  }
+  if (!stats || stats.length === 0) {
+    console.warn(
+      `[Trending Fetch] No daily_game_stats rows for period=${period}, range ${startDateStr}..${yesterdayStr}`,
+    )
+    return []
+  }
 
-  // game_id별 누적 집계 (TypeScript)
-  // trend_score: 기간 내 일별 점수 합산 (꾸준히 인기 있는 게임 우대)
-  // peak_viewers: 기간 내 최고 시청자 수 (카드 표시용)
-  const gameStats = new Map<number, { peak_viewers: number; trend_score: number }>()
+  // game_id별 누적 집계 — 키는 String(game_id)로 BIGINT/number 혼용 방지
+  const gameStats = new Map<string, { peak_viewers: number; trend_score: number }>()
   for (const row of stats) {
-    const gid = row.game_id as number
-    const ts = (row.trend_score as number) ?? 0
-    const pv = (row.peak_viewers as number) ?? 0
+    const gid = String(row.game_id)
+    const ts = Number(row.trend_score) || 0
+    const pv = Number(row.peak_viewers) || 0
     const prev = gameStats.get(gid)
     gameStats.set(gid, {
       peak_viewers: Math.max(pv, prev?.peak_viewers ?? 0),
@@ -1146,10 +1163,17 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
     .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
     .in("id", topIds)
 
-  if (gErr || !games) return []
+  if (gErr) {
+    console.error("[Trending Fetch Error] getHistoricalTrending games:", gErr.message, gErr)
+    return []
+  }
+  if (!games || games.length === 0) {
+    console.warn("[Trending Fetch] getHistoricalTrending games empty for topIds:", topIds)
+    return []
+  }
 
   const mappings = await getGameMappings()
-  const gamesMap = new Map<number, any>()
+  const gamesMap = new Map<string, any>()
   for (const g of games) {
     const m = resolveMapping(
       mappings,
@@ -1157,14 +1181,14 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
       (g as any).english_title ?? null,
       (g as any).korean_title ?? null
     )
-    gamesMap.set(g.id, applyMappingOverridesToGame(g, m))
+    gamesMap.set(String(g.id), applyMappingOverridesToGame(g, m))
   }
 
   return topIds
     .map((gameId) => {
-      const g = gamesMap.get(gameId)
+      const g = gamesMap.get(String(gameId))
       if (!g) return null
-      const s = gameStats.get(gameId)!
+      const s = gameStats.get(String(gameId))!
       const effectiveDiscount = getEffectiveDiscountRate(g.discount_rate)
       return {
         id: g.id,
@@ -1235,16 +1259,20 @@ async function getGamesByTrendScoreImpl(tagName?: string): Promise<HistoricalTre
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const startDate = sevenDaysAgo.toISOString().slice(0, 10)
 
-  const { data: stats } = await supabase
+  const { data: stats, error: statsErr } = await supabase
     .from("daily_game_stats")
     .select("game_id, trend_score, peak_viewers")
     .gte("record_date", startDate)
 
-  const trendMap = new Map<number, { trend_score: number; peak_viewers: number }>()
+  if (statsErr) {
+    console.error("[Trending Fetch Error] getGamesByTrendScore daily_game_stats:", statsErr.message, statsErr)
+  }
+
+  const trendMap = new Map<string, { trend_score: number; peak_viewers: number }>()
   for (const row of stats ?? []) {
-    const id = row.game_id as number
-    const ts = (row.trend_score as number) ?? 0
-    const pv = (row.peak_viewers as number) ?? 0
+    const id = String(row.game_id)
+    const ts = Number(row.trend_score) || 0
+    const pv = Number(row.peak_viewers) || 0
     const prev = trendMap.get(id)
     if (!prev || ts > prev.trend_score) trendMap.set(id, { trend_score: ts, peak_viewers: pv })
   }
@@ -1254,17 +1282,21 @@ async function getGamesByTrendScoreImpl(tagName?: string): Promise<HistoricalTre
     .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
     .limit(500)
 
-  const { data: games } = tagName
+  const { data: games, error: gamesErr } = tagName
     ? await baseQuery.contains("top_tags", [tagName])
     : await baseQuery
 
+  if (gamesErr) {
+    console.error("[Trending Fetch Error] getGamesByTrendScore games:", gamesErr.message, gamesErr)
+    return []
+  }
   if (!games) return []
 
   const mappings = await getGameMappings()
 
   return games
     .map((g: any) => {
-      const s = trendMap.get(g.id as number)
+      const s = trendMap.get(String(g.id))
       const m = resolveMapping(mappings, g.title ?? "", g.english_title ?? null, g.korean_title ?? null)
       const mg = applyMappingOverridesToGame(g, m) as any
       const effectiveDiscount = getEffectiveDiscountRate(mg.discount_rate)

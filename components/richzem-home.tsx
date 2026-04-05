@@ -146,7 +146,7 @@ export default async function RichzemHome() {
   const allMatchedLive = matchTopLiveGamesToTrendingRows(topLiveGames, dbGames)
   const todayStatsMap = await fetchTodayDailyGameStatsByGameIds(allMatchedLive.map((g) => g.id))
   const trendingLive: TrendingGameRow[] = allMatchedLive.map((g) => {
-    const s = todayStatsMap.get(g.id)
+    const s = todayStatsMap.get(String(g.id))
     return {
       ...g,
       trend_score: s?.trend_score ?? 0,
