@@ -10,7 +10,7 @@ function SteamScoreGraph({ game }: { game: GameRow }) {
 
   return (
     <div
-      className="w-full max-w-[min(100%,33vw)] overflow-hidden rounded-xl border border-border bg-muted/30 px-3 pb-2.5 pt-3 dark:bg-muted/20"
+      className="w-full min-w-0 overflow-hidden rounded-xl border border-border bg-muted/30 px-3 pb-2.5 pt-3 dark:bg-muted/20"
       role="img"
       aria-label={`스팀 사용자 평가 긍정 비율 ${pct}%`}
     >
@@ -48,7 +48,7 @@ function CriticScoreGraph({ game }: { game: GameRow }) {
 
   return (
     <div
-      className="w-full max-w-[min(100%,33vw)] overflow-hidden rounded-xl border border-border bg-muted/30 px-3 pb-2.5 pt-3 dark:bg-muted/20"
+      className="w-full min-w-0 overflow-hidden rounded-xl border border-border bg-muted/30 px-3 pb-2.5 pt-3 dark:bg-muted/20"
       role="img"
       aria-label={`메타크리틱 등 크리틱 점수 ${score}점`}
     >

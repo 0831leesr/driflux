@@ -24,17 +24,17 @@ export function GameEvaluations({ game }: { game: GameRow }) {
       <div
         className={
           twoCol
-            ? "grid gap-8 md:grid-cols-2 md:items-start md:gap-12"
+            ? "grid grid-cols-1 gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-start md:gap-8"
             : "flex flex-col gap-4"
         }
       >
         {hasScores ? (
-          <div className="flex min-w-0 flex-col">
+          <div className="flex min-w-0 w-full flex-col">
             <GameEvaluationScores game={game} />
           </div>
         ) : null}
         {hasSteamReviews ? (
-          <div className="flex min-w-0 flex-col">
+          <div className="flex min-w-0 w-full flex-col">
             <Suspense fallback={<SteamReviewsSkeleton variant="embedded" />}>
               <SteamReviews appId={String(game.steam_appid)} variant="embedded" />
             </Suspense>
