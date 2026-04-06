@@ -1,4 +1,5 @@
 name: Daily maintenance — discover, Steam, evaluations, top streamers
+run-name: Daily maintenance (${{ github.event_name }})
 
 on:
   schedule:
@@ -9,10 +10,10 @@ jobs:
   daily-tasks:
     runs-on: ubuntu-latest
     steps:
-      - run: curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/discover-top-games" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/discover-top-games" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
 
-      - run: curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam?limit=50" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam?limit=50" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
 
-      - run: curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
 
-      - run: curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
