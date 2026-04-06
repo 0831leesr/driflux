@@ -4,6 +4,7 @@ import { fetchGameById } from "@/lib/data"
 import { getChzzkStreamsByCategory, getTopLiveGames } from "@/lib/chzzk"
 import { getBestGameImage, getDisplayGameTitle, formatViewerCountShort } from "@/lib/utils"
 import { GameDetailsPage } from "@/components/game-details-page"
+import { GameEvaluations } from "@/components/game/game-evaluations"
 import type { StreamData } from "@/components/stream-card"
 
 // Revalidate every 60s — aligned with Chzzk live stream ISR cache
@@ -52,6 +53,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
+/**
+ * 게임 상세 화면 구성(세로 순서):
+ * 1. GameHeader — `GameDetailsClient` / `game-header.tsx` (타이틀·시청자·태그·팔로우)
+ * 2. GameEvaluations — 점수 요약 + 스팀 인기 리뷰
+ * 3. GameMedia — 라이브 / 다시보기 / 클립
+ */
 export default async function GamePage({ params }: PageProps) {
   const { id } = await params
   const gameId = parseInt(id, 10)
@@ -65,18 +72,15 @@ export default async function GamePage({ params }: PageProps) {
   const gameTitle = getDisplayGameTitle(game)
   const categoryId = game.english_title?.trim() ?? ""
 
-  // 방송 목록(페이징 20개)과 전체 카테고리 집계(Top 50)를 병렬로 패칭
   const [chzzkStreams, topLiveGames] = await Promise.all([
     categoryId ? getChzzkStreamsByCategory(categoryId) : Promise.resolve([]),
     getTopLiveGames(50),
   ])
 
-  // 현재 게임을 Top Live 목록에서 매칭 (정규화 비교)
   const matchedLive = categoryId
     ? topLiveGames.find((g) => normCategoryId(g.categoryId) === normCategoryId(categoryId))
     : undefined
 
-  // 헤더 통계: Top Live 집계 우선, 없으면 방송 목록 합산 (비주류 게임 fallback)
   const totalViewers =
     matchedLive?.concurrentUserCount ??
     chzzkStreams.reduce((sum, s) => sum + s.concurrentUserCount, 0)
@@ -104,6 +108,7 @@ export default async function GamePage({ params }: PageProps) {
       streams={streams}
       totalViewers={totalViewers}
       liveStreamCount={liveStreamCount}
+      evaluationsSlot={<GameEvaluations game={game} />}
     />
   )
 }

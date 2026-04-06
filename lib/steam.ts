@@ -566,6 +566,93 @@ export async function getSteamReviewSummary(
   }
 }
 
+/** 스팀 스토어 인기 리뷰(한국어) 한 건 */
+export interface SteamPopularReview {
+  review: string
+  voted_up: boolean
+  /** 총 플레이타임 (Steam `playtime_forever` 분 → 시간, 소수 없음) */
+  playtime_hours: number
+  /** 원본 분 단위 (1시간 미만 표기 등에 사용) */
+  playtime_minutes: number
+}
+
+function minutesToPlaytimeFields(minutes: number): { hours: number; minutes: number } {
+  if (!Number.isFinite(minutes) || minutes < 0) {
+    return { hours: 0, minutes: 0 }
+  }
+  const m = Math.floor(minutes)
+  return { hours: Math.floor(m / 60), minutes: m }
+}
+
+/**
+ * 스팀 스토어 인기 리뷰(한국어, filter=top) 목록
+ *
+ * @returns `null` — 네트워크/파싱 실패(호출측에서 조용히 숨김), 빈 배열 — 성공했으나 리뷰 없음
+ */
+export async function fetchSteamReviews(
+  appId: string,
+  limit: number = 10
+): Promise<SteamPopularReview[] | null> {
+  const id = appId.trim()
+  if (!id || !/^\d+$/.test(id)) {
+    return null
+  }
+
+  const safeLimit = Math.min(Math.max(1, limit), 10)
+  const url = `https://store.steampowered.com/appreviews/${id}?json=1&language=korean&filter=top&num_per_page=${safeLimit}`
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": "Richzem/1.0",
+      },
+      next: { revalidate: 3600 },
+    })
+
+    if (!response.ok) {
+      console.error(`[Steam Review List] HTTP ${response.status} for app ${id}`)
+      return null
+    }
+
+    const data = (await response.json()) as {
+      success?: number
+      reviews?: Array<{
+        review?: string
+        voted_up?: boolean
+        author?: { playtime_forever?: number }
+      }>
+    }
+
+    if (!data.success || !Array.isArray(data.reviews)) {
+      return null
+    }
+
+    const out: SteamPopularReview[] = []
+    for (const r of data.reviews) {
+      const text = typeof r.review === "string" ? r.review.trim() : ""
+      if (!text) continue
+      const playtime_forever = r.author?.playtime_forever
+      const pm =
+        typeof playtime_forever === "number" && Number.isFinite(playtime_forever)
+          ? Math.max(0, Math.floor(playtime_forever))
+          : 0
+      const { hours, minutes } = minutesToPlaytimeFields(pm)
+      out.push({
+        review: text,
+        voted_up: Boolean(r.voted_up),
+        playtime_hours: hours,
+        playtime_minutes: minutes,
+      })
+    }
+
+    return out
+  } catch (error) {
+    console.error(`[Steam Review List] Error for app ${id}:`, error)
+    return null
+  }
+}
+
 /* ── Popular Game IDs for Testing ── */
 export const POPULAR_STEAM_GAMES = {
   ELDEN_RING: 1245620,

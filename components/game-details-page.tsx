@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { GameDetailsClient } from "@/components/game-details"
 import type { GameRow } from "@/lib/data"
@@ -14,13 +15,21 @@ interface GameDetailsPageProps {
   totalViewers?: number
   /** 헤더에 표시할 전체 방송 수 (Top Live API 집계값) */
   liveStreamCount?: number
+  /** 평가·스팀 리뷰 섹션(서버 컴포넌트 슬롯, 헤더와 미디어 사이) */
+  evaluationsSlot?: ReactNode
 }
 
 const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
 const CHZZK_VIDEO_URL = "https://chzzk.naver.com/video"
 const CHZZK_CLIP_URL = "https://chzzk.naver.com/clips"
 
-export function GameDetailsPage({ game, streams, totalViewers, liveStreamCount }: GameDetailsPageProps) {
+export function GameDetailsPage({
+  game,
+  streams,
+  totalViewers,
+  liveStreamCount,
+  evaluationsSlot,
+}: GameDetailsPageProps) {
   const router = useRouter()
 
   function handleBack() {
@@ -55,6 +64,7 @@ export function GameDetailsPage({ game, streams, totalViewers, liveStreamCount }
           onStreamClick={handleStreamClick}
           onVideoClick={handleVideoClick}
           onClipClick={handleClipClick}
+          evaluationsSlot={evaluationsSlot}
         />
       </main>
     </>
