@@ -64,6 +64,7 @@ function computeHiddenGems(
       const db = lookup(live)
       if (!db) return []
       const score = live.concurrentUserCount / Math.pow(live.openLiveCount + 10, 2)
+      const effectiveDiscount = getEffectiveDiscountRate(db.discount_rate)
       return [
         {
           score,
@@ -73,6 +74,10 @@ function computeHiddenGems(
           header_image_url: db.header_image_url ?? db.cover_image_url,
           totalViewers: live.concurrentUserCount,
           liveStreamCount: live.openLiveCount,
+          price_krw: db.price_krw ?? null,
+          original_price_krw: db.original_price_krw ?? null,
+          discount_rate: effectiveDiscount > 0 ? effectiveDiscount : null,
+          is_free: db.is_free ?? null,
         },
       ]
     })
@@ -105,6 +110,7 @@ function computeNewReleases(
       }
 
       const score = live.concurrentUserCount / Math.sqrt(daysSinceRelease + 1)
+      const effectiveDiscount = getEffectiveDiscountRate(db.discount_rate)
 
       return [
         {
@@ -116,6 +122,10 @@ function computeNewReleases(
           totalViewers: live.concurrentUserCount,
           liveStreamCount: live.openLiveCount,
           daysSinceRelease,
+          price_krw: db.price_krw ?? null,
+          original_price_krw: db.original_price_krw ?? null,
+          discount_rate: effectiveDiscount > 0 ? effectiveDiscount : null,
+          is_free: db.is_free ?? null,
         },
       ]
     })

@@ -443,6 +443,10 @@ export interface GamesWithDropsRow {
   cover_image_url: string | null
   header_image_url: string | null
   totalViewers: number
+  price_krw: number | null
+  original_price_krw: number | null
+  discount_rate: number | null
+  is_free: boolean | null
 }
 
 /* ── Fetch hidden gems games (숨겨진 꿀잼 게임 - stream 5~29, viewers >= 100) ── */
@@ -453,6 +457,10 @@ export interface HiddenGemsRow {
   header_image_url: string | null
   totalViewers: number
   liveStreamCount: number
+  price_krw: number | null
+  original_price_krw: number | null
+  discount_rate: number | null
+  is_free: boolean | null
 }
 
 /* ── Fetch new releases (따끈따끈 신작 - 30일 이내 출시, 치지직 화제) ── */
@@ -464,6 +472,10 @@ export interface NewReleasesRow {
   totalViewers: number
   liveStreamCount: number
   daysSinceRelease: number
+  price_krw: number | null
+  original_price_krw: number | null
+  discount_rate: number | null
+  is_free: boolean | null
 }
 
 /* ── Fetch trending games (trending_games view - trend_score 알고리즘 적용) ── */

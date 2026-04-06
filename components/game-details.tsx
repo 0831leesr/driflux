@@ -30,11 +30,15 @@ export function GameDetailsClient({
   onVideoClick,
   onClipClick,
   evaluationsSlot,
+  isYesterdayTrending,
+  isRising,
 }: {
   game: GameRow
   streams: StreamData[]
   totalViewers?: number
   liveStreamCount?: number
+  isYesterdayTrending?: boolean
+  isRising?: boolean
   onBack: () => void
   onStreamClick?: (stream: StreamData) => void
   onVideoClick?: (video: VideoData) => void
@@ -86,6 +90,8 @@ export function GameDetailsClient({
         onBack={onBack}
         onFollowClick={handleFollowClick}
         onVisitStoreClick={handleVisitStoreClick}
+        isYesterdayTrending={isYesterdayTrending}
+        isRising={isRising}
       />
 
       {evaluationsSlot}

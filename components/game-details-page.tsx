@@ -17,6 +17,8 @@ interface GameDetailsPageProps {
   liveStreamCount?: number
   /** 평가·스팀 리뷰 섹션(서버 컴포넌트 슬롯, 헤더와 미디어 사이) */
   evaluationsSlot?: ReactNode
+  isYesterdayTrending?: boolean
+  isRising?: boolean
 }
 
 const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
@@ -29,6 +31,8 @@ export function GameDetailsPage({
   totalViewers,
   liveStreamCount,
   evaluationsSlot,
+  isYesterdayTrending,
+  isRising,
 }: GameDetailsPageProps) {
   const router = useRouter()
 
@@ -65,6 +69,8 @@ export function GameDetailsPage({
           onVideoClick={handleVideoClick}
           onClipClick={handleClipClick}
           evaluationsSlot={evaluationsSlot}
+          isYesterdayTrending={isYesterdayTrending}
+          isRising={isRising}
         />
       </main>
     </>

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import { fetchGameById } from "@/lib/data"
+import { fetchGameById, fetchTodayDailyGameStatsByGameIds, getHistoricalTrending } from "@/lib/data"
 import { getChzzkStreamsByCategory, getTopLiveGames } from "@/lib/chzzk"
 import { getBestGameImage, getDisplayGameTitle, formatViewerCountShort } from "@/lib/utils"
 import { GameDetailsPage } from "@/components/game-details-page"
@@ -72,10 +72,15 @@ export default async function GamePage({ params }: PageProps) {
   const gameTitle = getDisplayGameTitle(game)
   const categoryId = game.english_title?.trim() ?? ""
 
-  const [chzzkStreams, topLiveGames] = await Promise.all([
+  const [chzzkStreams, topLiveGames, yesterdayTrending] = await Promise.all([
     categoryId ? getChzzkStreamsByCategory(categoryId) : Promise.resolve([]),
     getTopLiveGames(50),
+    getHistoricalTrending("yesterday"),
   ])
+
+  const isYesterdayTrending = yesterdayTrending.some((g) => g.id === game.id)
+  const todayStatsMap = await fetchTodayDailyGameStatsByGameIds([game.id])
+  const isRising = (todayStatsMap.get(String(game.id))?.momentum_score ?? 0) > 0
 
   const matchedLive = categoryId
     ? topLiveGames.find((g) => normCategoryId(g.categoryId) === normCategoryId(categoryId))
@@ -109,6 +114,8 @@ export default async function GamePage({ params }: PageProps) {
       totalViewers={totalViewers}
       liveStreamCount={liveStreamCount}
       evaluationsSlot={<GameEvaluations game={game} />}
+      isYesterdayTrending={isYesterdayTrending}
+      isRising={isRising}
     />
   )
 }

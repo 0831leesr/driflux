@@ -1,12 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, ExternalLink, Heart, Loader2, Radio, Tag, Users } from "lucide-react"
+import { ArrowLeft, ExternalLink, Heart, Loader2, Radio, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { GameRow } from "@/lib/data"
 import { getDisplayGameTitle } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
+import { GameDetailHeaderBadgesRow } from "@/components/game/game-detail-header-badges"
+import { buildFeatureTags } from "@/lib/feature-tags"
+import { newReleaseDPlusForBadge } from "@/lib/release-date"
 
 export type GameHeaderProps = {
   game: GameRow
@@ -18,6 +21,10 @@ export type GameHeaderProps = {
   onBack: () => void
   onFollowClick: () => void
   onVisitStoreClick: () => void
+  /** 어제 트렌드 집계에 포함 */
+  isYesterdayTrending?: boolean
+  /** 오늘 daily_game_stats 급상승 */
+  isRising?: boolean
 }
 
 export function GameHeader({
@@ -30,7 +37,15 @@ export function GameHeader({
   onBack,
   onFollowClick,
   onVisitStoreClick,
+  isYesterdayTrending = false,
+  isRising = false,
 }: GameHeaderProps) {
+  const headerFeatureTags = buildFeatureTags({
+    newReleaseDPlus: newReleaseDPlusForBadge(game.release_date ?? null),
+    isTrending: isYesterdayTrending,
+    isRising,
+  })
+
   return (
     <>
       <div className="px-4 pt-4 lg:px-6">
@@ -74,6 +89,11 @@ export function GameHeader({
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-3 sm:gap-4">
+            <GameDetailHeaderBadgesRow
+              featureTags={headerFeatureTags}
+              discountRate={game.discount_rate}
+            />
+
             <h1 className="text-balance text-center text-2xl font-bold tracking-tight text-foreground sm:text-left sm:text-3xl md:text-4xl">
               {getDisplayGameTitle(game)}
             </h1>
@@ -89,14 +109,6 @@ export function GameHeader({
                 <span className="font-semibold">{viewersFormatted}</span>
                 <span className="text-muted-foreground">시청자</span>
               </span>
-              {game.discount_rate != null && game.discount_rate > 0 && (
-                <span className="flex items-center gap-1.5">
-                  <Tag className="h-4 w-4 shrink-0 text-amber-400" />
-                  <Badge className="border-transparent bg-gradient-to-r from-amber-500 to-red-500 px-2 py-0.5 text-xs font-bold text-[hsl(var(--primary-foreground))]">
-                    -{game.discount_rate}% 스팀 할인
-                  </Badge>
-                </span>
-              )}
             </div>
 
             {tags.length > 0 && (
