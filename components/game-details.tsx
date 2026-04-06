@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { GameHeader } from "@/components/game/game-header"
+import type { GameDetailTopStreamer } from "@/lib/types"
 import { GameMedia } from "@/components/game/game-media"
 
 export function GameDetailsClient({
@@ -32,6 +33,7 @@ export function GameDetailsClient({
   evaluationsSlot,
   isYesterdayTrending,
   isRising,
+  topStreamers = [],
 }: {
   game: GameRow
   streams: StreamData[]
@@ -39,6 +41,7 @@ export function GameDetailsClient({
   liveStreamCount?: number
   isYesterdayTrending?: boolean
   isRising?: boolean
+  topStreamers?: GameDetailTopStreamer[]
   onBack: () => void
   onStreamClick?: (stream: StreamData) => void
   onVideoClick?: (video: VideoData) => void
@@ -92,6 +95,7 @@ export function GameDetailsClient({
         onVisitStoreClick={handleVisitStoreClick}
         isYesterdayTrending={isYesterdayTrending}
         isRising={isRising}
+        topStreamers={topStreamers}
       />
 
       {evaluationsSlot}

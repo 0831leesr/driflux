@@ -122,6 +122,32 @@ export async function fetchGameById(id: number): Promise<GameRow | null> {
   return applyMappingOverridesToGame(game, mapping) as GameRow
 }
 
+export type GameTopStreamersDbRow = {
+  rank1_name: string | null
+  rank1_viewers: number | null
+  rank2_name: string | null
+  rank2_viewers: number | null
+  rank3_name: string | null
+  rank3_viewers: number | null
+}
+
+/** `game_top_streamers` 단일 행 (게임 상세 헤더 TOP3용) */
+export async function fetchGameTopStreamersRow(gameId: number): Promise<GameTopStreamersDbRow | null> {
+  const supabase = createClientForCache()
+  const { data, error } = await supabase
+    .from("game_top_streamers")
+    .select("rank1_name, rank1_viewers, rank2_name, rank2_viewers, rank3_name, rank3_viewers")
+    .eq("game_id", gameId)
+    .maybeSingle()
+
+  if (error) {
+    console.error("fetchGameTopStreamersRow error:", error.message)
+    return null
+  }
+  if (!data) return null
+  return data as GameTopStreamersDbRow
+}
+
 /* ── Fetch multiple games by IDs ── */
 export async function fetchGamesByIds(ids: number[]): Promise<GameRow[]> {
   if (ids.length === 0) return []

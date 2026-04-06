@@ -72,6 +72,8 @@ async function main() {
     "28_create_games_with_drops_view.sql",
     "29_create_hidden_gems_games_view.sql",
     "30_create_new_releases_games_view.sql",
+    "36_streamer_game_logs_and_game_top_streamers.sql",
+    "37_game_top_streamers_public_read.sql",
   ]
   const useAll = process.argv.includes("--all")
   const toRun = useAll

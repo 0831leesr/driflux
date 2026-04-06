@@ -1,4 +1,4 @@
-name: Daily maintenance — discover, Steam, evaluations
+name: Daily maintenance — discover, Steam, evaluations, top streamers
 
 on:
   schedule:
@@ -6,23 +6,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  daily-maintenance:
+  daily-tasks:
     runs-on: ubuntu-latest
     steps:
-      - name: Discover top games
-        run: |
-          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/discover-top-games" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - run: curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/discover-top-games" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
-      - name: Update Steam metadata
-        run: |
-          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam?limit=50" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - run: curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam?limit=50" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
-      - name: Update evaluations (Steam + critic)
-        run: |
-          HTTP=$(curl -s -o /tmp/evals_resp.txt -w "%{http_code}" -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
-          echo "HTTP $HTTP"
-          cat /tmp/evals_resp.txt
-          if [ "$HTTP" -ge 400 ]; then exit 1; fi
+      - run: curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - run: curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

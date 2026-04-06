@@ -52,3 +52,10 @@ export interface EventRow {
   external_url: string | null
   games?: Pick<GameRow, "id" | "title" | "cover_image_url" | "header_image_url"> | null
 }
+
+/** 게임 상세 헤더: `game_top_streamers` TOP3 슬롯(비어 있으면 "---") */
+export interface GameDetailTopStreamer {
+  displayName: string
+  /** 라이브 목록과 매칭된 경우에만 치지직 링크용 */
+  channelId: string | null
+}

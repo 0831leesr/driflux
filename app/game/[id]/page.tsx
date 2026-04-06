@@ -1,11 +1,17 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import { fetchGameById, fetchTodayDailyGameStatsByGameIds, getHistoricalTrending } from "@/lib/data"
+import {
+  fetchGameById,
+  fetchGameTopStreamersRow,
+  fetchTodayDailyGameStatsByGameIds,
+  getHistoricalTrending,
+} from "@/lib/data"
 import { getChzzkStreamsByCategory, getTopLiveGames } from "@/lib/chzzk"
 import { getBestGameImage, getDisplayGameTitle, formatViewerCountShort } from "@/lib/utils"
 import { GameDetailsPage } from "@/components/game-details-page"
 import { GameEvaluations } from "@/components/game/game-evaluations"
 import type { StreamData } from "@/components/stream-card"
+import type { GameDetailTopStreamer } from "@/lib/types"
 
 // Revalidate every 60s — aligned with Chzzk live stream ISR cache
 export const revalidate = 60
@@ -13,6 +19,31 @@ export const revalidate = 60
 /** categoryId 정규화: 언더스코어↔공백 변환 후 소문자 비교 */
 function normCategoryId(s: string) {
   return s.toLowerCase().replace(/_/g, " ").trim()
+}
+
+function normStreamerName(s: string) {
+  return s.trim().toLowerCase()
+}
+
+const TOP_STREAMER_PLACEHOLDER = "---"
+
+/** 항상 3슬롯. DB/이름 없으면 "---", 라이브와 닉 일치 시 channelId만 채움 */
+function buildGameDetailTopStreamerSlots(
+  row: Awaited<ReturnType<typeof fetchGameTopStreamersRow>>,
+  streams: StreamData[],
+): GameDetailTopStreamer[] {
+  const names = row
+    ? ([row.rank1_name, row.rank2_name, row.rank3_name] as const)
+    : ([null, null, null] as const)
+
+  return names.map((name) => {
+    const displayName = name?.trim() ? name.trim() : TOP_STREAMER_PLACEHOLDER
+    if (displayName === TOP_STREAMER_PLACEHOLDER) {
+      return { displayName: TOP_STREAMER_PLACEHOLDER, channelId: null }
+    }
+    const live = streams.find((st) => normStreamerName(st.streamerName) === normStreamerName(displayName))
+    return { displayName, channelId: live?.channelId ?? null }
+  })
 }
 
 interface PageProps {
@@ -72,10 +103,11 @@ export default async function GamePage({ params }: PageProps) {
   const gameTitle = getDisplayGameTitle(game)
   const categoryId = game.english_title?.trim() ?? ""
 
-  const [chzzkStreams, topLiveGames, yesterdayTrending] = await Promise.all([
+  const [chzzkStreams, topLiveGames, yesterdayTrending, topStreamersRow] = await Promise.all([
     categoryId ? getChzzkStreamsByCategory(categoryId) : Promise.resolve([]),
     getTopLiveGames(50),
     getHistoricalTrending("yesterday"),
+    fetchGameTopStreamersRow(game.id),
   ])
 
   const isYesterdayTrending = yesterdayTrending.some((g) => g.id === game.id)
@@ -107,6 +139,8 @@ export default async function GamePage({ params }: PageProps) {
     channelImageUrl: s.channelImageUrl?.trim() || null,
   }))
 
+  const topStreamers = buildGameDetailTopStreamerSlots(topStreamersRow, streams)
+
   return (
     <GameDetailsPage
       game={game}
@@ -116,6 +150,7 @@ export default async function GamePage({ params }: PageProps) {
       evaluationsSlot={<GameEvaluations game={game} />}
       isYesterdayTrending={isYesterdayTrending}
       isRising={isRising}
+      topStreamers={topStreamers}
     />
   )
 }

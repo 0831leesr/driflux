@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { GameDetailsClient } from "@/components/game-details"
 import type { GameRow } from "@/lib/data"
+import type { GameDetailTopStreamer } from "@/lib/types"
 import type { StreamData } from "@/components/stream-card"
 import type { VideoData } from "@/components/video-card"
 import type { ClipData } from "@/components/clip-card"
@@ -19,6 +20,8 @@ interface GameDetailsPageProps {
   evaluationsSlot?: ReactNode
   isYesterdayTrending?: boolean
   isRising?: boolean
+  /** TOP3 슬롯(부족 시 "---"), 미전달 시 헤더에서 "---"로 채움 */
+  topStreamers?: GameDetailTopStreamer[]
 }
 
 const CHZZK_LIVE_URL = "https://chzzk.naver.com/live"
@@ -33,6 +36,7 @@ export function GameDetailsPage({
   evaluationsSlot,
   isYesterdayTrending,
   isRising,
+  topStreamers = [],
 }: GameDetailsPageProps) {
   const router = useRouter()
 
@@ -71,6 +75,7 @@ export function GameDetailsPage({
           evaluationsSlot={evaluationsSlot}
           isYesterdayTrending={isYesterdayTrending}
           isRising={isRising}
+          topStreamers={topStreamers}
         />
       </main>
     </>

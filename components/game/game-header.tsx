@@ -5,6 +5,7 @@ import { ArrowLeft, ExternalLink, Heart, Loader2, Radio, Users } from "lucide-re
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { GameRow } from "@/lib/data"
+import type { GameDetailTopStreamer } from "@/lib/types"
 import { getDisplayGameTitle } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
 import { GameDetailHeaderBadgesRow } from "@/components/game/game-detail-header-badges"
@@ -25,7 +26,15 @@ export type GameHeaderProps = {
   isYesterdayTrending?: boolean
   /** 오늘 daily_game_stats 급상승 */
   isRising?: boolean
+  /** TOP3 슬롯(이름 없으면 "---"), 항상 3개 권장 */
+  topStreamers?: GameDetailTopStreamer[]
 }
+
+/** 치지직 채널/라이브 진입 (프로젝트 공통 패턴과 동일) */
+const chzzkChannelHref = (channelId: string) =>
+  `https://chzzk.naver.com/live/${encodeURIComponent(channelId)}`
+
+const TOP_PLACEHOLDER = "---"
 
 export function GameHeader({
   game,
@@ -39,7 +48,19 @@ export function GameHeader({
   onVisitStoreClick,
   isYesterdayTrending = false,
   isRising = false,
+  topStreamers = [],
 }: GameHeaderProps) {
+  const topSlots: GameDetailTopStreamer[] =
+    topStreamers.length >= 3
+      ? topStreamers.slice(0, 3)
+      : [
+          ...topStreamers,
+          ...Array.from({ length: Math.max(0, 3 - topStreamers.length) }, () => ({
+            displayName: TOP_PLACEHOLDER,
+            channelId: null as string | null,
+          })),
+        ]
+
   const headerFeatureTags = buildFeatureTags({
     newReleaseDPlus: newReleaseDPlusForBadge(game.release_date ?? null),
     isTrending: isYesterdayTrending,
@@ -75,8 +96,8 @@ export function GameHeader({
           <div className="absolute inset-0 bg-gradient-to-r from-card/90 via-card/70 to-card/40" />
         </div>
 
-        <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-end sm:gap-6 sm:p-6 md:p-7">
-          <div className="relative mx-auto h-48 w-32 shrink-0 overflow-hidden rounded-xl border-2 border-border/50 shadow-2xl sm:mx-0 sm:h-56 sm:w-40 md:h-60">
+        <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:gap-5 sm:p-6 md:gap-6 md:p-7">
+          <div className="relative mx-auto h-48 w-32 shrink-0 overflow-hidden rounded-xl border-2 border-border/50 shadow-2xl sm:mx-0 sm:h-56 sm:w-40 md:h-60 sm:self-end">
             <GameImage
               src={game.header_image_url ?? game.cover_image_url}
               type="cover"
@@ -155,6 +176,57 @@ export function GameHeader({
                 </Button>
               )}
             </div>
+          </div>
+
+          <div className="flex w-full shrink-0 flex-col gap-2.5 border-t border-border/50 pt-4 sm:w-auto sm:min-w-[10.5rem] sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0 md:min-w-[11.5rem]">
+            <p className="text-center text-xs font-medium text-muted-foreground sm:text-left">
+              최근 플레이 스트리머
+            </p>
+            <ul className="flex flex-col gap-2" aria-label="최근 플레이 스트리머 TOP 3">
+              {topSlots.map((s, idx) => {
+                const isPlaceholder = s.displayName === TOP_PLACEHOLDER
+                const href =
+                  !isPlaceholder && s.channelId?.trim()
+                    ? chzzkChannelHref(s.channelId.trim())
+                    : null
+
+                const rowClass =
+                  "flex min-h-9 w-full items-center rounded-md border border-border bg-background/40 px-3 py-2 text-left text-sm transition-colors"
+
+                const label = (
+                  <span
+                    className={`min-w-0 truncate font-medium ${
+                      isPlaceholder ? "text-muted-foreground" : "text-foreground"
+                    }`}
+                  >
+                    {s.displayName}
+                  </span>
+                )
+
+                return (
+                  <li key={`top-streamer-${idx}`}>
+                    {href ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${rowClass} cursor-pointer hover:border-[hsl(var(--neon-purple))]/50 hover:bg-accent/40 hover:text-[hsl(var(--neon-purple))]`}
+                      >
+                        {label}
+                      </a>
+                    ) : (
+                      <div
+                        className={`${rowClass} cursor-default ${
+                          isPlaceholder ? "opacity-90" : ""
+                        }`}
+                      >
+                        {label}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         </div>
       </div>

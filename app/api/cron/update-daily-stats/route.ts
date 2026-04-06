@@ -3,9 +3,14 @@ import { createAdminClient } from "@/lib/supabase/server"
 import {
   buildChzzkCategoriesLiveUrl,
   fetchChzzkCategoriesLiveTextFirst,
+  getChzzkStreamsByCategory,
   type FetchChzzkCategoriesLiveTextFirstResult,
 } from "@/lib/chzzk"
 import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
+import {
+  getKstTodayDateString,
+  normalizeStreamerName,
+} from "@/lib/actions/update-top-streamers"
 
 /**
  * Cron Job API: 일일 피크 통계 + 급상승(Momentum) 갱신
@@ -15,6 +20,8 @@ import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
  * - 스케줄은 외부(예: 30분 주기 GitHub Actions 등)에서 호출 — vercel.json crons 비움
  * - Chzzk categories/live API에서 실시간 게임별 시청자 수 및 방송 수 수집
  * - games 테이블의 title/korean_title/english_title과 매핑
+ * - (추가) 매칭된 상위 게임에 대해 categories/GAME/{id}/lives로 라이브 목록을 받아
+ *   streamer_game_logs에 KST 당일·채널명·시청자 피크 병합 upsert
  * - daily_game_stats Upsert:
  *   - peak_viewers / peak_stream_count / trend_score: GREATEST(기존, 현재)
  *   - previous_viewers ← 오늘 첫 스냅샷 시점의 시청자 수(Baseline), 이후 크론에서 유지
@@ -32,6 +39,118 @@ interface ChzzkCategoryItem {
   concurrentUserCount: number
   openLiveCount: number
   posterImageUrl: string | null
+}
+
+/** categories/live에서 game_id에 매칭된 행 중 시청자 최고치일 때의 Chzzk categoryId(영문) */
+type GameStatsWithCategory = {
+  concurrentUserCount: number
+  openLiveCount: number
+  chzzkCategoryId: string
+}
+
+/** Vercel 60초 내 완료를 위해 라이브 목록 API 호출 상한 */
+const MAX_GAMES_FOR_STREAMER_LIVE_FETCH = 36
+const STREAMER_LIVES_CONCURRENCY = 6
+
+type StreamerGameLogRow = {
+  game_id: number
+  log_date: string
+  streamer_name: string
+  peak_viewers: number
+}
+
+async function collectStreamerGameLogRowsFromChzzk(
+  statsMap: Map<number, GameStatsWithCategory>,
+): Promise<{ rows: StreamerGameLogRow[]; gamesFetched: number }> {
+  const kstLogDate = getKstTodayDateString()
+  const entries = Array.from(statsMap.entries())
+    .filter(([, s]) => s.chzzkCategoryId.length > 0)
+    .sort((a, b) => b[1].concurrentUserCount - a[1].concurrentUserCount)
+    .slice(0, MAX_GAMES_FOR_STREAMER_LIVE_FETCH)
+
+  const rawRows: StreamerGameLogRow[] = []
+
+  for (let i = 0; i < entries.length; i += STREAMER_LIVES_CONCURRENCY) {
+    const chunk = entries.slice(i, i + STREAMER_LIVES_CONCURRENCY)
+    const chunkResults = await Promise.all(
+      chunk.map(async ([gameId, s]) => {
+        const streams = await getChzzkStreamsByCategory(s.chzzkCategoryId)
+        return streams.map((st) => ({
+          game_id: gameId,
+          log_date: kstLogDate,
+          streamer_name: normalizeStreamerName(st.channelName),
+          peak_viewers: st.concurrentUserCount,
+        }))
+      }),
+    )
+    for (const rows of chunkResults) {
+      rawRows.push(...rows)
+    }
+  }
+
+  const deduped = new Map<string, StreamerGameLogRow>()
+  for (const row of rawRows) {
+    if (!row.streamer_name) continue
+    const key = `${row.game_id}\0${row.streamer_name}`
+    const prev = deduped.get(key)
+    if (!prev || row.peak_viewers > prev.peak_viewers) deduped.set(key, row)
+  }
+  return { rows: Array.from(deduped.values()), gamesFetched: entries.length }
+}
+
+/**
+ * 기존 DB peak_viewers와 비교해 더 큰 값으로 upsert (동일 키는 유니크 충돌 시 덮어쓰기 = 이미 max 반영된 값)
+ */
+async function mergeAndUpsertStreamerGameLogs(
+  supabase: ReturnType<typeof createAdminClient>,
+  rows: StreamerGameLogRow[],
+): Promise<{ upserted: number; failed: number }> {
+  if (rows.length === 0) return { upserted: 0, failed: 0 }
+
+  const kstLogDate = rows[0]!.log_date
+  const gameIds = [...new Set(rows.map((r) => r.game_id))]
+
+  const { data: existing, error: selErr } = await supabase
+    .from("streamer_game_logs")
+    .select("game_id, streamer_name, peak_viewers")
+    .eq("log_date", kstLogDate)
+    .in("game_id", gameIds)
+
+  if (selErr) {
+    throw new Error(selErr.message)
+  }
+
+  const existingPeak = new Map<string, number>()
+  for (const ex of existing ?? []) {
+    const r = ex as { game_id: number; streamer_name: string; peak_viewers: number | null }
+    const name = normalizeStreamerName(String(r.streamer_name ?? ""))
+    if (!name) continue
+    existingPeak.set(`${r.game_id}\0${name}`, Number(r.peak_viewers ?? 0))
+  }
+
+  const merged: StreamerGameLogRow[] = rows.map((row) => {
+    const key = `${row.game_id}\0${row.streamer_name}`
+    const prev = existingPeak.get(key) ?? 0
+    return { ...row, peak_viewers: Math.max(row.peak_viewers, prev) }
+  })
+
+  const BATCH = 200
+  let upserted = 0
+  let failed = 0
+  for (let i = 0; i < merged.length; i += BATCH) {
+    const batch = merged.slice(i, i + BATCH)
+    const { error } = await supabase.from("streamer_game_logs").upsert(batch, {
+      onConflict: "game_id,log_date,streamer_name",
+      ignoreDuplicates: false,
+    })
+    if (error) {
+      console.error("[DailyStats] streamer_game_logs upsert:", error.message, error.details, error.hint)
+      failed += batch.length
+    } else {
+      upserted += batch.length
+    }
+  }
+  return { upserted, failed }
 }
 
 interface ExistingDailyStatRow {
@@ -136,9 +255,8 @@ export async function GET(request: Request) {
       titleMap.set(normalize(g.title), g.id)
     }
 
-    // ── Step 3: Chzzk 카테고리를 game_id에 매핑 + 집계 ──
-    type GameStats = { concurrentUserCount: number; openLiveCount: number }
-    const statsMap = new Map<number, GameStats>()
+    // ── Step 3: Chzzk 카테고리를 game_id에 매핑 + 집계 (시청자 최고 행의 categoryId 보존 → 라이브 목록 API용) ──
+    const statsMap = new Map<number, GameStatsWithCategory>()
 
     for (const cat of categories) {
       const gameId =
@@ -149,12 +267,14 @@ export async function GET(request: Request) {
 
       if (!gameId) continue
 
+      const chzzkCategoryId = String(cat.categoryId ?? "").trim()
       const prev = statsMap.get(gameId)
       // 중복 매핑 시 더 높은 값 유지
       if (!prev || cat.concurrentUserCount > prev.concurrentUserCount) {
         statsMap.set(gameId, {
           concurrentUserCount: cat.concurrentUserCount,
           openLiveCount: cat.openLiveCount,
+          chzzkCategoryId,
         })
       }
     }
@@ -289,6 +409,42 @@ export async function GET(request: Request) {
       }
     }
 
+    // ── Step 8: streamer_game_logs (KST 당일, 카테고리별 라이브 순회 → 채널명·시청자 피크 병합 upsert) ──
+    let streamerLogs: {
+      kstLogDate: string
+      gamesFetched: number
+      rawRows: number
+      upserted: number
+      failed: number
+      skipped: boolean
+      error?: string
+    } = {
+      kstLogDate: getKstTodayDateString(),
+      gamesFetched: 0,
+      rawRows: 0,
+      upserted: 0,
+      failed: 0,
+      skipped: true,
+    }
+
+    try {
+      const { rows: logRows, gamesFetched } = await collectStreamerGameLogRowsFromChzzk(statsMap)
+      streamerLogs.gamesFetched = gamesFetched
+      streamerLogs.rawRows = logRows.length
+      streamerLogs.skipped = false
+      if (logRows.length > 0) {
+        const { upserted: slUp, failed: slFail } = await mergeAndUpsertStreamerGameLogs(supabase, logRows)
+        streamerLogs.upserted = slUp
+        streamerLogs.failed = slFail
+      }
+      console.log(
+        `[DailyStats] streamer_game_logs — kst: ${streamerLogs.kstLogDate}, games: ${gamesFetched}, rows: ${logRows.length}, upserted: ${streamerLogs.upserted}, failed: ${streamerLogs.failed}`,
+      )
+    } catch (e) {
+      streamerLogs.error = e instanceof Error ? e.message : String(e)
+      console.error("[DailyStats] streamer_game_logs pipeline failed:", streamerLogs.error)
+    }
+
     const duration = Date.now() - startTime
     console.log(
       `[DailyStats] Done in ${duration}ms — date: ${today}, chzzk: ${categories.length}, matched: ${statsMap.size}, new: ${newInserts}, updated: ${updates}, upserted: ${upserted}, failed: ${failed}`
@@ -304,6 +460,7 @@ export async function GET(request: Request) {
         upserted,
         failed,
       },
+      streamerLogs,
       duration,
     })
   } catch (error) {
