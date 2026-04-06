@@ -32,7 +32,7 @@ export function HiddenGemsSection({ games, yesterdayTrendingIds }: { games: Hidd
     <section>
       <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-foreground">
         <Gem className="h-5 w-5 text-cyan-400" />
-        <span>💎 숨겨진 꿀잼 게임 발견</span>
+        <span>숨겨진 게임 발견</span>
       </h2>
       <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="card-grid-4">

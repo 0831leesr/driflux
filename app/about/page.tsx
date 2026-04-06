@@ -5,7 +5,7 @@ import { LoginBrandLogos } from "@/components/login-brand-logos"
 export const metadata: Metadata = {
   title: "서비스 소개 | Richzem",
   description:
-    "Richzem(리치젬)은 치지직 라이브 데이터와 Steam·게임 DB 정보를 모아 게임·방송을 찾아볼 수 있는 웹 서비스입니다.",
+    "Richzem(리치젬)은 치지직·Steam·게임 DB를 묶어 메인·팔로우·탐색·캘린더와 검색·상세 화면에서 방송·트렌드·게임을 탐색할 수 있는 웹 서비스입니다.",
 }
 
 const features = [
@@ -13,7 +13,7 @@ const features = [
     icon: TrendingUp,
     title: "트렌드 목록",
     description:
-      "실시간·어제·주간·월간 등 구간을 탭으로 바꿔 가며, 치지직 라이브 집계와 DB에 매칭된 게임 카드 목록을 볼 수 있습니다.",
+      "실시간·어제·주간·월간 등 구간을 탭으로 바꿔 가며, 치지직 라이브 집계와 DB에 매칭된 게임 카드 목록을 볼 수 있습니다. 카드 좌상단에는 신작(D+N)·트렌딩·급상승·드롭스 등 조건에 맞을 때 특징 태그가 붙을 수 있습니다.",
   },
   {
     icon: Tv2,
@@ -43,7 +43,7 @@ const features = [
     icon: Star,
     title: "계정·팔로우",
     description:
-      "Google 로그인 후 게임·태그·스트리머 팔로우, 다시보기·클립 북마크, 캘린더 일정 팔로우 등 설정을 서버에 저장할 수 있습니다. 저장한 영상 일부는 브라우저에도 남을 수 있습니다.",
+      "Google 로그인 후 게임·태그·스트리머 팔로우, 다시보기·클립 북마크, 캘린더 일정 팔로우 등 설정을 서버에 저장할 수 있습니다. 비로그인 시 팔로우 탭의 빈 화면 등에는 안내 문구가 표시될 수 있습니다. 좌측 사이드바에는 로그인 여부와 관계없이 실시간 트렌딩·급상승 게임 미니 목록이 제공됩니다. 저장한 영상 일부는 브라우저에도 남을 수 있습니다.",
   },
 ]
 
@@ -66,7 +66,11 @@ export default function AboutPage() {
           <p>
             <strong className="text-foreground">Richzem(리치젬)</strong>은 네이버 치지직(CHZZK)에서 가져온
             라이브·VOD·클립 API 응답과, 내부 DB에 적재한 Steam·IGDB·수동 매핑 등의 게임 메타데이터를 조합해, 웹에서
-            목록·검색·상세 화면을 제공합니다.
+            메인·팔로우·탐색·캘린더 탭과 검색·태그·게임 상세 등 화면을 제공합니다. 상단 탭 선택은 주소(
+            <code className="rounded bg-muted px-1 py-0.5 text-xs text-foreground">/</code>,{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs text-foreground">/?tab=</code>,{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs text-foreground">/explore</code>)와 맞춰
+            유지됩니다.
           </p>
           <p>
             스트리밍과 스토어 정보를 한 화면에서 대조할 수 있도록 하는 것이 목적이며, 특정 스트리머나 게임을 보장하거나
@@ -101,8 +105,12 @@ export default function AboutPage() {
       {/* Note */}
       <section className="mt-12 rounded-xl border border-border bg-muted/30 px-6 py-5 text-sm leading-relaxed text-muted-foreground">
         <p>
-          Richzem(리치젬)에 표시되는 치지직 라이브·시청자 등 정보는 수집·갱신 시점에 따라 치지직 앱/웹 화면과 실시간으로
-          완전히 일치하지 않을 수 있습니다.
+          Richzem(리치젬)에 표시되는 치지직 라이브·시청자 등 정보는 치지직의 실제 데이터와 실시간으로 일치하지 않을
+          수 있습니다.
+        </p>
+        <p className="mt-3">
+          Richzem(리치젬)에 표시되는 게임 정보는 Steam·실제 스토어 및 게임과 오차가 있거나, 모든 항목이 표시되지 못할
+          수 있습니다.
         </p>
         <p className="mt-3">
           Richzem(리치젬)은 네이버(치지직), Valve(스팀), IGDB와 공식 제휴 관계가 없습니다. 서비스 내 표시되는 게임

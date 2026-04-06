@@ -3,11 +3,15 @@ import Link from "next/link"
 export function Footer() {
   return (
     <footer className="mt-auto shrink-0 border-t border-border bg-card/30 py-8 text-center text-xs text-muted-foreground">
-      <div className="mx-auto max-w-2xl px-4">
+      <div className="w-full px-4 lg:px-6">
         {/* Chzzk data timing */}
         <p className="leading-relaxed">
-          Richzem(리치젬)에 표시되는 치지직 라이브·시청자 등 정보는 수집·갱신 시점에 따라 치지직
-          앱/웹 화면과 실시간으로 완전히 일치하지 않을 수 있습니다.
+          Richzem(리치젬)에 표시되는 치지직 라이브·시청자 등 정보는 치지직의 실제 데이터와 실시간으로
+          일치하지 않을 수 있습니다.
+        </p>
+        <p className="mt-2 leading-relaxed">
+          Richzem(리치젬)에 표시되는 게임 정보는 Steam·실제 스토어 및 게임과 오차가 있거나, 모든 항목이
+          표시되지 못할 수 있습니다.
         </p>
 
         {/* Disclaimer */}

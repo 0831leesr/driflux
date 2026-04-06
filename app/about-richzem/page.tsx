@@ -6,7 +6,6 @@ import {
   Compass,
   Gamepad2,
   Heart,
-  LayoutGrid,
   Radio,
   Scissors,
   Search,
@@ -20,7 +19,7 @@ import { LoginBrandLogos } from "@/components/login-brand-logos"
 export const metadata: Metadata = {
   title: "리치젬에 관하여",
   description:
-    "Richzem(리치젬)의 메인·팔로우·탐색·캘린더 탭, 검색, 게임 상세 페이지 등 서비스 전반을 정리한 안내입니다.",
+    "Richzem(리치젬)의 메인·팔로우·탐색·캘린더, 검색·게임 상세·태그 페이지와 데이터 안내를 정리합니다.",
 }
 
 export default function RichzemAboutPage() {
@@ -39,27 +38,6 @@ export default function RichzemAboutPage() {
 
       <section className="mt-10">
         <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
-          <LayoutGrid className="h-5 w-5 text-[hsl(var(--neon-purple))]" />
-          전체 화면 구성
-        </h2>
-        <ul className="mt-4 space-y-3 text-sm leading-7 text-muted-foreground">
-          <li>
-            <strong className="text-foreground">상단 헤더</strong>: 로고, 본 안내로 이동하는 「리치젬에 관하여」,
-            게임·스트리머·태그 검색창(PC), 다크/라이트 테마 전환, 로그인·계정 영역이 있습니다.
-          </li>
-          <li>
-            <strong className="text-foreground">왼쪽 사이드바</strong> 데스크톱에서는 접기/펼치기가 가능합니다. 팔로우한
-            게임·태그·스트리머, 캘린더에서 팔로우한 일정 등에 빠르게 접근할 수 있습니다.
-          </li>
-          <li>
-            <strong className="text-foreground">본문</strong>은 선택한 메뉴·탭에 맞게 스크롤되며, 하단에는 푸터가
-            이어집니다.
-          </li>
-        </ul>
-      </section>
-
-      <section className="mt-10">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
           <TrendingUp className="h-5 w-5 text-[hsl(var(--neon-purple))]" />
           홈 상단 탭 네 가지
         </h2>
@@ -69,7 +47,9 @@ export default function RichzemAboutPage() {
             /
           </Link>
           )에서는 상단 탭으로 큰 흐름이 나뉩니다. 「탐색」만 별도 경로{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">/explore</code>로 열립니다.
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">/explore</code>로 열립니다. 메인·팔로우·
+          캘린더 선택은 주소의 <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">?tab=</code> 값과
+          맞춰지며, 탭 줄은 페이지 본문이 로딩되는 동안에도 레이아웃에 고정되어 같은 자리에 유지됩니다.
         </p>
 
         <div className="mt-5 space-y-4">
@@ -95,7 +75,7 @@ export default function RichzemAboutPage() {
                 타이틀을 모읍니다(데이터 제공 상황에 따라 비어 있을 수 있습니다).
               </li>
               <li>
-                <strong className="text-foreground">숨겨진 꿀잼</strong>(화면 표시명과 동일): 동시 라이브 채널 수·시청자
+                <strong className="text-foreground">숨겨진 게임 발견</strong>(화면 표시명과 동일): 동시 라이브 채널 수·시청자
                 수가 정해진 범위에 들어가는 게임만 남긴 뒤, 시청자 수와 채널 수로 만든 점수가 높은 순으로 일부를
                 나열합니다.
               </li>
@@ -103,6 +83,10 @@ export default function RichzemAboutPage() {
                 <strong className="text-foreground">따끈한 신작</strong>(화면 표시명과 동일): DB 출시일이 약 30일 이내인
                 게임 중 현재 라이브가 있는 항목만 남기고, 시청자 수와 출시 경과 일수를 반영한 내부 점수로 순서를 매겨
                 나열합니다.
+              </li>
+              <li>
+                <strong className="text-foreground">게임 카드 배지</strong>: 조건에 따라 카드 좌상단에 신작(D+N)·트렌딩·
+                급상승·드롭스 등 특징 태그가 최대 몇 개까지 함께 표시될 수 있습니다.
               </li>
             </ul>
           </article>
@@ -113,7 +97,8 @@ export default function RichzemAboutPage() {
               팔로우
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              로그인한 뒤 게임·태그·스트리머를 팔로우하면 맞춤 피드를 볼 수 있습니다. 하위 탭으로 기능이 나뉩니다.
+              로그인한 뒤 게임·태그·스트리머를 팔로우하면 맞춤 피드를 볼 수 있습니다. 비로그인일 때는 빈 목록 대신
+              안내 문구가 표시될 수 있습니다. 하위 탭으로 기능이 나뉩니다.
             </p>
             <ul className="mt-3 list-inside list-disc space-y-1.5 text-sm text-muted-foreground">
               <li>
@@ -259,8 +244,12 @@ export default function RichzemAboutPage() {
 
       <section className="mt-10 rounded-xl border border-border bg-muted/30 px-5 py-5 text-sm leading-relaxed text-muted-foreground">
         <p>
-          Richzem(리치젬)에 표시되는 치지직 라이브·시청자 등 정보는 수집·갱신 시점에 따라 치지직 앱/웹 화면과 실시간으로
-          완전히 일치하지 않을 수 있습니다.
+          Richzem(리치젬)에 표시되는 치지직 라이브·시청자 등 정보는 치지직의 실제 데이터와 실시간으로 일치하지 않을
+          수 있습니다.
+        </p>
+        <p className="mt-3">
+          Richzem(리치젬)에 표시되는 게임 정보는 Steam·실제 스토어 및 게임과 오차가 있거나, 모든 항목이 표시되지 못할
+          수 있습니다.
         </p>
         <p className="mt-3">
           Richzem(리치젬)은 네이버(치지직), Valve(Steam), IGDB 등과 공식 제휴가 있다는 뜻이 아닙니다. 화면에 나오는
