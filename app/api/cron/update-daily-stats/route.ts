@@ -75,14 +75,23 @@ async function collectStreamerGameLogRowsFromChzzk(
     const chunk = entries.slice(i, i + STREAMER_LIVES_CONCURRENCY)
     const chunkResults = await Promise.all(
       chunk.map(async ([gameId, s]) => {
-        const streams = await getChzzkStreamsByCategory(s.chzzkCategoryId)
-        return streams.map((st) => ({
-          game_id: gameId,
-          log_date: kstLogDate,
-          streamer_name: normalizeStreamerName(st.channelName),
-          peak_viewers: st.concurrentUserCount,
-          channel_image_url: st.channelImageUrl?.trim() || null,
-        }))
+        const streams = await getChzzkStreamsByCategory(s.chzzkCategoryId, {
+          bypassNextFetchCache: true,
+        })
+        return streams.map((st) => {
+          const thumb =
+            st.liveImageUrl?.includes("{type}") === true
+              ? st.liveImageUrl.replace(/{type}/g, "200")
+              : st.liveImageUrl?.trim() || ""
+          const profile = st.channelImageUrl?.trim() || thumb || null
+          return {
+            game_id: gameId,
+            log_date: kstLogDate,
+            streamer_name: normalizeStreamerName(st.channelName),
+            peak_viewers: st.concurrentUserCount,
+            channel_image_url: profile,
+          }
+        })
       }),
     )
     for (const rows of chunkResults) {
@@ -133,14 +142,16 @@ async function mergeAndUpsertStreamerGameLogs(
       game_id: number
       streamer_name: string
       peak_viewers: number | null
-      channel_image_url: string | null
+      channel_image_url?: string | null
+      channelImageUrl?: string | null
     }
     const name = normalizeStreamerName(String(r.streamer_name ?? ""))
     if (!name) continue
     const key = `${r.game_id}\0${name}`
+    const img = r.channel_image_url ?? r.channelImageUrl
     existingByKey.set(key, {
       peak: Number(r.peak_viewers ?? 0),
-      image: r.channel_image_url?.trim() || null,
+      image: typeof img === "string" ? img.trim() || null : null,
     })
   }
 

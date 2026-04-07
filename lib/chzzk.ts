@@ -102,6 +102,50 @@ function resolveChzzkTemplateImageUrl(url: string | null | undefined, typeSize: 
   return u.includes("{type}") ? u.replace(/{type}/g, typeSize) : u
 }
 
+/**
+ * service/v2/categories/GAME/{slug}/lives 항목에서 채널 프로필 URL 추출.
+ * 응답 변형(중첩 live, snake_case) 대비 + 프로필이 비면 라이브 썸네일을 소형으로 대체.
+ */
+function pickChzzkCategoryLiveProfileUrl(item: Record<string, unknown> | null | undefined): string {
+  if (!item || typeof item !== "object") return ""
+  const ch = item.channel as Record<string, unknown> | undefined
+  const rawFromChannel =
+    (typeof ch?.channelImageUrl === "string" && ch.channelImageUrl.trim()) ||
+    (typeof ch?.channel_image_url === "string" && ch.channel_image_url.trim()) ||
+    ""
+  const rawTop =
+    (typeof item.channelImageUrl === "string" && item.channelImageUrl.trim()) ||
+    (typeof item.channel_image_url === "string" && item.channel_image_url.trim()) ||
+    ""
+  const live = item.live as Record<string, unknown> | undefined
+  const liveCh = live?.channel as Record<string, unknown> | undefined
+  const rawLiveNested =
+    (typeof liveCh?.channelImageUrl === "string" && liveCh.channelImageUrl.trim()) ||
+    (typeof liveCh?.channel_image_url === "string" && liveCh.channel_image_url.trim()) ||
+    ""
+
+  const resolved = resolveChzzkTemplateImageUrl(
+    rawFromChannel || rawTop || rawLiveNested,
+    "200",
+  )
+  if (resolved) return resolved
+
+  const thumb =
+    (typeof item.liveImageUrl === "string" && item.liveImageUrl.trim()) ||
+    (typeof item.defaultThumbnailImageUrl === "string" && item.defaultThumbnailImageUrl.trim()) ||
+    ""
+  if (!thumb) return ""
+  return thumb.includes("{type}") ? thumb.replace(/{type}/g, "200") : thumb
+}
+
+export type GetChzzkCategoryLivesOptions = {
+  /**
+   * true면 Next.js fetch Data Cache를 쓰지 않음.
+   * 크론·집계에서 오래된 캐시로 인해 필드가 비는 문제를 피하기 위해 사용.
+   */
+  bypassNextFetchCache?: boolean
+}
+
 /** 다시보기 영상 API 응답 아이템 */
 export interface ChzzkVideoItem {
   videoNo: number
@@ -736,10 +780,12 @@ export async function fetchChzzkGamePosterImage(categoryId: string): Promise<str
  * Replaces keyword search with exact category lookup.
  *
  * @param categoryId - Chzzk category ID (e.g., "League_of_Legends", "Rimworld")
+ * @param options - `bypassNextFetchCache`: 크론 등에서 fetch 캐시 비활성화
  * @returns Array of stream data in SearchedStreamData format
  */
 export async function getChzzkStreamsByCategory(
-  categoryId: string
+  categoryId: string,
+  options?: GetChzzkCategoryLivesOptions,
 ): Promise<SearchedStreamData[]> {
   if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
     console.warn("[Chzzk Category] Skipping invalid categoryId:", JSON.stringify(categoryId))
@@ -751,11 +797,21 @@ export async function getChzzkStreamsByCategory(
   console.log("[Chzzk Request] Fetching category lives:", url)
 
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: CHZZK_JSON_BROWSER_HEADERS,
-      next: { revalidate: REVALIDATE_LIVE },
-    } as NextFetchOptions)
+    const bypass = options?.bypassNextFetchCache === true
+    const response = await fetch(
+      url,
+      bypass
+        ? ({
+            method: "GET",
+            headers: CHZZK_JSON_BROWSER_HEADERS,
+            cache: "no-store",
+          } as RequestInit)
+        : ({
+            method: "GET",
+            headers: CHZZK_JSON_BROWSER_HEADERS,
+            next: { revalidate: REVALIDATE_LIVE },
+          } as NextFetchOptions),
+    )
 
     const rawText = await response.text()
     if (!response.ok) {
@@ -783,16 +839,16 @@ export async function getChzzkStreamsByCategory(
     }
 
     const results: SearchedStreamData[] = items
-      .filter((item: any) => item?.channel?.channelId)
+      .filter((item: any) => !!(item?.channel?.channelId ?? item?.channelId))
       .map((item: any) => {
-        const channelId = item.channel?.channelId ?? item.channelId ?? ""
+        const channelId = String(item.channel?.channelId ?? item.channelId ?? "").trim()
         const channelName = item.channel?.channelName ?? item.channelName ?? "Unknown"
         let thumbnailUrl = item.liveImageUrl ?? ""
         if (thumbnailUrl && thumbnailUrl.includes("{type}")) {
           thumbnailUrl = thumbnailUrl.replace(/{type}/g, "1080")
         }
         const hasDrops = !!(item.dropsCampaignNo ?? item.dropsCampaignNos?.length)
-        const channelImageUrl = resolveChzzkTemplateImageUrl(item.channel?.channelImageUrl, "200")
+        const channelImageUrl = pickChzzkCategoryLiveProfileUrl(item as Record<string, unknown>)
         return {
           channelId,
           channelName,
