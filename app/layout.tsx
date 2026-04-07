@@ -45,6 +45,11 @@ export const metadata: Metadata = {
     title: "리치젬",
     description: "치지직 라이브 방송 트렌드, 게임·스트리머 탐색",
   },
+  verification: {
+    other: {
+      'naver-site-verification': [<meta name="naver-site-verification" content="e24fd215bac8f57e7288dc5b7e6eb219ce911059" />],
+    },
+  },
 };
 
 export default function RootLayout({
