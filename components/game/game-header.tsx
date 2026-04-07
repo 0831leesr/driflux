@@ -1,13 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, ExternalLink, Heart, Loader2, Radio, Users } from "lucide-react"
+import { ArrowLeft, ExternalLink, Heart, Loader2, Radio, User, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { GameRow } from "@/lib/data"
 import type { GameDetailTopStreamer } from "@/lib/types"
 import { getDisplayGameTitle } from "@/lib/utils"
 import GameImage from "@/components/ui/game-image"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { GameDetailHeaderBadgesRow } from "@/components/game/game-detail-header-badges"
 import { buildFeatureTags } from "@/lib/feature-tags"
 import { newReleaseDPlusForBadge } from "@/lib/release-date"
@@ -58,6 +59,7 @@ export function GameHeader({
           ...Array.from({ length: Math.max(0, 3 - topStreamers.length) }, () => ({
             displayName: TOP_PLACEHOLDER,
             channelId: null as string | null,
+            profileImageUrl: null as string | null,
           })),
         ]
 
@@ -191,16 +193,41 @@ export function GameHeader({
                     : null
 
                 const rowClass =
-                  "flex min-h-9 w-full items-center rounded-md border border-border bg-background/40 px-3 py-2 text-left text-sm transition-colors"
+                  "flex min-h-10 w-full items-center gap-2.5 rounded-md border border-border bg-background/40 px-3 py-2 text-left text-sm transition-colors"
+
+                const avatarUrl = s.profileImageUrl?.trim() || null
+                const avatar = (
+                  <Avatar className="h-8 w-8 shrink-0 border border-border/60">
+                    {avatarUrl ? (
+                      <AvatarImage src={avatarUrl} alt="" className="object-cover" />
+                    ) : null}
+                    <AvatarFallback
+                      className={
+                        isPlaceholder
+                          ? "bg-muted/80 text-xs text-muted-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {isPlaceholder ? "—" : <User className="h-4 w-4" aria-hidden />}
+                    </AvatarFallback>
+                  </Avatar>
+                )
 
                 const label = (
                   <span
-                    className={`min-w-0 truncate font-medium ${
+                    className={`min-w-0 flex-1 truncate font-medium ${
                       isPlaceholder ? "text-muted-foreground" : "text-foreground"
                     }`}
                   >
                     {s.displayName}
                   </span>
+                )
+
+                const rowInner = (
+                  <>
+                    {avatar}
+                    {label}
+                  </>
                 )
 
                 return (
@@ -212,7 +239,7 @@ export function GameHeader({
                         rel="noopener noreferrer"
                         className={`${rowClass} cursor-pointer hover:border-[hsl(var(--neon-purple))]/50 hover:bg-accent/40 hover:text-[hsl(var(--neon-purple))]`}
                       >
-                        {label}
+                        {rowInner}
                       </a>
                     ) : (
                       <div
@@ -220,7 +247,7 @@ export function GameHeader({
                           isPlaceholder ? "opacity-90" : ""
                         }`}
                       >
-                        {label}
+                        {rowInner}
                       </div>
                     )}
                   </li>

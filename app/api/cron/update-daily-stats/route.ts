@@ -57,6 +57,7 @@ type StreamerGameLogRow = {
   log_date: string
   streamer_name: string
   peak_viewers: number
+  channel_image_url: string | null
 }
 
 async function collectStreamerGameLogRowsFromChzzk(
@@ -80,6 +81,7 @@ async function collectStreamerGameLogRowsFromChzzk(
           log_date: kstLogDate,
           streamer_name: normalizeStreamerName(st.channelName),
           peak_viewers: st.concurrentUserCount,
+          channel_image_url: st.channelImageUrl?.trim() || null,
         }))
       }),
     )
@@ -93,7 +95,12 @@ async function collectStreamerGameLogRowsFromChzzk(
     if (!row.streamer_name) continue
     const key = `${row.game_id}\0${row.streamer_name}`
     const prev = deduped.get(key)
-    if (!prev || row.peak_viewers > prev.peak_viewers) deduped.set(key, row)
+    if (!prev || row.peak_viewers > prev.peak_viewers) {
+      deduped.set(key, row)
+    } else if (prev && row.peak_viewers === prev.peak_viewers) {
+      const url = row.channel_image_url?.trim() || prev.channel_image_url?.trim() || null
+      deduped.set(key, { ...prev, channel_image_url: url })
+    }
   }
   return { rows: Array.from(deduped.values()), gamesFetched: entries.length }
 }
@@ -112,7 +119,7 @@ async function mergeAndUpsertStreamerGameLogs(
 
   const { data: existing, error: selErr } = await supabase
     .from("streamer_game_logs")
-    .select("game_id, streamer_name, peak_viewers")
+    .select("game_id, streamer_name, peak_viewers, channel_image_url")
     .eq("log_date", kstLogDate)
     .in("game_id", gameIds)
 
@@ -120,18 +127,39 @@ async function mergeAndUpsertStreamerGameLogs(
     throw new Error(selErr.message)
   }
 
-  const existingPeak = new Map<string, number>()
+  const existingByKey = new Map<string, { peak: number; image: string | null }>()
   for (const ex of existing ?? []) {
-    const r = ex as { game_id: number; streamer_name: string; peak_viewers: number | null }
+    const r = ex as {
+      game_id: number
+      streamer_name: string
+      peak_viewers: number | null
+      channel_image_url: string | null
+    }
     const name = normalizeStreamerName(String(r.streamer_name ?? ""))
     if (!name) continue
-    existingPeak.set(`${r.game_id}\0${name}`, Number(r.peak_viewers ?? 0))
+    const key = `${r.game_id}\0${name}`
+    existingByKey.set(key, {
+      peak: Number(r.peak_viewers ?? 0),
+      image: r.channel_image_url?.trim() || null,
+    })
   }
 
   const merged: StreamerGameLogRow[] = rows.map((row) => {
     const key = `${row.game_id}\0${row.streamer_name}`
-    const prev = existingPeak.get(key) ?? 0
-    return { ...row, peak_viewers: Math.max(row.peak_viewers, prev) }
+    const prev = existingByKey.get(key)
+    const prevPeak = prev?.peak ?? 0
+    const prevImage = prev?.image ?? null
+    const newPeak = row.peak_viewers
+    const finalPeak = Math.max(newPeak, prevPeak)
+    let finalImage: string | null = null
+    if (newPeak > prevPeak) {
+      finalImage = row.channel_image_url?.trim() || prevImage
+    } else if (newPeak < prevPeak) {
+      finalImage = prevImage || row.channel_image_url?.trim() || null
+    } else {
+      finalImage = row.channel_image_url?.trim() || prevImage || null
+    }
+    return { ...row, peak_viewers: finalPeak, channel_image_url: finalImage }
   })
 
   const BATCH = 200

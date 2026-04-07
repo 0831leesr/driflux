@@ -24,16 +24,20 @@ export function getKstYesterdayDateString(): string {
 export interface StreamerRankRow {
   streamer_name: string
   peak_viewers: number
+  channel_image_url: string | null
 }
 
 export interface GameTopStreamersRow {
   game_id: number
   rank1_name: string | null
   rank1_viewers: number | null
+  rank1_profile_image_url: string | null
   rank2_name: string | null
   rank2_viewers: number | null
+  rank2_profile_image_url: string | null
   rank3_name: string | null
   rank3_viewers: number | null
+  rank3_profile_image_url: string | null
   last_updated: string | null
 }
 
@@ -53,7 +57,7 @@ export async function updateTopStreamers(
 
   const { data: logRows, error: logError } = await client
     .from("streamer_game_logs")
-    .select("streamer_name, peak_viewers")
+    .select("streamer_name, peak_viewers, channel_image_url")
     .eq("game_id", gameId)
     .eq("log_date", yesterday)
     .order("peak_viewers", { ascending: false })
@@ -63,16 +67,24 @@ export async function updateTopStreamers(
   }
 
   const yesterdayList: StreamerRankRow[] = (logRows ?? [])
-    .map((r) => ({
-      streamer_name: normalizeStreamerName(String(r.streamer_name ?? "")),
-      peak_viewers: Number(r.peak_viewers ?? 0),
-    }))
+    .map((r) => {
+      const row = r as {
+        streamer_name?: string | null
+        peak_viewers?: number | null
+        channel_image_url?: string | null
+      }
+      return {
+        streamer_name: normalizeStreamerName(String(row.streamer_name ?? "")),
+        peak_viewers: Number(row.peak_viewers ?? 0),
+        channel_image_url: row.channel_image_url?.trim() || null,
+      }
+    })
     .filter((r) => r.streamer_name.length > 0)
 
   const { data: currentRow, error: curError } = await client
     .from("game_top_streamers")
     .select(
-      "game_id, rank1_name, rank1_viewers, rank2_name, rank2_viewers, rank3_name, rank3_viewers, last_updated",
+      "game_id, rank1_name, rank1_viewers, rank1_profile_image_url, rank2_name, rank2_viewers, rank2_profile_image_url, rank3_name, rank3_viewers, rank3_profile_image_url, last_updated",
     )
     .eq("game_id", gameId)
     .maybeSingle()
@@ -90,14 +102,17 @@ export async function updateTopStreamers(
       {
         streamer_name: currentData.rank1_name ? normalizeStreamerName(currentData.rank1_name) : "",
         peak_viewers: Number(currentData.rank1_viewers ?? 0),
+        channel_image_url: currentData.rank1_profile_image_url?.trim() || null,
       },
       {
         streamer_name: currentData.rank2_name ? normalizeStreamerName(currentData.rank2_name) : "",
         peak_viewers: Number(currentData.rank2_viewers ?? 0),
+        channel_image_url: currentData.rank2_profile_image_url?.trim() || null,
       },
       {
         streamer_name: currentData.rank3_name ? normalizeStreamerName(currentData.rank3_name) : "",
         peak_viewers: Number(currentData.rank3_viewers ?? 0),
+        channel_image_url: currentData.rank3_profile_image_url?.trim() || null,
       },
     ].filter((s) => s.streamer_name.length > 0)
 
@@ -116,10 +131,13 @@ export async function updateTopStreamers(
     game_id: gameId,
     rank1_name: top3[0]?.streamer_name ?? null,
     rank1_viewers: top3[0]?.peak_viewers ?? null,
+    rank1_profile_image_url: top3[0]?.channel_image_url?.trim() || null,
     rank2_name: top3[1]?.streamer_name ?? null,
     rank2_viewers: top3[1]?.peak_viewers ?? null,
+    rank2_profile_image_url: top3[1]?.channel_image_url?.trim() || null,
     rank3_name: top3[2]?.streamer_name ?? null,
     rank3_viewers: top3[2]?.peak_viewers ?? null,
+    rank3_profile_image_url: top3[2]?.channel_image_url?.trim() || null,
     last_updated: new Date().toISOString(),
   }
 

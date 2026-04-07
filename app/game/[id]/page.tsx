@@ -27,7 +27,7 @@ function normStreamerName(s: string) {
 
 const TOP_STREAMER_PLACEHOLDER = "---"
 
-/** 항상 3슬롯. DB/이름 없으면 "---", 라이브와 닉 일치 시 channelId만 채움 */
+/** 항상 3슬롯. DB/이름 없으면 "---", 라이브와 닉 일치 시 channelId·썸네일 우선, 없으면 DB 저장 프로필 URL */
 function buildGameDetailTopStreamerSlots(
   row: Awaited<ReturnType<typeof fetchGameTopStreamersRow>>,
   streams: StreamData[],
@@ -35,14 +35,27 @@ function buildGameDetailTopStreamerSlots(
   const names = row
     ? ([row.rank1_name, row.rank2_name, row.rank3_name] as const)
     : ([null, null, null] as const)
+  const storedImages = row
+    ? ([row.rank1_profile_image_url, row.rank2_profile_image_url, row.rank3_profile_image_url] as const)
+    : ([null, null, null] as const)
 
-  return names.map((name) => {
+  return names.map((name, i) => {
     const displayName = name?.trim() ? name.trim() : TOP_STREAMER_PLACEHOLDER
     if (displayName === TOP_STREAMER_PLACEHOLDER) {
-      return { displayName: TOP_STREAMER_PLACEHOLDER, channelId: null }
+      return {
+        displayName: TOP_STREAMER_PLACEHOLDER,
+        channelId: null,
+        profileImageUrl: null,
+      }
     }
     const live = streams.find((st) => normStreamerName(st.streamerName) === normStreamerName(displayName))
-    return { displayName, channelId: live?.channelId ?? null }
+    const stored = storedImages[i]?.trim() || null
+    const liveImg = live?.channelImageUrl?.trim() || null
+    return {
+      displayName,
+      channelId: live?.channelId ?? null,
+      profileImageUrl: liveImg || stored,
+    }
   })
 }
 
