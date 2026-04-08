@@ -197,7 +197,7 @@ export function GameHeader({
 
                 const avatarUrl = s.profileImageUrl?.trim() || null
                 const avatar = (
-                  <Avatar className="h-8 w-8 shrink-0 border border-border/60">
+                  <Avatar className="h-8 w-8 shrink-0 border border-border/60" aria-hidden={true}>
                     {avatarUrl ? (
                       <AvatarImage src={avatarUrl} alt="" className="object-cover" />
                     ) : null}

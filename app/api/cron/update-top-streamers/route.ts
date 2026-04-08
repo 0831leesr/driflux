@@ -2,9 +2,8 @@ import { NextResponse } from "next/server"
 import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
 import { updateTopStreamersForAllGames } from "@/lib/actions/update-top-streamers"
 
-/** GitHub Actions 단계당 60초 이내 완료를 목표로 함 (게임 수가 매우 많으면 limit 조정 검토) */
-/** game_id 목록이 클 때 병렬 배치가 길어질 수 있음 (기본 60초 초과 방지) */
-export const maxDuration = 300
+/** Chzzk 보강 호출 포함 시 여유 (타임아웃 시 `?part=0&parts=N` 분할 호출 가능) */
+export const maxDuration = 180
 
 /**
  * 게임별 최근 인기 스트리머 TOP 3 병합 갱신 (일 1회 권장)

@@ -58,6 +58,6 @@ export interface GameDetailTopStreamer {
   displayName: string
   /** 라이브 목록과 매칭된 경우에만 치지직 링크용 */
   channelId: string | null
-  /** 일일 로그·TOP 집계에 저장된 프로필 URL; 라이브 매칭 시 현재 스냅샷이 있으면 그쪽을 우선 */
+  /** DB 캐시 URL, 라이브 매칭 시 현재 스냅샷 우선 */
   profileImageUrl: string | null
 }

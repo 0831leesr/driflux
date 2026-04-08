@@ -102,10 +102,7 @@ function resolveChzzkTemplateImageUrl(url: string | null | undefined, typeSize: 
   return u.includes("{type}") ? u.replace(/{type}/g, typeSize) : u
 }
 
-/**
- * service/v2/categories/GAME/{slug}/lives 항목에서 채널 프로필 URL 추출.
- * 응답 변형(중첩 live, snake_case) 대비 + 프로필이 비면 라이브 썸네일을 소형으로 대체.
- */
+/** 카테고리 lives 항목 → 프로필 URL(없으면 썸네일 `{type}`→200) */
 function pickChzzkCategoryLiveProfileUrl(item: Record<string, unknown> | null | undefined): string {
   if (!item || typeof item !== "object") return ""
   const ch = item.channel as Record<string, unknown> | undefined
@@ -139,10 +136,7 @@ function pickChzzkCategoryLiveProfileUrl(item: Record<string, unknown> | null | 
 }
 
 export type GetChzzkCategoryLivesOptions = {
-  /**
-   * true면 Next.js fetch Data Cache를 쓰지 않음.
-   * 크론·집계에서 오래된 캐시로 인해 필드가 비는 문제를 피하기 위해 사용.
-   */
+  /** 크론 등에서 `fetch` Data Cache 비활성화 */
   bypassNextFetchCache?: boolean
 }
 
@@ -774,14 +768,7 @@ export async function fetchChzzkGamePosterImage(categoryId: string): Promise<str
 }
 
 /**
- * Get live streams by category ID (highly accurate, category-specific API)
- *
- * API: GET https://api.chzzk.naver.com/service/v2/categories/GAME/{categoryId}/lives
- * Replaces keyword search with exact category lookup.
- *
- * @param categoryId - Chzzk category ID (e.g., "League_of_Legends", "Rimworld")
- * @param options - `bypassNextFetchCache`: 크론 등에서 fetch 캐시 비활성화
- * @returns Array of stream data in SearchedStreamData format
+ * GAME 카테고리 라이브 목록 (v2 …/categories/GAME/{id}/lives)
  */
 export async function getChzzkStreamsByCategory(
   categoryId: string,

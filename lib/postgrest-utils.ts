@@ -12,5 +12,8 @@ export function isPostgrestMissingColumnError(message: string | undefined): bool
 export function isPostgrestRpcNotFoundError(message: string | undefined): boolean {
   if (!message) return false
   const m = message.toLowerCase()
-  return m.includes("could not find the function") || m.includes("function") && m.includes("does not exist")
+  return (
+    m.includes("could not find the function") ||
+    (m.includes("function") && m.includes("does not exist"))
+  )
 }

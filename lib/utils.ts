@@ -8,6 +8,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** 치지직 채널명과 DB/캐시 닉네임 비교 시 (trim + 소문자) */
+export function normalizeChzzkStreamerNameForMatch(s: string): string {
+  return s.trim().toLowerCase()
+}
+
 /**
  * Format number to Korean Won (원화)
  * @param price - Price in KRW (e.g., 4500000 for 45,000원)

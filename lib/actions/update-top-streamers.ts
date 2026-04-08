@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/server"
+import { normalizeChzzkStreamerNameForMatch } from "@/lib/utils"
 import { isPostgrestMissingColumnError, isPostgrestRpcNotFoundError } from "@/lib/postgrest-utils"
 import { getChzzkStreamsByCategory } from "@/lib/chzzk"
 
@@ -47,11 +48,7 @@ export function normalizeStreamerName(name: string): string {
   return name.trim()
 }
 
-function normStreamerNameForMatch(name: string): string {
-  return name.trim().toLowerCase()
-}
-
-/** DB에 프로필 URL이 없을 때, 해당 게임 치지직 카테고리 라이브에서 닉 매칭으로 보강 */
+/** DB 로그에 프로필 URL이 없을 때 라이브 목록으로 보강(방송 중·닉 일치 시에만) */
 async function enrichTop3ProfileUrlsFromChzzkLive(
   gameId: number,
   client: SupabaseClient,
@@ -76,14 +73,15 @@ async function enrichTop3ProfileUrlsFromChzzkLive(
   return rows.map((r) => {
     if (!r.streamer_name?.trim() || r.channel_image_url?.trim()) return r
     const live = streams.find(
-      (st) => normStreamerNameForMatch(st.channelName) === normStreamerNameForMatch(r.streamer_name),
+      (st) =>
+        normalizeChzzkStreamerNameForMatch(st.channelName) ===
+        normalizeChzzkStreamerNameForMatch(r.streamer_name),
     )
     const url = live?.channelImageUrl?.trim() || null
     return url ? { ...r, channel_image_url: url } : r
   })
 }
 
-/** PostgREST RPC `RETURNS TABLE(game_id bigint)` → `{ game_id }` 행 또는 변형 응답 파싱 */
 function parseRpcGameIdRows(data: unknown): number[] {
   if (!Array.isArray(data)) return []
   const out: number[] = []
@@ -102,9 +100,7 @@ function parseRpcGameIdRows(data: unknown): number[] {
   return out
 }
 
-/**
- * 어제(KST) 로그와 기존 game_top_streamers를 병합해 TOP 3를 갱신합니다.
- */
+/** 어제(KST) streamer_game_logs + 기존 TOP3 병합 후 upsert */
 export async function updateTopStreamers(
   gameId: number,
   supabase?: SupabaseClient,
@@ -259,10 +255,7 @@ export async function updateTopStreamers(
   return { ok: true }
 }
 
-/**
- * 로그 또는 TOP3 캐시에 등장한 모든 game_id.
- * 이전 구현은 streamer_game_logs 전 행의 game_id를 한 번에 select 해 페이로드·타임아웃 위험이 있었음 → RPC DISTINCT 또는 id 키셋 스캔.
- */
+/** RPC `fetch_game_ids_for_top_streamer_update` 우선, 실패 시 키셋 스캔 */
 export async function fetchGameIdsForTopStreamerUpdate(
   supabase?: SupabaseClient,
 ): Promise<number[]> {
@@ -328,16 +321,11 @@ async function fetchGameIdsKeysetScan(client: SupabaseClient): Promise<number[]>
 const PARALLEL = 20
 
 export type TopStreamersCronPartition = {
-  /** 0-based, `parts` 미만. GitHub Actions에서 여러 번 나눠 호출 */
   part?: number
-  /** 기본 1 = 한 요청에 전체 처리 */
   parts?: number
 }
 
-/**
- * 활성(로그 또는 캐시에 등장한) 게임마다 updateTopStreamers 실행.
- * `parts`>1 이면 `game_id` 목록을 균등 분할해 한 호출당 한 구간만 처리 (타임아웃 방지).
- */
+/** `parts`>1이면 game_id 목록을 균등 분할(타임아웃 시 `?part=&parts=`로 분할 호출) */
 export async function updateTopStreamersForAllGames(
   options?: TopStreamersCronPartition,
 ): Promise<{

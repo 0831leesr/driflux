@@ -1,4 +1,4 @@
--- TOP 스트리머 갱신 대상 game_id: 최근 로그만 (전체 DISTINCT는 행 수 폭증 시에도 가벼움)
+-- TOP 스트리머 갱신용 game_id (39번 함수 정의를 대체·최적화: 최근 14일 로그만 DISTINCT)
 
 CREATE OR REPLACE FUNCTION public.fetch_game_ids_for_top_streamer_update()
 RETURNS TABLE (game_id bigint)

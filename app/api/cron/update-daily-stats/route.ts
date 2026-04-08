@@ -80,20 +80,13 @@ async function collectStreamerGameLogRowsFromChzzk(
         const streams = await getChzzkStreamsByCategory(s.chzzkCategoryId, {
           bypassNextFetchCache: true,
         })
-        return streams.map((st) => {
-          const thumb =
-            st.liveImageUrl?.includes("{type}") === true
-              ? st.liveImageUrl.replace(/{type}/g, "200")
-              : st.liveImageUrl?.trim() || ""
-          const profile = st.channelImageUrl?.trim() || thumb || null
-          return {
-            game_id: gameId,
-            log_date: kstLogDate,
-            streamer_name: normalizeStreamerName(st.channelName),
-            peak_viewers: st.concurrentUserCount,
-            channel_image_url: profile,
-          }
-        })
+        return streams.map((st) => ({
+          game_id: gameId,
+          log_date: kstLogDate,
+          streamer_name: normalizeStreamerName(st.channelName),
+          peak_viewers: st.concurrentUserCount,
+          channel_image_url: st.channelImageUrl?.trim() || null,
+        }))
       }),
     )
     for (const rows of chunkResults) {
@@ -381,7 +374,7 @@ export async function GET(request: Request) {
       })
     }
 
-    // ── Step 3b: streamer_game_logs 먼저 처리 (Step 7 대량 upsert·타임아웃 이후에 밀리지 않도록) ──
+    // ── Step 3b: streamer_game_logs (daily_game_stats 대량 upsert보다 먼저) ──
     let streamerLogs: {
       kstLogDate: string
       gamesFetched: number

@@ -7,7 +7,12 @@ import {
   getHistoricalTrending,
 } from "@/lib/data"
 import { getChzzkStreamsByCategory, getTopLiveGames } from "@/lib/chzzk"
-import { getBestGameImage, getDisplayGameTitle, formatViewerCountShort } from "@/lib/utils"
+import {
+  getBestGameImage,
+  getDisplayGameTitle,
+  formatViewerCountShort,
+  normalizeChzzkStreamerNameForMatch,
+} from "@/lib/utils"
 import { GameDetailsPage } from "@/components/game-details-page"
 import { GameEvaluations } from "@/components/game/game-evaluations"
 import type { StreamData } from "@/components/stream-card"
@@ -19,10 +24,6 @@ export const revalidate = 60
 /** categoryId 정규화: 언더스코어↔공백 변환 후 소문자 비교 */
 function normCategoryId(s: string) {
   return s.toLowerCase().replace(/_/g, " ").trim()
-}
-
-function normStreamerName(s: string) {
-  return s.trim().toLowerCase()
 }
 
 const TOP_STREAMER_PLACEHOLDER = "---"
@@ -48,7 +49,11 @@ function buildGameDetailTopStreamerSlots(
         profileImageUrl: null,
       }
     }
-    const live = streams.find((st) => normStreamerName(st.streamerName) === normStreamerName(displayName))
+    const live = streams.find(
+      (st) =>
+        normalizeChzzkStreamerNameForMatch(st.streamerName) ===
+        normalizeChzzkStreamerNameForMatch(displayName),
+    )
     const stored = storedImages[i]?.trim() || null
     const liveImg = live?.channelImageUrl?.trim() || null
     return {
