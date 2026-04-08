@@ -11,7 +11,7 @@ import {
   getKstTodayDateString,
   normalizeStreamerName,
 } from "@/lib/actions/update-top-streamers"
-import { isMissingOrUnknownColumnError } from "@/lib/supabase/column-error"
+import { isPostgrestMissingColumnError } from "@/lib/postgrest-utils"
 
 /**
  * Cron Job API: 일일 피크 통계 + 급상승(Momentum) 갱신
@@ -32,7 +32,8 @@ import { isMissingOrUnknownColumnError } from "@/lib/supabase/column-error"
  * trend_score 공식:
  *   concurrentUserCount * (1 + LN(openLiveCount + 1))
  */
-export const maxDuration = 60
+/** daily_game_stats 배치 + streamer_game_logs(다수 카테고리 fetch) */
+export const maxDuration = 120
 
 interface ChzzkCategoryItem {
   categoryId: string
@@ -125,37 +126,39 @@ async function mergeAndUpsertStreamerGameLogs(
   if (rows.length === 0) return { upserted: 0, failed: 0 }
 
   const kstLogDate = rows[0]!.log_date
-  const gameIds = [...new Set(rows.map((r) => r.game_id))]
+  const gameIds = [
+    ...new Set(
+      rows.map((r) => r.game_id).filter((id) => Number.isFinite(id) && id > 0),
+    ),
+  ]
 
-  let existing: unknown[] | null = null
-  let selectHasChannelImage = true
-  {
-    const withImg = await supabase
+  let existing: unknown[] = []
+  if (gameIds.length > 0) {
+    const selFull = await supabase
       .from("streamer_game_logs")
       .select("game_id, streamer_name, peak_viewers, channel_image_url")
       .eq("log_date", kstLogDate)
       .in("game_id", gameIds)
 
-    if (withImg.error && isMissingOrUnknownColumnError(withImg.error.message)) {
-      const noImg = await supabase
+    if (selFull.error && isPostgrestMissingColumnError(selFull.error.message)) {
+      const selSlim = await supabase
         .from("streamer_game_logs")
         .select("game_id, streamer_name, peak_viewers")
         .eq("log_date", kstLogDate)
         .in("game_id", gameIds)
-      if (noImg.error) {
-        throw new Error(noImg.error.message)
+      if (selSlim.error) {
+        throw new Error(selSlim.error.message)
       }
-      existing = noImg.data ?? []
-      selectHasChannelImage = false
-    } else if (withImg.error) {
-      throw new Error(withImg.error.message)
+      existing = selSlim.data ?? []
+    } else if (selFull.error) {
+      throw new Error(selFull.error.message)
     } else {
-      existing = withImg.data ?? []
+      existing = selFull.data ?? []
     }
   }
 
   const existingByKey = new Map<string, { peak: number; image: string | null }>()
-  for (const ex of existing ?? []) {
+  for (const ex of existing) {
     const r = ex as {
       game_id: number
       streamer_name: string
@@ -166,7 +169,7 @@ async function mergeAndUpsertStreamerGameLogs(
     const name = normalizeStreamerName(String(r.streamer_name ?? ""))
     if (!name) continue
     const key = `${r.game_id}\0${name}`
-    const img = selectHasChannelImage ? r.channel_image_url ?? r.channelImageUrl : null
+    const img = r.channel_image_url ?? r.channelImageUrl
     existingByKey.set(key, {
       peak: Number(r.peak_viewers ?? 0),
       image: typeof img === "string" ? img.trim() || null : null,
@@ -177,48 +180,43 @@ async function mergeAndUpsertStreamerGameLogs(
     const key = `${row.game_id}\0${row.streamer_name}`
     const prev = existingByKey.get(key)
     const prevPeak = prev?.peak ?? 0
-    const prevImage = selectHasChannelImage ? prev?.image ?? null : null
+    const prevImage = prev?.image ?? null
     const newPeak = row.peak_viewers
     const finalPeak = Math.max(newPeak, prevPeak)
     let finalImage: string | null = null
-    if (selectHasChannelImage) {
-      if (newPeak > prevPeak) {
-        finalImage = row.channel_image_url?.trim() || prevImage
-      } else if (newPeak < prevPeak) {
-        finalImage = prevImage || row.channel_image_url?.trim() || null
-      } else {
-        finalImage = row.channel_image_url?.trim() || prevImage || null
-      }
+    if (newPeak > prevPeak) {
+      finalImage = row.channel_image_url?.trim() || prevImage
+    } else if (newPeak < prevPeak) {
+      finalImage = prevImage || row.channel_image_url?.trim() || null
+    } else {
+      finalImage = row.channel_image_url?.trim() || prevImage || null
     }
     return { ...row, peak_viewers: finalPeak, channel_image_url: finalImage }
   })
 
-  const toUpsert = selectHasChannelImage
-    ? merged
-    : merged.map(({ channel_image_url: _omit, ...rest }) => rest)
-
   const BATCH = 200
   let upserted = 0
   let failed = 0
-  for (let i = 0; i < toUpsert.length; i += BATCH) {
-    const batch = toUpsert.slice(i, i + BATCH)
-    let { error } = await supabase.from("streamer_game_logs").upsert(batch, {
+  for (let i = 0; i < merged.length; i += BATCH) {
+    const batch = merged.slice(i, i + BATCH)
+    let up = await supabase.from("streamer_game_logs").upsert(batch, {
       onConflict: "game_id,log_date,streamer_name",
       ignoreDuplicates: false,
     })
-    if (error && selectHasChannelImage && isMissingOrUnknownColumnError(error.message)) {
-      const stripped = batch.map((row: Record<string, unknown>) => {
-        const { channel_image_url: _c, ...rest } = row
-        return rest
-      })
-      const retry = await supabase.from("streamer_game_logs").upsert(stripped, {
+    if (up.error && isPostgrestMissingColumnError(up.error.message)) {
+      const slim = batch.map((r) => ({
+        game_id: r.game_id,
+        log_date: r.log_date,
+        streamer_name: r.streamer_name,
+        peak_viewers: r.peak_viewers,
+      }))
+      up = await supabase.from("streamer_game_logs").upsert(slim, {
         onConflict: "game_id,log_date,streamer_name",
         ignoreDuplicates: false,
       })
-      error = retry.error
     }
-    if (error) {
-      console.error("[DailyStats] streamer_game_logs upsert:", error.message, error.details, error.hint)
+    if (up.error) {
+      console.error("[DailyStats] streamer_game_logs upsert:", up.error.message, up.error.details, up.error.hint)
       failed += batch.length
     } else {
       upserted += batch.length

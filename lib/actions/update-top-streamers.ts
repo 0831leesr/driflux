@@ -1,21 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/server"
-import { isMissingOrUnknownColumnError } from "@/lib/supabase/column-error"
+import { isPostgrestMissingColumnError, isPostgrestRpcNotFoundError } from "@/lib/postgrest-utils"
 
 /** KST 기준 오늘 날짜 YYYY-MM-DD */
 export function getKstTodayDateString(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" })
 }
 
-/**
- * KST 기준 어제 날짜 YYYY-MM-DD
- * (이전 UTC Date.UTC(y,m,d) 방식은 KST 달력과 어긋날 수 있어, KST 정오 앵커로 하루 전으로 계산)
- */
+/** KST 기준 어제 날짜 YYYY-MM-DD */
 export function getKstYesterdayDateString(): string {
-  const today = getKstTodayDateString()
-  const anchor = new Date(`${today}T12:00:00+09:00`)
-  anchor.setUTCDate(anchor.getUTCDate() - 1)
-  return anchor.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" })
+  const todayKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" })
+  const [yStr, mStr, dStr] = todayKst.split("-")
+  const y = Number(yStr)
+  const m = Number(mStr)
+  const d = Number(dStr)
+  const utc = new Date(Date.UTC(y, m - 1, d, 0, 0, 0))
+  utc.setUTCDate(utc.getUTCDate() - 1)
+  const yy = utc.getUTCFullYear()
+  const mm = String(utc.getUTCMonth() + 1).padStart(2, "0")
+  const dd = String(utc.getUTCDate()).padStart(2, "0")
+  return `${yy}-${mm}-${dd}`
 }
 
 export interface StreamerRankRow {
@@ -53,31 +57,28 @@ export async function updateTopStreamers(
   const yesterday = getKstYesterdayDateString()
 
   let logRows: unknown[] | null = null
-  let logHasImageColumn = true
   {
-    const withImg = await client
+    const resFull = await client
       .from("streamer_game_logs")
       .select("streamer_name, peak_viewers, channel_image_url")
       .eq("game_id", gameId)
       .eq("log_date", yesterday)
       .order("peak_viewers", { ascending: false })
-
-    if (withImg.error && isMissingOrUnknownColumnError(withImg.error.message)) {
-      const noImg = await client
+    if (resFull.error && isPostgrestMissingColumnError(resFull.error.message)) {
+      const resSlim = await client
         .from("streamer_game_logs")
         .select("streamer_name, peak_viewers")
         .eq("game_id", gameId)
         .eq("log_date", yesterday)
         .order("peak_viewers", { ascending: false })
-      if (noImg.error) {
-        return { ok: false, error: noImg.error.message }
+      if (resSlim.error) {
+        return { ok: false, error: resSlim.error.message }
       }
-      logRows = noImg.data ?? []
-      logHasImageColumn = false
-    } else if (withImg.error) {
-      return { ok: false, error: withImg.error.message }
+      logRows = resSlim.data ?? []
+    } else if (resFull.error) {
+      return { ok: false, error: resFull.error.message }
     } else {
-      logRows = withImg.data ?? []
+      logRows = resFull.data ?? []
     }
   }
 
@@ -91,41 +92,38 @@ export async function updateTopStreamers(
       return {
         streamer_name: normalizeStreamerName(String(row.streamer_name ?? "")),
         peak_viewers: Number(row.peak_viewers ?? 0),
-        channel_image_url: logHasImageColumn ? row.channel_image_url?.trim() || null : null,
+        channel_image_url: row.channel_image_url?.trim() || null,
       }
     })
     .filter((r) => r.streamer_name.length > 0)
 
-  let currentRow: GameTopStreamersRow | null = null
-  let topHasProfileColumns = true
+  let currentRow: unknown = null
   {
-    const full = await client
+    const resFull = await client
       .from("game_top_streamers")
       .select(
         "game_id, rank1_name, rank1_viewers, rank1_profile_image_url, rank2_name, rank2_viewers, rank2_profile_image_url, rank3_name, rank3_viewers, rank3_profile_image_url, last_updated",
       )
       .eq("game_id", gameId)
       .maybeSingle()
-
-    if (full.error && isMissingOrUnknownColumnError(full.error.message)) {
-      const slim = await client
+    if (resFull.error && isPostgrestMissingColumnError(resFull.error.message)) {
+      const resSlim = await client
         .from("game_top_streamers")
         .select("game_id, rank1_name, rank1_viewers, rank2_name, rank2_viewers, rank3_name, rank3_viewers, last_updated")
         .eq("game_id", gameId)
         .maybeSingle()
-      if (slim.error) {
-        return { ok: false, error: slim.error.message }
+      if (resSlim.error) {
+        return { ok: false, error: resSlim.error.message }
       }
-      currentRow = slim.data as GameTopStreamersRow | null
-      topHasProfileColumns = false
-    } else if (full.error) {
-      return { ok: false, error: full.error.message }
+      currentRow = resSlim.data
+    } else if (resFull.error) {
+      return { ok: false, error: resFull.error.message }
     } else {
-      currentRow = full.data as GameTopStreamersRow | null
+      currentRow = resFull.data
     }
   }
 
-  const currentData = currentRow
+  const currentData = currentRow as GameTopStreamersRow | null
 
   const finalTop3: StreamerRankRow[] = [...yesterdayList]
 
@@ -134,26 +132,17 @@ export async function updateTopStreamers(
       {
         streamer_name: currentData.rank1_name ? normalizeStreamerName(currentData.rank1_name) : "",
         peak_viewers: Number(currentData.rank1_viewers ?? 0),
-        channel_image_url:
-          topHasProfileColumns && currentData.rank1_profile_image_url
-            ? currentData.rank1_profile_image_url.trim() || null
-            : null,
+        channel_image_url: currentData.rank1_profile_image_url?.trim() || null,
       },
       {
         streamer_name: currentData.rank2_name ? normalizeStreamerName(currentData.rank2_name) : "",
         peak_viewers: Number(currentData.rank2_viewers ?? 0),
-        channel_image_url:
-          topHasProfileColumns && currentData.rank2_profile_image_url
-            ? currentData.rank2_profile_image_url.trim() || null
-            : null,
+        channel_image_url: currentData.rank2_profile_image_url?.trim() || null,
       },
       {
         streamer_name: currentData.rank3_name ? normalizeStreamerName(currentData.rank3_name) : "",
         peak_viewers: Number(currentData.rank3_viewers ?? 0),
-        channel_image_url:
-          topHasProfileColumns && currentData.rank3_profile_image_url
-            ? currentData.rank3_profile_image_url.trim() || null
-            : null,
+        channel_image_url: currentData.rank3_profile_image_url?.trim() || null,
       },
     ].filter((s) => s.streamer_name.length > 0)
 
@@ -168,90 +157,108 @@ export async function updateTopStreamers(
   }
 
   const top3 = finalTop3.slice(0, 3)
-  const basePayload = {
+  const payload = {
     game_id: gameId,
     rank1_name: top3[0]?.streamer_name ?? null,
     rank1_viewers: top3[0]?.peak_viewers ?? null,
+    rank1_profile_image_url: top3[0]?.channel_image_url?.trim() || null,
     rank2_name: top3[1]?.streamer_name ?? null,
     rank2_viewers: top3[1]?.peak_viewers ?? null,
+    rank2_profile_image_url: top3[1]?.channel_image_url?.trim() || null,
     rank3_name: top3[2]?.streamer_name ?? null,
     rank3_viewers: top3[2]?.peak_viewers ?? null,
+    rank3_profile_image_url: top3[2]?.channel_image_url?.trim() || null,
     last_updated: new Date().toISOString(),
   }
-  const profilePayload = topHasProfileColumns
-    ? {
-        rank1_profile_image_url: top3[0]?.channel_image_url?.trim() || null,
-        rank2_profile_image_url: top3[1]?.channel_image_url?.trim() || null,
-        rank3_profile_image_url: top3[2]?.channel_image_url?.trim() || null,
-      }
-    : {}
 
-  let upsertError = (
-    await client.from("game_top_streamers").upsert({ ...basePayload, ...profilePayload }, {
-      onConflict: "game_id",
-      ignoreDuplicates: false,
-    })
-  ).error
+  let upsertRes = await client.from("game_top_streamers").upsert(payload, {
+    onConflict: "game_id",
+    ignoreDuplicates: false,
+  })
 
-  if (upsertError && topHasProfileColumns && isMissingOrUnknownColumnError(upsertError.message)) {
-    upsertError = (
-      await client.from("game_top_streamers").upsert(basePayload, {
-        onConflict: "game_id",
-        ignoreDuplicates: false,
-      })
-    ).error
+  if (upsertRes.error && isPostgrestMissingColumnError(upsertRes.error.message)) {
+    upsertRes = await client
+      .from("game_top_streamers")
+      .upsert(
+        {
+          game_id: payload.game_id,
+          rank1_name: payload.rank1_name,
+          rank1_viewers: payload.rank1_viewers,
+          rank2_name: payload.rank2_name,
+          rank2_viewers: payload.rank2_viewers,
+          rank3_name: payload.rank3_name,
+          rank3_viewers: payload.rank3_viewers,
+          last_updated: payload.last_updated,
+        },
+        { onConflict: "game_id", ignoreDuplicates: false },
+      )
   }
 
-  if (upsertError) {
-    return { ok: false, error: upsertError.message }
+  if (upsertRes.error) {
+    return { ok: false, error: upsertRes.error.message }
   }
 
   return { ok: true }
 }
 
-/** 로그 또는 기존 TOP3 캐시가 있는 모든 game_id */
+/**
+ * 로그 또는 TOP3 캐시에 등장한 모든 game_id.
+ * 이전 구현은 streamer_game_logs 전 행의 game_id를 한 번에 select 해 페이로드·타임아웃 위험이 있었음 → RPC DISTINCT 또는 id 키셋 스캔.
+ */
 export async function fetchGameIdsForTopStreamerUpdate(
   supabase?: SupabaseClient,
 ): Promise<number[]> {
   const client = supabase ?? createAdminClient()
-  const ids = new Set<number>()
-  const pageSize = 1000
 
-  for (let start = 0; ; start += pageSize) {
-    const { data: logGames, error: e1 } = await client
-      .from("streamer_game_logs")
-      .select("game_id")
-      .order("game_id", { ascending: true })
-      .order("id", { ascending: true })
-      .range(start, start + pageSize - 1)
-    if (e1) {
-      console.error("[fetchGameIdsForTopStreamerUpdate] streamer_game_logs:", e1.message)
-      break
-    }
-    const chunk = logGames ?? []
-    for (const row of chunk) {
-      const id = Number((row as { game_id: number }).game_id)
-      if (Number.isFinite(id)) ids.add(id)
-    }
-    if (chunk.length < pageSize) break
+  const { data: rpcData, error: rpcError } = await client.rpc("fetch_game_ids_for_top_streamer_update")
+  if (!rpcError && Array.isArray(rpcData)) {
+    return (rpcData as { game_id: number }[])
+      .map((r) => Number(r.game_id))
+      .filter((id) => Number.isFinite(id))
   }
 
-  for (let start = 0; ; start += pageSize) {
-    const { data: topGames, error: e2 } = await client
-      .from("game_top_streamers")
-      .select("game_id")
-      .order("game_id", { ascending: true })
-      .range(start, start + pageSize - 1)
-    if (e2) {
-      console.error("[fetchGameIdsForTopStreamerUpdate] game_top_streamers:", e2.message)
+  if (rpcError && !isPostgrestRpcNotFoundError(rpcError.message)) {
+    console.error("[fetchGameIdsForTopStreamerUpdate] RPC error:", rpcError.message)
+  }
+
+  return fetchGameIdsKeysetScan(client)
+}
+
+async function fetchGameIdsKeysetScan(client: SupabaseClient): Promise<number[]> {
+  const ids = new Set<number>()
+  const pageSize = 2000
+  let lastId = 0
+
+  for (;;) {
+    const { data, error } = await client
+      .from("streamer_game_logs")
+      .select("id, game_id")
+      .gt("id", lastId)
+      .order("id", { ascending: true })
+      .limit(pageSize)
+
+    if (error) {
+      console.error("[fetchGameIdsForTopStreamerUpdate] keyset streamer_game_logs:", error.message)
       break
     }
-    const chunk = topGames ?? []
-    for (const row of chunk) {
+
+    const rows = (data ?? []) as { id: number; game_id: number }[]
+    if (rows.length === 0) break
+
+    for (const r of rows) {
+      const gid = Number(r.game_id)
+      if (Number.isFinite(gid)) ids.add(gid)
+      lastId = r.id
+    }
+    if (rows.length < pageSize) break
+  }
+
+  const { data: topRows, error: topErr } = await client.from("game_top_streamers").select("game_id")
+  if (!topErr) {
+    for (const row of topRows ?? []) {
       const id = Number((row as { game_id: number }).game_id)
       if (Number.isFinite(id)) ids.add(id)
     }
-    if (chunk.length < pageSize) break
   }
 
   return Array.from(ids).sort((a, b) => a - b)
