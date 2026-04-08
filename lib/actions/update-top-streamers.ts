@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/server"
 import { isPostgrestMissingColumnError, isPostgrestRpcNotFoundError } from "@/lib/postgrest-utils"
+import { getChzzkStreamsByCategory } from "@/lib/chzzk"
 
 /** KST 기준 오늘 날짜 YYYY-MM-DD */
 export function getKstTodayDateString(): string {
@@ -44,6 +45,42 @@ export interface GameTopStreamersRow {
 
 export function normalizeStreamerName(name: string): string {
   return name.trim()
+}
+
+function normStreamerNameForMatch(name: string): string {
+  return name.trim().toLowerCase()
+}
+
+/** DB에 프로필 URL이 없을 때, 해당 게임 치지직 카테고리 라이브에서 닉 매칭으로 보강 */
+async function enrichTop3ProfileUrlsFromChzzkLive(
+  gameId: number,
+  client: SupabaseClient,
+  rows: StreamerRankRow[],
+): Promise<StreamerRankRow[]> {
+  const needUrl = rows.some((r) => r.streamer_name && !r.channel_image_url?.trim())
+  if (!needUrl) return rows
+
+  const { data: g, error: gErr } = await client
+    .from("games")
+    .select("english_title")
+    .eq("id", gameId)
+    .maybeSingle()
+  if (gErr || !g) return rows
+
+  const slug = String((g as { english_title?: string | null }).english_title ?? "").trim()
+  if (!slug) return rows
+
+  const streams = await getChzzkStreamsByCategory(slug, { bypassNextFetchCache: true })
+  if (streams.length === 0) return rows
+
+  return rows.map((r) => {
+    if (!r.streamer_name?.trim() || r.channel_image_url?.trim()) return r
+    const live = streams.find(
+      (st) => normStreamerNameForMatch(st.channelName) === normStreamerNameForMatch(r.streamer_name),
+    )
+    const url = live?.channelImageUrl?.trim() || null
+    return url ? { ...r, channel_image_url: url } : r
+  })
 }
 
 /** PostgREST RPC `RETURNS TABLE(game_id bigint)` → `{ game_id }` 행 또는 변형 응답 파싱 */
@@ -175,7 +212,9 @@ export async function updateTopStreamers(
     }
   }
 
-  const top3 = finalTop3.slice(0, 3)
+  let top3: StreamerRankRow[] = finalTop3.slice(0, 3)
+  top3 = await enrichTop3ProfileUrlsFromChzzkLive(gameId, client, top3)
+
   const payload = {
     game_id: gameId,
     rank1_name: top3[0]?.streamer_name ?? null,
