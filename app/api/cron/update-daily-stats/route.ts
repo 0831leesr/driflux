@@ -296,6 +296,15 @@ export async function GET(request: Request) {
         message: "No live categories found (Chzzk API may be unavailable)",
         rawChzzkData: chzzkFetch ? buildRawChzzkDebugSnippet(chzzkFetch) : "no fetch result",
         stats: { gamesProcessed: 0, upserted: 0, failed: 0 },
+        streamerLogs: {
+          skipped: true,
+          reason: "no_chzzk_categories",
+          kstLogDate: getKstTodayDateString(),
+          gamesFetched: 0,
+          rawRows: 0,
+          upserted: 0,
+          failed: 0,
+        },
         duration: Date.now() - startTime,
       })
     }
@@ -359,8 +368,54 @@ export async function GET(request: Request) {
         success: true,
         message: "No matching games found in DB",
         stats: { categoriesFetched: categories.length, gamesMatched: 0, upserted: 0, failed: 0 },
+        streamerLogs: {
+          skipped: true,
+          reason: "no_matched_games",
+          kstLogDate: getKstTodayDateString(),
+          gamesFetched: 0,
+          rawRows: 0,
+          upserted: 0,
+          failed: 0,
+        },
         duration: Date.now() - startTime,
       })
+    }
+
+    // ── Step 3b: streamer_game_logs 먼저 처리 (Step 7 대량 upsert·타임아웃 이후에 밀리지 않도록) ──
+    let streamerLogs: {
+      kstLogDate: string
+      gamesFetched: number
+      rawRows: number
+      upserted: number
+      failed: number
+      skipped: boolean
+      reason?: string
+      error?: string
+    } = {
+      kstLogDate: getKstTodayDateString(),
+      gamesFetched: 0,
+      rawRows: 0,
+      upserted: 0,
+      failed: 0,
+      skipped: true,
+    }
+
+    try {
+      const { rows: logRows, gamesFetched } = await collectStreamerGameLogRowsFromChzzk(statsMap)
+      streamerLogs.gamesFetched = gamesFetched
+      streamerLogs.rawRows = logRows.length
+      streamerLogs.skipped = false
+      if (logRows.length > 0) {
+        const { upserted: slUp, failed: slFail } = await mergeAndUpsertStreamerGameLogs(supabase, logRows)
+        streamerLogs.upserted = slUp
+        streamerLogs.failed = slFail
+      }
+      console.log(
+        `[DailyStats] streamer_game_logs — kst: ${streamerLogs.kstLogDate}, games: ${gamesFetched}, rows: ${logRows.length}, upserted: ${streamerLogs.upserted}, failed: ${streamerLogs.failed}`,
+      )
+    } catch (e) {
+      streamerLogs.error = e instanceof Error ? e.message : String(e)
+      console.error("[DailyStats] streamer_game_logs pipeline failed:", streamerLogs.error)
     }
 
     // ── Step 4: 오늘 날짜 (UTC 기준) ──
@@ -479,42 +534,6 @@ export async function GET(request: Request) {
       } else {
         upserted += batch.length
       }
-    }
-
-    // ── Step 8: streamer_game_logs (KST 당일, 카테고리별 라이브 순회 → 채널명·시청자 피크 병합 upsert) ──
-    let streamerLogs: {
-      kstLogDate: string
-      gamesFetched: number
-      rawRows: number
-      upserted: number
-      failed: number
-      skipped: boolean
-      error?: string
-    } = {
-      kstLogDate: getKstTodayDateString(),
-      gamesFetched: 0,
-      rawRows: 0,
-      upserted: 0,
-      failed: 0,
-      skipped: true,
-    }
-
-    try {
-      const { rows: logRows, gamesFetched } = await collectStreamerGameLogRowsFromChzzk(statsMap)
-      streamerLogs.gamesFetched = gamesFetched
-      streamerLogs.rawRows = logRows.length
-      streamerLogs.skipped = false
-      if (logRows.length > 0) {
-        const { upserted: slUp, failed: slFail } = await mergeAndUpsertStreamerGameLogs(supabase, logRows)
-        streamerLogs.upserted = slUp
-        streamerLogs.failed = slFail
-      }
-      console.log(
-        `[DailyStats] streamer_game_logs — kst: ${streamerLogs.kstLogDate}, games: ${gamesFetched}, rows: ${logRows.length}, upserted: ${streamerLogs.upserted}, failed: ${streamerLogs.failed}`,
-      )
-    } catch (e) {
-      streamerLogs.error = e instanceof Error ? e.message : String(e)
-      console.error("[DailyStats] streamer_game_logs pipeline failed:", streamerLogs.error)
     }
 
     const duration = Date.now() - startTime

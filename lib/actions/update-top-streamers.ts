@@ -46,6 +46,25 @@ export function normalizeStreamerName(name: string): string {
   return name.trim()
 }
 
+/** PostgREST RPC `RETURNS TABLE(game_id bigint)` → `{ game_id }` 행 또는 변형 응답 파싱 */
+function parseRpcGameIdRows(data: unknown): number[] {
+  if (!Array.isArray(data)) return []
+  const out: number[] = []
+  for (const item of data) {
+    if (item == null) continue
+    if (typeof item === "number" && Number.isFinite(item)) {
+      out.push(item)
+      continue
+    }
+    if (typeof item === "object" && "game_id" in item) {
+      const v = (item as { game_id: unknown }).game_id
+      const n = typeof v === "string" ? Number(v) : Number(v)
+      if (Number.isFinite(n)) out.push(n)
+    }
+  }
+  return out
+}
+
 /**
  * 어제(KST) 로그와 기존 game_top_streamers를 병합해 TOP 3를 갱신합니다.
  */
@@ -210,11 +229,14 @@ export async function fetchGameIdsForTopStreamerUpdate(
 ): Promise<number[]> {
   const client = supabase ?? createAdminClient()
 
-  const { data: rpcData, error: rpcError } = await client.rpc("fetch_game_ids_for_top_streamer_update")
+  const { data: rpcData, error: rpcError } = await client.rpc(
+    "fetch_game_ids_for_top_streamer_update",
+    {},
+  )
+
   if (!rpcError && Array.isArray(rpcData)) {
-    return (rpcData as { game_id: number }[])
-      .map((r) => Number(r.game_id))
-      .filter((id) => Number.isFinite(id))
+    const ids = parseRpcGameIdRows(rpcData)
+    return [...new Set(ids)].sort((a, b) => a - b)
   }
 
   if (rpcError && !isPostgrestRpcNotFoundError(rpcError.message)) {
@@ -264,35 +286,63 @@ async function fetchGameIdsKeysetScan(client: SupabaseClient): Promise<number[]>
   return Array.from(ids).sort((a, b) => a - b)
 }
 
-const PARALLEL = 15
+const PARALLEL = 20
+
+export type TopStreamersCronPartition = {
+  /** 0-based, `parts` 미만. GitHub Actions에서 여러 번 나눠 호출 */
+  part?: number
+  /** 기본 1 = 한 요청에 전체 처리 */
+  parts?: number
+}
 
 /**
  * 활성(로그 또는 캐시에 등장한) 게임마다 updateTopStreamers 실행.
+ * `parts`>1 이면 `game_id` 목록을 균등 분할해 한 호출당 한 구간만 처리 (타임아웃 방지).
  */
-export async function updateTopStreamersForAllGames(): Promise<{
+export async function updateTopStreamersForAllGames(
+  options?: TopStreamersCronPartition,
+): Promise<{
   gameCount: number
+  subsetCount: number
+  part: number
+  parts: number
   updated: number
   failed: number
   errors: string[]
 }> {
   const supabase = createAdminClient()
-  const gameIds = await fetchGameIdsForTopStreamerUpdate(supabase)
+  const parts = Math.min(24, Math.max(1, Math.floor(options?.parts ?? 1)))
+  const part = Math.min(parts - 1, Math.max(0, Math.floor(options?.part ?? 0)))
+
+  const allIds = await fetchGameIdsForTopStreamerUpdate(supabase)
+  const per = Math.ceil(allIds.length / parts)
+  const start = part * per
+  const gameIds = allIds.slice(start, Math.min(start + per, allIds.length))
+
   let updated = 0
   let failed = 0
   const errors: string[] = []
 
   for (let i = 0; i < gameIds.length; i += PARALLEL) {
-    const chunk = gameIds.slice(i, i + PARALLEL)
-    const results = await Promise.all(chunk.map((id) => updateTopStreamers(id, supabase)))
+    const batch = gameIds.slice(i, i + PARALLEL)
+    const results = await Promise.all(batch.map((id) => updateTopStreamers(id, supabase)))
     for (let j = 0; j < results.length; j++) {
       const r = results[j]
       if (r.ok) updated++
       else {
         failed++
-        errors.push(`game_id ${chunk[j]}: ${r.error}`)
+        errors.push(`game_id ${batch[j]}: ${r.error}`)
       }
     }
   }
 
-  return { gameCount: gameIds.length, updated, failed, errors }
+  return {
+    gameCount: allIds.length,
+    subsetCount: gameIds.length,
+    part,
+    parts,
+    updated,
+    failed,
+    errors,
+  }
 }

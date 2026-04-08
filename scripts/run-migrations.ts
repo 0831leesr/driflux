@@ -76,6 +76,7 @@ async function main() {
     "37_game_top_streamers_public_read.sql",
     "38_streamer_profile_image_urls.sql",
     "39_fetch_game_ids_for_top_streamer_rpc.sql",
+    "40_fetch_game_ids_recent_only.sql",
   ]
   const useAll = process.argv.includes("--all")
   const toRun = useAll

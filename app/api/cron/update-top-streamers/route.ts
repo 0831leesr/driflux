@@ -22,7 +22,14 @@ export async function GET(request: Request) {
 
   const startTime = Date.now()
   try {
-    const result = await updateTopStreamersForAllGames()
+    const url = new URL(request.url)
+    const parts = Math.min(24, Math.max(1, parseInt(url.searchParams.get("parts") ?? "1", 10) || 1))
+    const part = Math.min(
+      parts - 1,
+      Math.max(0, parseInt(url.searchParams.get("part") ?? "0", 10) || 0),
+    )
+
+    const result = await updateTopStreamersForAllGames({ part, parts })
     const duration = Date.now() - startTime
     return NextResponse.json({
       success: true,

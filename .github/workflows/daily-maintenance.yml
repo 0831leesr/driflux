@@ -16,4 +16,8 @@ jobs:
 
       - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
 
-      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
+      # TOP 스트리머: game_id가 많으면 한 요청에서 타임아웃 → 4분할 순차 호출
+      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers?part=0&parts=4" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
+      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers?part=1&parts=4" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
+      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers?part=2&parts=4" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
+      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers?part=3&parts=4" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
