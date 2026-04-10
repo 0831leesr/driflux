@@ -1,27 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/server"
+import { addKstCalendarDays, formatKstDateString } from "@/lib/kst-dates"
 import { normalizeChzzkStreamerNameForMatch } from "@/lib/utils"
 import { isPostgrestMissingColumnError, isPostgrestRpcNotFoundError } from "@/lib/postgrest-utils"
 import { getChzzkStreamsByCategory } from "@/lib/chzzk"
 
 /** KST 기준 오늘 날짜 YYYY-MM-DD */
 export function getKstTodayDateString(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" })
+  return formatKstDateString()
 }
 
 /** KST 기준 어제 날짜 YYYY-MM-DD */
 export function getKstYesterdayDateString(): string {
-  const todayKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" })
-  const [yStr, mStr, dStr] = todayKst.split("-")
-  const y = Number(yStr)
-  const m = Number(mStr)
-  const d = Number(dStr)
-  const utc = new Date(Date.UTC(y, m - 1, d, 0, 0, 0))
-  utc.setUTCDate(utc.getUTCDate() - 1)
-  const yy = utc.getUTCFullYear()
-  const mm = String(utc.getUTCMonth() + 1).padStart(2, "0")
-  const dd = String(utc.getUTCDate()).padStart(2, "0")
-  return `${yy}-${mm}-${dd}`
+  return addKstCalendarDays(formatKstDateString(), -1)
 }
 
 export interface StreamerRankRow {

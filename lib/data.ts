@@ -12,6 +12,7 @@ import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
 import { getGameMappings, resolveMapping, applyMappingOverridesToGame, type GameMapping } from "@/lib/mappings"
 import { getChzzkStreamsByCategory, searchChzzkLives, getTopLiveGames } from "@/lib/chzzk"
+import { addKstCalendarDays, formatKstDateString } from "@/lib/kst-dates"
 import { getHistoricalTrendingDateRange } from "@/lib/trending-date-range"
 
 /* ── Cache config (revalidate in seconds) ── */
@@ -553,7 +554,7 @@ export async function fetchTodayDailyGameStatsByGameIds(
   if (gameIds.length === 0) return map
 
   const supabase = createClientForCache()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = formatKstDateString()
 
   const { data, error } = await supabase
     .from("daily_game_stats")
@@ -1230,10 +1231,16 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
 
   if (topIds.length === 0) return []
 
+  const numericTopIds = topIds
+    .map((id) => Number(id))
+    .filter((n) => Number.isFinite(n) && Number.isInteger(n))
+
+  if (numericTopIds.length === 0) return []
+
   const { data: games, error: gErr } = await supabase
     .from("games")
     .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
-    .in("id", topIds)
+    .in("id", numericTopIds)
 
   if (gErr) {
     console.error("[Trending Fetch Error] getHistoricalTrending games:", gErr.message, gErr)
@@ -1289,7 +1296,7 @@ export async function getHistoricalTrending(period: TrendingPeriod): Promise<His
   return unstable_cache(
     () => getHistoricalTrendingImpl(period),
     [`historical-trending-${period}`],
-    { revalidate: 3600 } // 1시간 캐시 (과거 데이터는 하루 1회만 갱신)
+    { revalidate: 3600, tags: ["historical-trending"] } // 크론에서 revalidateTag로 무효화
   )()
 }
 
@@ -1327,9 +1334,7 @@ export async function fetchAllGamesForHome(): Promise<HomeGameRow[]> {
 async function getGamesByTrendScoreImpl(tagName?: string): Promise<HistoricalTrendingRow[]> {
   const supabase = createClientForCache()
 
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-  const startDate = sevenDaysAgo.toISOString().slice(0, 10)
+  const startDate = addKstCalendarDays(formatKstDateString(), -7)
 
   const { data: stats, error: statsErr } = await supabase
     .from("daily_game_stats")
@@ -1488,7 +1493,7 @@ export async function getGamesByTrendPeriodForExplore(
   return unstable_cache(
     () => getGamesByTrendPeriodForExploreImpl(period, tagName),
     [`explore-trend-period-${period}-${tagName ?? "all"}`],
-    { revalidate: 300 }
+    { revalidate: 300, tags: ["explore-trend-period"] }
   )()
 }
 

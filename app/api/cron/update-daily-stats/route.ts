@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
+import { formatKstDateString } from "@/lib/kst-dates"
 import {
   buildChzzkCategoriesLiveUrl,
   fetchChzzkCategoriesLiveTextFirst,
@@ -23,7 +25,7 @@ import { isPostgrestMissingColumnError } from "@/lib/postgrest-utils"
  * - games 테이블의 title/korean_title/english_title과 매핑
  * - (추가) 매칭된 상위 게임에 대해 categories/GAME/{id}/lives로 라이브 목록을 받아
  *   streamer_game_logs에 KST 당일·채널명·시청자 피크 병합 upsert
- * - daily_game_stats Upsert:
+ * - daily_game_stats Upsert (record_date = KST 달력 YYYY-MM-DD, 트렌드 조회·streamer_game_logs와 동일):
  *   - peak_viewers / peak_stream_count / trend_score: GREATEST(기존, 현재)
  *   - previous_viewers ← 오늘 첫 스냅샷 시점의 시청자 수(Baseline), 이후 크론에서 유지
  *   - current_viewers ← 이번 API 값
@@ -411,8 +413,8 @@ export async function GET(request: Request) {
       console.error("[DailyStats] streamer_game_logs pipeline failed:", streamerLogs.error)
     }
 
-    // ── Step 4: 오늘 날짜 (UTC 기준) ──
-    const today = new Date().toISOString().slice(0, 10)
+    // ── Step 4: 오늘 날짜 (KST 달력 — 트렌딩·streamer_game_logs·getHistoricalTrendingDateRange와 동일)
+    const today = formatKstDateString()
 
     // ── Step 5: 기존 today 레코드 일괄 조회 (peak 비교용) ──
     const gameIds = Array.from(statsMap.keys())
@@ -533,6 +535,15 @@ export async function GET(request: Request) {
     console.log(
       `[DailyStats] Done in ${duration}ms — date: ${today}, chzzk: ${categories.length}, matched: ${statsMap.size}, new: ${newInserts}, updated: ${updates}, upserted: ${upserted}, failed: ${failed}`
     )
+
+    if (upserted > 0) {
+      try {
+        revalidateTag("historical-trending", "max")
+        revalidateTag("explore-trend-period", "max")
+      } catch (tagErr) {
+        console.warn("[DailyStats] revalidateTag failed (non-fatal):", tagErr)
+      }
+    }
 
     return NextResponse.json({
       success: true,
