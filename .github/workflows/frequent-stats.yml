@@ -10,6 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger update-daily-stats
+        env:
+          BASE: ${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}
+          SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-daily-stats" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          set -euo pipefail
+          if [[ ! "$BASE" =~ ^https?:// ]]; then
+            BASE="https://${BASE}"
+          fi
+          curl -sfS -X GET "${BASE}/api/cron/update-daily-stats" \
+            -H "Authorization: Bearer ${SECRET}"

@@ -8,17 +8,27 @@ on:
 jobs:
   update-esports-events:
     runs-on: ubuntu-latest
+    env:
+      BASE: ${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}
+      SECRET: ${{ secrets.CRON_SECRET }}
     steps:
       - name: Update Esports Events
         run: |
-          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-esports-events" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          set -euo pipefail
+          if [[ ! "$BASE" =~ ^https?:// ]]; then BASE="https://${BASE}"; fi
+          curl -sfS -X GET "${BASE}/api/cron/update-esports-events" \
+            -H "Authorization: Bearer ${SECRET}"
 
   update-videos:
     runs-on: ubuntu-latest
     needs: []  # 독립 실행
+    env:
+      BASE: ${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}
+      SECRET: ${{ secrets.CRON_SECRET }}
     steps:
       - name: Update Chzzk VOD Cache
         run: |
-          curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-videos?limit=30" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          set -euo pipefail
+          if [[ ! "$BASE" =~ ^https?:// ]]; then BASE="https://${BASE}"; fi
+          curl -sfS -X GET "${BASE}/api/cron/update-videos?limit=30" \
+            -H "Authorization: Bearer ${SECRET}"

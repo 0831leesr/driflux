@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { formatKstDateString } from "@/lib/kst-dates"
 import {
   buildChzzkCategoriesLiveUrl,
+  fetchAggregatedGameCategoriesFromChzzkLives,
   fetchChzzkCategoriesLiveTextFirst,
   getChzzkStreamsByCategory,
   type FetchChzzkCategoriesLiveTextFirstResult,
@@ -307,9 +308,10 @@ export async function GET(request: Request) {
   console.log("[DailyStats] Starting — fetching from Chzzk categories/live API...")
 
   try {
-    // ── Step 1: Chzzk API — text() → 로그 → JSON.parse (HTML/비JSON 대비) ──
+    // ── Step 1: Chzzk API — categories/live → 비면 service/v1/lives POPULAR 집계 폴백
     let categories: ChzzkCategoryItem[] = []
     let chzzkFetch: FetchChzzkCategoriesLiveTextFirstResult | null = null
+    let chzzkSource: "categories-live" | "lives-popular-fallback" = "categories-live"
 
     try {
       chzzkFetch = await fetchChzzkCategoriesLiveTextFirst(buildChzzkCategoriesLiveUrl(), {
@@ -319,23 +321,33 @@ export async function GET(request: Request) {
 
       if (categories.length === 0) {
         console.warn(
-          "[DailyStats] No category rows after parse — raw prefix:",
-          chzzkFetch.rawText.slice(0, 1000)
+          "[DailyStats] categories/live empty — raw prefix:",
+          chzzkFetch.rawText.slice(0, 1000),
         )
       }
     } catch (fetchErr) {
       console.error(
-        "[DailyStats] Chzzk fetch exception:",
-        fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
+        "[DailyStats] Chzzk categories/live exception:",
+        fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
       )
     }
 
     if (categories.length === 0) {
-      console.warn("[DailyStats] No categories returned from Chzzk — skipping upsert.")
+      const fallback = await fetchAggregatedGameCategoriesFromChzzkLives({ cache: "no-store" })
+      if (fallback.length > 0) {
+        categories = fallback as ChzzkCategoryItem[]
+        chzzkSource = "lives-popular-fallback"
+        console.warn(`[DailyStats] Using lives POPULAR fallback — ${fallback.length} categories`)
+      }
+    }
+
+    if (categories.length === 0) {
+      console.warn("[DailyStats] No categories from Chzzk (primary + fallback) — skipping upsert.")
       return NextResponse.json({
         success: true,
         message: "No live categories found (Chzzk API may be unavailable)",
         rawChzzkData: chzzkFetch ? buildRawChzzkDebugSnippet(chzzkFetch) : "no fetch result",
+        chzzkSource: "none",
         stats: { gamesProcessed: 0, upserted: 0, failed: 0 },
         streamerLogs: {
           skipped: true,
@@ -350,7 +362,7 @@ export async function GET(request: Request) {
       })
     }
 
-    console.log(`[DailyStats] Fetched ${categories.length} live categories from Chzzk.`)
+    console.log(`[DailyStats] Fetched ${categories.length} categories (source: ${chzzkSource})`)
 
     // ── Step 2: games 테이블에서 title 룩업 맵 구성 ──
     const supabase = createAdminClient()
@@ -571,6 +583,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Processed ${categories.length} Chzzk categories, matched ${statsMap.size} games for ${today} (upserted: ${upserted}, failed: ${failed})`,
+      chzzkSource,
       stats: {
         recordDate: today,
         categoriesFetched: categories.length,

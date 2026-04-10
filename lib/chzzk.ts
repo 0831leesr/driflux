@@ -396,11 +396,7 @@ export async function fetchChzzkCategoriesLiveTextFirst(
     console.error("[Chzzk] API body code !== 200:", code, raw?.message)
   }
 
-  const content = raw?.content as Record<string, unknown> | null | undefined
-  const data = content?.data
-  const categories = (
-    Array.isArray(data) ? data : Array.isArray(content) ? content : []
-  ) as ChzzkLiveCategoryItem[]
+  const categories = chzzkListFromContent(raw?.content) as ChzzkLiveCategoryItem[]
 
   return {
     categories,
@@ -410,6 +406,78 @@ export async function fetchChzzkCategoriesLiveTextFirst(
     httpOk: true,
     httpStatus: response.status,
   }
+}
+
+/**
+ * service/v1/lives(POPULAR) 응답 행 → categories/live와 동형의 게임 카테고리 목록으로 집계
+ * (데이터센터·차단 등으로 categories/live가 빈 배열일 때 update-daily-stats 폴백용)
+ */
+function aggregateChzzkLivesRowsToCategoryItems(rows: Record<string, unknown>[]): ChzzkLiveCategoryItem[] {
+  const map = new Map<
+    string,
+    { categoryValue: string; viewers: number; streams: number; poster: string | null }
+  >()
+
+  for (const row of rows) {
+    const catType = row.categoryType
+    if (typeof catType === "string" && catType !== "GAME") continue
+
+    const cid = String(row.liveCategory ?? "").trim()
+    if (!cid) continue
+
+    const cval = String(row.liveCategoryValue ?? "").trim()
+    const v = Number(row.concurrentUserCount ?? 0) || 0
+    const posterRaw = row.liveImageUrl
+    const poster = typeof posterRaw === "string" ? posterRaw : null
+
+    const prev = map.get(cid)
+    if (!prev) {
+      map.set(cid, { categoryValue: cval || cid, viewers: v, streams: 1, poster })
+    } else {
+      prev.viewers += v
+      prev.streams += 1
+      if (!prev.categoryValue && cval) prev.categoryValue = cval
+    }
+  }
+
+  return [...map.entries()]
+    .map(([categoryId, a]) => ({
+      categoryId,
+      categoryValue: a.categoryValue,
+      concurrentUserCount: a.viewers,
+      openLiveCount: a.streams,
+      posterImageUrl: a.poster,
+    }))
+    .sort((x, y) => y.concurrentUserCount - x.concurrentUserCount)
+}
+
+/** categories/live가 비었을 때 치지직 인기 라이브 목록으로 동일 스키마 카테고리 생성 */
+export async function fetchAggregatedGameCategoriesFromChzzkLives(
+  extraInit: NextFetchOptions = {},
+): Promise<ChzzkLiveCategoryItem[]> {
+  const url = buildChzzkServiceV1LivesUrl()
+  console.log("[Chzzk] lives POPULAR fallback:", url)
+
+  const r = await fetchChzzkCategoriesLiveTextFirst(url, { ...extraInit })
+
+  if (!r.httpOk || r.parseError || !r.parsed) {
+    console.warn("[Chzzk] lives fallback: unusable response", {
+      httpOk: r.httpOk,
+      parseError: r.parseError,
+    })
+    return []
+  }
+
+  const raw = r.parsed as Record<string, unknown>
+  if (typeof raw.code === "number" && raw.code !== 200) {
+    console.warn("[Chzzk] lives fallback: body code", raw.code)
+    return []
+  }
+
+  const rows = chzzkListFromContent(raw.content) as Record<string, unknown>[]
+  const aggregated = aggregateChzzkLivesRowsToCategoryItems(rows)
+  console.log(`[Chzzk] lives fallback: ${rows.length} rows → ${aggregated.length} categories`)
+  return aggregated
 }
 
 /* ── Helper Functions ── */

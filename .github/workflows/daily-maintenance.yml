@@ -9,11 +9,21 @@ on:
 jobs:
   daily-tasks:
     runs-on: ubuntu-latest
+    env:
+      BASE: ${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}
+      SECRET: ${{ secrets.CRON_SECRET }}
     steps:
-      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/discover-top-games" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
-
-      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-steam?limit=20" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
-
-      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
-
-      - run: 'curl -sf -X GET "${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}/api/cron/update-top-streamers" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"'
+      - name: Run daily crons
+        run: |
+          set -euo pipefail
+          if [[ ! "$BASE" =~ ^https?:// ]]; then
+            BASE="https://${BASE}"
+          fi
+          curl -sfS -X GET "${BASE}/api/cron/discover-top-games" \
+            -H "Authorization: Bearer ${SECRET}"
+          curl -sfS -X GET "${BASE}/api/cron/update-steam?limit=20" \
+            -H "Authorization: Bearer ${SECRET}"
+          curl -sfS -X GET "${BASE}/api/cron/update-evaluations?steamLimit=100&criticLimit=30" \
+            -H "Authorization: Bearer ${SECRET}"
+          curl -sfS -X GET "${BASE}/api/cron/update-top-streamers" \
+            -H "Authorization: Bearer ${SECRET}"
