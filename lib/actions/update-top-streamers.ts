@@ -58,7 +58,12 @@ async function enrichTop3ProfileUrlsFromChzzkLive(
   const slug = String((g as { english_title?: string | null }).english_title ?? "").trim()
   if (!slug) return rows
 
-  const streams = await getChzzkStreamsByCategory(slug, { bypassNextFetchCache: true })
+  let streams: Awaited<ReturnType<typeof getChzzkStreamsByCategory>> = []
+  try {
+    streams = await getChzzkStreamsByCategory(slug, { bypassNextFetchCache: true })
+  } catch {
+    return rows
+  }
   if (streams.length === 0) return rows
 
   return rows.map((r) => {
@@ -343,13 +348,21 @@ export async function updateTopStreamersForAllGames(
 
   for (let i = 0; i < gameIds.length; i += PARALLEL) {
     const batch = gameIds.slice(i, i + PARALLEL)
-    const results = await Promise.all(batch.map((id) => updateTopStreamers(id, supabase)))
-    for (let j = 0; j < results.length; j++) {
-      const r = results[j]
-      if (r.ok) updated++
-      else {
+    const settled = await Promise.allSettled(batch.map((id) => updateTopStreamers(id, supabase)))
+    for (let j = 0; j < settled.length; j++) {
+      const gid = batch[j]!
+      const res = settled[j]!
+      if (res.status === "fulfilled") {
+        const r = res.value
+        if (r.ok) updated++
+        else {
+          failed++
+          errors.push(`game_id ${gid}: ${r.error}`)
+        }
+      } else {
         failed++
-        errors.push(`game_id ${batch[j]}: ${r.error}`)
+        const reason = res.reason instanceof Error ? res.reason.message : String(res.reason)
+        errors.push(`game_id ${gid}: ${reason}`)
       }
     }
   }

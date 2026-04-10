@@ -23,8 +23,8 @@ import { isPostgrestMissingColumnError } from "@/lib/postgrest-utils"
  * - 스케줄은 외부(예: 30분 주기 GitHub Actions 등)에서 호출 — vercel.json crons 비움
  * - Chzzk categories/live API에서 실시간 게임별 시청자 수 및 방송 수 수집
  * - games 테이블의 title/korean_title/english_title과 매핑
- * - (추가) 매칭된 상위 게임에 대해 categories/GAME/{id}/lives로 라이브 목록을 받아
- *   streamer_game_logs에 KST 당일·채널명·시청자 피크 병합 upsert
+ * - (추가) daily_game_stats 반영 후, 매칭된 상위 게임에 대해 categories/GAME/{id}/lives로 라이브 목록을 받아
+ *   streamer_game_logs에 KST 당일·채널명·시청자 피크 병합 upsert (실패해도 일별 통계는 유지)
  * - daily_game_stats Upsert (record_date = KST 달력 YYYY-MM-DD, 트렌드 조회·streamer_game_logs와 동일):
  *   - peak_viewers / peak_stream_count / trend_score: GREATEST(기존, 현재)
  *   - previous_viewers ← 오늘 첫 스냅샷 시점의 시청자 수(Baseline), 이후 크론에서 유지
@@ -244,6 +244,52 @@ function buildRawChzzkDebugSnippet(r: FetchChzzkCategoriesLiveTextFirstResult): 
   return r.rawText.slice(0, 800)
 }
 
+/** PostgREST/프록시 URL 길이 한도 회피 — .in(game_id, …) 분할 조회 */
+const DAILY_STATS_GAME_ID_IN_CHUNK = 150
+
+type ExistingDailyStatsMap = Map<
+  number,
+  {
+    peak_viewers: number
+    peak_stream_count: number
+    trend_score: number
+    current_viewers: number
+    previous_viewers: number | null
+  }
+>
+
+async function fetchExistingDailyStatsMap(
+  supabase: ReturnType<typeof createAdminClient>,
+  gameIds: number[],
+  recordDate: string,
+): Promise<ExistingDailyStatsMap> {
+  const existingMap: ExistingDailyStatsMap = new Map()
+
+  for (let i = 0; i < gameIds.length; i += DAILY_STATS_GAME_ID_IN_CHUNK) {
+    const chunk = gameIds.slice(i, i + DAILY_STATS_GAME_ID_IN_CHUNK)
+    const { data: rows, error } = await supabase
+      .from("daily_game_stats")
+      .select("game_id, peak_viewers, peak_stream_count, trend_score, current_viewers, previous_viewers")
+      .in("game_id", chunk)
+      .eq("record_date", recordDate)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+    for (const row of rows ?? []) {
+      const r = row as ExistingDailyStatRow
+      existingMap.set(r.game_id, {
+        peak_viewers: r.peak_viewers ?? 0,
+        peak_stream_count: r.peak_stream_count ?? 0,
+        trend_score: r.trend_score ?? 0,
+        current_viewers: r.current_viewers ?? 0,
+        previous_viewers: r.previous_viewers,
+      })
+    }
+  }
+  return existingMap
+}
+
 export async function GET(request: Request) {
   // Auth: CRON_SECRET below — not browser session getUser().
   if (process.env.NODE_ENV !== "development") {
@@ -376,7 +422,111 @@ export async function GET(request: Request) {
       })
     }
 
-    // ── Step 3b: streamer_game_logs (daily_game_stats 대량 upsert보다 먼저) ──
+    // ── Step 3–7: daily_game_stats 먼저 (스트리머 다중 Chzzk 호출·타임아웃 시에도 일별 집계 유지)
+    const today = formatKstDateString()
+    const gameIds = Array.from(statsMap.keys())
+
+    type UpsertRow = {
+      game_id: number
+      record_date: string
+      peak_viewers: number
+      peak_stream_count: number
+      trend_score: number
+      current_viewers: number
+      previous_viewers: number
+      momentum_score: number
+    }
+
+    let newInserts = 0
+    let updates = 0
+    const upsertRows: UpsertRow[] = []
+    let upserted = 0
+    let failed = 0
+
+    try {
+      const existingMap = await fetchExistingDailyStatsMap(supabase, gameIds, today)
+
+      for (const [gameId, current] of statsMap.entries()) {
+        const currentTrendScore =
+          current.concurrentUserCount * (1 + Math.log(current.openLiveCount + 1))
+
+        const prev = existingMap.get(gameId)
+        const isFirstInsert = prev === undefined
+        const newViewers = current.concurrentUserCount
+
+        const baselineViewers =
+          prev != null && prev.previous_viewers != null
+            ? prev.previous_viewers
+            : newViewers
+        const delta = newViewers - baselineViewers
+        const momentumScore = !isFirstInsert && delta >= 100 ? Math.round(delta) : 0
+
+        upsertRows.push({
+          game_id: gameId,
+          record_date: today,
+          peak_viewers: Math.max(newViewers, prev?.peak_viewers ?? 0),
+          peak_stream_count: Math.max(current.openLiveCount, prev?.peak_stream_count ?? 0),
+          trend_score: Math.max(currentTrendScore, prev?.trend_score ?? 0),
+          current_viewers: newViewers,
+          previous_viewers: baselineViewers,
+          momentum_score: momentumScore,
+        })
+
+        if (isFirstInsert) newInserts++
+        else updates++
+      }
+
+      console.log(
+        `[DailyStats] Upsert payload ready — total: ${upsertRows.length}, new: ${newInserts}, update: ${updates}`,
+      )
+    } catch (dailyFetchErr) {
+      console.error("[DailyStats] Failed to fetch existing stats:", dailyFetchErr)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch existing stats",
+          details: dailyFetchErr instanceof Error ? dailyFetchErr.message : String(dailyFetchErr),
+        },
+        { status: 500 },
+      )
+    }
+
+    const BATCH_SIZE = 100
+    for (let i = 0; i < upsertRows.length; i += BATCH_SIZE) {
+      const batch = upsertRows.slice(i, i + BATCH_SIZE)
+      const batchNo = Math.floor(i / BATCH_SIZE) + 1
+      const { error: upsertError } = await supabase
+        .from("daily_game_stats")
+        .upsert(batch, { onConflict: "game_id,record_date", ignoreDuplicates: false })
+
+      if (upsertError) {
+        console.error(
+          `[DailyStats] Upsert failed (batch ${batchNo}/${Math.ceil(upsertRows.length / BATCH_SIZE)}):`,
+          upsertError.message,
+          "| code:", upsertError.code,
+          "| details:", upsertError.details,
+          "| hint:", upsertError.hint,
+        )
+        failed += batch.length
+      } else {
+        upserted += batch.length
+      }
+    }
+
+    const dailyPhaseMs = Date.now() - startTime
+    console.log(
+      `[DailyStats] daily_game_stats phase ${dailyPhaseMs}ms — date: ${today}, matched: ${statsMap.size}, new: ${newInserts}, updated: ${updates}, upserted: ${upserted}, failed: ${failed}`,
+    )
+
+    if (upserted > 0) {
+      try {
+        revalidateTag("historical-trending", "max")
+        revalidateTag("explore-trend-period", "max")
+      } catch (tagErr) {
+        console.warn("[DailyStats] revalidateTag failed (non-fatal):", tagErr)
+      }
+    }
+
+    // ── Step 3b: streamer_game_logs (daily 반영 후 — 실패해도 daily는 이미 저장됨)
     let streamerLogs: {
       kstLogDate: string
       gamesFetched: number
@@ -413,137 +563,10 @@ export async function GET(request: Request) {
       console.error("[DailyStats] streamer_game_logs pipeline failed:", streamerLogs.error)
     }
 
-    // ── Step 4: 오늘 날짜 (KST 달력 — 트렌딩·streamer_game_logs·getHistoricalTrendingDateRange와 동일)
-    const today = formatKstDateString()
-
-    // ── Step 5: 기존 today 레코드 일괄 조회 (peak 비교용) ──
-    const gameIds = Array.from(statsMap.keys())
-    const { data: existingRows, error: existingError } = await supabase
-      .from("daily_game_stats")
-      .select("game_id, peak_viewers, peak_stream_count, trend_score, current_viewers, previous_viewers")
-      .in("game_id", gameIds)
-      .eq("record_date", today)
-
-    if (existingError) {
-      console.error("[DailyStats] Failed to fetch existing stats:", existingError.message)
-      return NextResponse.json(
-        { error: "Failed to fetch existing stats", details: existingError.message },
-        { status: 500 }
-      )
-    }
-
-    const existingMap = new Map<
-      number,
-      {
-        peak_viewers: number
-        peak_stream_count: number
-        trend_score: number
-        current_viewers: number
-        previous_viewers: number | null
-      }
-    >()
-    for (const row of existingRows ?? []) {
-      const r = row as ExistingDailyStatRow
-      existingMap.set(r.game_id, {
-        peak_viewers: r.peak_viewers ?? 0,
-        peak_stream_count: r.peak_stream_count ?? 0,
-        trend_score: r.trend_score ?? 0,
-        current_viewers: r.current_viewers ?? 0,
-        previous_viewers: r.previous_viewers,
-      })
-    }
-
-    // ── Step 6: Upsert 페이로드 구성 ──
-    // Chzzk(statsMap)을 기준으로 순회 — existingMap에 기록이 없어도 신규 삽입 보장
-    type UpsertRow = {
-      game_id: number
-      record_date: string
-      peak_viewers: number
-      peak_stream_count: number
-      trend_score: number
-      current_viewers: number
-      previous_viewers: number
-      momentum_score: number
-    }
-
-    let newInserts = 0
-    let updates = 0
-    const upsertRows: UpsertRow[] = []
-
-    for (const [gameId, current] of statsMap.entries()) {
-      const currentTrendScore =
-        current.concurrentUserCount * (1 + Math.log(current.openLiveCount + 1))
-
-      const prev = existingMap.get(gameId)
-      const isFirstInsert = prev === undefined
-      const newViewers = current.concurrentUserCount
-
-      // 오늘 Baseline: 이미 저장된 previous_viewers가 있으면 유지, 없으면 이번 시청자 수로 설정(첫 기록)
-      const baselineViewers =
-        prev != null && prev.previous_viewers != null
-          ? prev.previous_viewers
-          : newViewers
-      const delta = newViewers - baselineViewers
-      const momentumScore = !isFirstInsert && delta >= 100 ? Math.round(delta) : 0
-
-      upsertRows.push({
-        game_id: gameId,
-        record_date: today,
-        peak_viewers: Math.max(newViewers, prev?.peak_viewers ?? 0),
-        peak_stream_count: Math.max(current.openLiveCount, prev?.peak_stream_count ?? 0),
-        trend_score: Math.max(currentTrendScore, prev?.trend_score ?? 0),
-        current_viewers: newViewers,
-        previous_viewers: baselineViewers,
-        momentum_score: momentumScore,
-      })
-
-      if (isFirstInsert) newInserts++
-      else updates++
-    }
-
-    console.log(
-      `[DailyStats] Upsert payload ready — total: ${upsertRows.length}, new: ${newInserts}, update: ${updates}`
-    )
-
-    // ── Step 7: Batch Upsert (100개씩) ──
-    const BATCH_SIZE = 100
-    let upserted = 0
-    let failed = 0
-
-    for (let i = 0; i < upsertRows.length; i += BATCH_SIZE) {
-      const batch = upsertRows.slice(i, i + BATCH_SIZE)
-      const batchNo = Math.floor(i / BATCH_SIZE) + 1
-      const { error: upsertError } = await supabase
-        .from("daily_game_stats")
-        .upsert(batch, { onConflict: "game_id,record_date", ignoreDuplicates: false })
-
-      if (upsertError) {
-        console.error(
-          `[DailyStats] Upsert failed (batch ${batchNo}/${Math.ceil(upsertRows.length / BATCH_SIZE)}):`,
-          upsertError.message,
-          "| code:", upsertError.code,
-          "| details:", upsertError.details,
-          "| hint:", upsertError.hint
-        )
-        failed += batch.length
-      } else {
-        upserted += batch.length
-      }
-    }
-
     const duration = Date.now() - startTime
     console.log(
-      `[DailyStats] Done in ${duration}ms — date: ${today}, chzzk: ${categories.length}, matched: ${statsMap.size}, new: ${newInserts}, updated: ${updates}, upserted: ${upserted}, failed: ${failed}`
+      `[DailyStats] Done in ${duration}ms — date: ${today}, chzzk: ${categories.length}, matched: ${statsMap.size}, daily upserted: ${upserted}, daily failed: ${failed}`,
     )
-
-    if (upserted > 0) {
-      try {
-        revalidateTag("historical-trending", "max")
-        revalidateTag("explore-trend-period", "max")
-      } catch (tagErr) {
-        console.warn("[DailyStats] revalidateTag failed (non-fatal):", tagErr)
-      }
-    }
 
     return NextResponse.json({
       success: true,

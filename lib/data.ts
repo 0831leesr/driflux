@@ -1234,7 +1234,6 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
   const numericTopIds = topIds
     .map((id) => Number(id))
     .filter((n) => Number.isFinite(n) && Number.isInteger(n))
-
   if (numericTopIds.length === 0) return []
 
   const { data: games, error: gErr } = await supabase
@@ -1296,7 +1295,7 @@ export async function getHistoricalTrending(period: TrendingPeriod): Promise<His
   return unstable_cache(
     () => getHistoricalTrendingImpl(period),
     [`historical-trending-${period}`],
-    { revalidate: 3600, tags: ["historical-trending"] } // 크론에서 revalidateTag로 무효화
+    { revalidate: 3600, tags: ["historical-trending"] }
   )()
 }
 
