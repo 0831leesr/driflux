@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/server"
 import { addKstCalendarDays, formatKstDateString } from "@/lib/kst-dates"
-import { normalizeChzzkStreamerNameForMatch } from "@/lib/utils"
+import { delay, normalizeChzzkStreamerNameForMatch } from "@/lib/utils"
 import { isPostgrestMissingColumnError, isPostgrestRpcNotFoundError } from "@/lib/postgrest-utils"
 import { getChzzkStreamsByCategory } from "@/lib/chzzk"
 
@@ -274,12 +274,24 @@ export async function fetchGameIdsForTopStreamerUpdate(
   return fetchGameIdsKeysetScan(client)
 }
 
+/** 폴백 키셋 스캔 최대 페이지 수 (무한 루프·장시간 크론 방지; 약 pageSize * maxPages 행 상한) */
+const KEYSET_SCAN_MAX_PAGES = 150
+
 async function fetchGameIdsKeysetScan(client: SupabaseClient): Promise<number[]> {
   const ids = new Set<number>()
   const pageSize = 2000
   let lastId = 0
+  let pages = 0
 
   for (;;) {
+    pages++
+    if (pages > KEYSET_SCAN_MAX_PAGES) {
+      console.warn(
+        `[fetchGameIdsForTopStreamerUpdate] keyset scan stopped at ${KEYSET_SCAN_MAX_PAGES} pages (~${KEYSET_SCAN_MAX_PAGES * pageSize} rows); apply migration 003 RPC for full coverage`,
+      )
+      break
+    }
+
     const { data, error } = await client
       .from("streamer_game_logs")
       .select("id, game_id")
@@ -314,7 +326,11 @@ async function fetchGameIdsKeysetScan(client: SupabaseClient): Promise<number[]>
   return Array.from(ids).sort((a, b) => a - b)
 }
 
-const PARALLEL = 20
+/** 동시 치지직/DB 부하 완화 (Hobby·레이트 리밋 대비) */
+const PARALLEL = 6
+
+/** 배치 간 치지직 피크 완화 (ms) */
+const BATCH_GAP_MS = 750
 
 export type TopStreamersCronPartition = {
   part?: number
@@ -364,6 +380,9 @@ export async function updateTopStreamersForAllGames(
         const reason = res.reason instanceof Error ? res.reason.message : String(res.reason)
         errors.push(`game_id ${gid}: ${reason}`)
       }
+    }
+    if (i + PARALLEL < gameIds.length) {
+      await delay(BATCH_GAP_MS)
     }
   }
 

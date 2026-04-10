@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { AppHeaderAuth } from "@/components/header";
+import { getSidebarSpotlightGamesCached } from "@/lib/sidebar-spotlight";
 import { FavoritesProvider } from "@/contexts/favorites-context";
 import { CalendarSettingsProvider } from "@/contexts/calendar-settings-context";
 import { CustomEventsProvider } from "@/contexts/custom-events-context";
@@ -52,12 +53,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const headerAuth = <AppHeaderAuth />;
+
+  let initialSidebarSpotlight: Awaited<ReturnType<typeof getSidebarSpotlightGamesCached>> = {
+    trending: [],
+    rising: [],
+  };
+  try {
+    initialSidebarSpotlight = await getSidebarSpotlightGamesCached();
+  } catch (e) {
+    console.error("[layout] getSidebarSpotlightGamesCached:", e);
+  }
 
   return (
     <html lang="ko" className="h-full" suppressHydrationWarning>
@@ -71,7 +82,9 @@ export default function RootLayout({
               <CalendarSettingsProvider>
                 <CustomEventsProvider>
                   <FollowedEventsProvider>
-                    <AppShell headerAuth={headerAuth}>{children}</AppShell>
+                    <AppShell headerAuth={headerAuth} initialSidebarSpotlight={initialSidebarSpotlight}>
+                      {children}
+                    </AppShell>
                   </FollowedEventsProvider>
                 </CustomEventsProvider>
               </CalendarSettingsProvider>

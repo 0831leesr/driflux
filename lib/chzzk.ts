@@ -11,6 +11,26 @@ import { sortChzzkVodList } from "@/lib/chzzk-vod-order"
 /** Next.js fetch 확장 옵션 (revalidate 등) */
 type NextFetchOptions = RequestInit & { next?: { revalidate?: number } }
 
+/** 개발 또는 DEBUG_CHZZK=1 일 때만 상세 log/warn (Vercel Hobby 로그 비용·노이즈 절감) */
+const CHZZK_DEBUG_LOGS =
+  process.env.NODE_ENV === "development" || process.env.DEBUG_CHZZK === "1"
+
+function chzzkDbg(...args: unknown[]) {
+  if (CHZZK_DEBUG_LOGS) console.log(...args)
+}
+
+const chzzkNativeWarn = console.warn.bind(console)
+
+function chzzkDbgWarn(...args: unknown[]) {
+  if (CHZZK_DEBUG_LOGS) chzzkNativeWarn(...args)
+}
+
+function chzzkTruncateErrBody(s: string, max = 400): string {
+  if (CHZZK_DEBUG_LOGS) return s
+  if (s.length <= max) return s
+  return `${s.slice(0, max)}…`
+}
+
 /* ── Types ── */
 export interface ChzzkLiveContent {
   liveTitle: string
@@ -343,7 +363,7 @@ export async function fetchChzzkCategoriesLiveTextFirst(
   url: string,
   extraInit: NextFetchOptions = {}
 ): Promise<FetchChzzkCategoriesLiveTextFirstResult> {
-  console.log("[Chzzk Fetch Request URL]:", url)
+  chzzkDbg("[Chzzk Fetch Request URL]:", url)
 
   const response = await fetch(url, {
     method: "GET",
@@ -352,12 +372,12 @@ export async function fetchChzzkCategoriesLiveTextFirst(
   } as NextFetchOptions)
 
   const rawText = await response.text()
-  console.log("[Chzzk Raw Response]:", rawText.slice(0, 300))
+  chzzkDbg("[Chzzk Raw Response]:", rawText.slice(0, 300))
 
   if (!response.ok) {
     console.error(
       `[Chzzk] HTTP ${response.status} — body prefix:`,
-      rawText.slice(0, 1000)
+      chzzkTruncateErrBody(rawText, 1000),
     )
     return {
       categories: [],
@@ -378,7 +398,7 @@ export async function fetchChzzkCategoriesLiveTextFirst(
       "[Chzzk] JSON.parse failed:",
       msg,
       "| raw prefix:",
-      rawText.slice(0, 500)
+      chzzkTruncateErrBody(rawText, 500),
     )
     return {
       categories: [],
@@ -456,12 +476,12 @@ export async function fetchAggregatedGameCategoriesFromChzzkLives(
   extraInit: NextFetchOptions = {},
 ): Promise<ChzzkLiveCategoryItem[]> {
   const url = buildChzzkServiceV1LivesUrl()
-  console.log("[Chzzk] lives POPULAR fallback:", url)
+  chzzkDbg("[Chzzk] lives POPULAR fallback:", url)
 
   const r = await fetchChzzkCategoriesLiveTextFirst(url, { ...extraInit })
 
   if (!r.httpOk || r.parseError || !r.parsed) {
-    console.warn("[Chzzk] lives fallback: unusable response", {
+    chzzkDbgWarn("[Chzzk] lives fallback: unusable response", {
       httpOk: r.httpOk,
       parseError: r.parseError,
     })
@@ -470,13 +490,13 @@ export async function fetchAggregatedGameCategoriesFromChzzkLives(
 
   const raw = r.parsed as Record<string, unknown>
   if (typeof raw.code === "number" && raw.code !== 200) {
-    console.warn("[Chzzk] lives fallback: body code", raw.code)
+    chzzkDbgWarn("[Chzzk] lives fallback: body code", raw.code)
     return []
   }
 
   const rows = chzzkListFromContent(raw.content) as Record<string, unknown>[]
   const aggregated = aggregateChzzkLivesRowsToCategoryItems(rows)
-  console.log(`[Chzzk] lives fallback: ${rows.length} rows → ${aggregated.length} categories`)
+  chzzkDbg(`[Chzzk] lives fallback: ${rows.length} rows → ${aggregated.length} categories`)
   return aggregated
 }
 
@@ -517,13 +537,13 @@ export async function getChzzkLiveStatus(
 ): Promise<ProcessedChzzkData> {
   try {
     if (channelId == null || typeof channelId !== "string" || channelId.trim() === "") {
-      console.warn(`[Chzzk API] Skipping invalid channelId:`, JSON.stringify(channelId))
+      chzzkDbgWarn(`[Chzzk API] Skipping invalid channelId:`, JSON.stringify(channelId))
       return createOfflineStatus("")
     }
 
     const trimmedId = channelId.trim()
     const url = `${CHZZK_API_BASE}/polling/v2/channels/${trimmedId}/live-status`
-    console.log("[Chzzk Request] Fetching:", url)
+    chzzkDbg("[Chzzk Request] Fetching:", url)
 
     const response = await fetch(url, {
       method: "GET",
@@ -534,12 +554,12 @@ export async function getChzzkLiveStatus(
     const rawText = await response.text()
     if (!response.ok) {
       if (response.status === 404) {
-        console.warn(`[Chzzk API] 404 Not Found (channel may not exist): ${url}`)
+        chzzkDbgWarn(`[Chzzk API] 404 Not Found (channel may not exist): ${url}`)
       } else {
         console.error(`[Chzzk API] ✗ HTTP Error: ${response.status} ${response.statusText}`)
-        console.error(`[Chzzk API] Error Response Body:`, rawText)
+        console.error(`[Chzzk API] Error Response Body:`, chzzkTruncateErrBody(rawText))
       }
-      console.warn(`[Chzzk API] Returning offline status (soft fail)`)
+      chzzkDbgWarn(`[Chzzk API] Returning offline status (soft fail)`)
       return createOfflineStatus(trimmedId)
     }
 
@@ -548,7 +568,7 @@ export async function getChzzkLiveStatus(
       data = JSON.parse(rawText) as ChzzkApiResponse
     } catch (e) {
       console.error(`[Chzzk API] JSON parse failed:`, e)
-      console.error(`[Chzzk API] Raw:`, rawText)
+      console.error(`[Chzzk API] Raw:`, chzzkTruncateErrBody(rawText))
       return createOfflineStatus(trimmedId)
     }
 
@@ -556,7 +576,7 @@ export async function getChzzkLiveStatus(
     if (!data || typeof data.code === 'undefined') {
       console.error(`[Chzzk API] ✗ Invalid response structure (no code field)`)
       console.error(`[Chzzk API] Response keys:`, Object.keys(data || {}))
-      console.warn(`[Chzzk API] Returning offline status to prevent cron failure`)
+      chzzkDbgWarn(`[Chzzk API] Returning offline status to prevent cron failure`)
       return createOfflineStatus(trimmedId)
     }
 
@@ -570,13 +590,13 @@ export async function getChzzkLiveStatus(
         console.error(`[Chzzk API] This should not happen with polling API!`)
       }
       
-      console.warn(`[Chzzk API] Returning offline status to prevent cron failure`)
+      chzzkDbgWarn(`[Chzzk API] Returning offline status to prevent cron failure`)
       return createOfflineStatus(trimmedId)
     }
 
     if (!data.content) {
-      console.warn(`[Chzzk API] ✗ Content is null (channel may not exist or be private)`)
-      console.warn(`[Chzzk API] Returning offline status to prevent cron failure`)
+      chzzkDbgWarn(`[Chzzk API] ✗ Content is null (channel may not exist or be private)`)
+      chzzkDbgWarn(`[Chzzk API] Returning offline status to prevent cron failure`)
       return createOfflineStatus(trimmedId)
     }
 
@@ -600,7 +620,7 @@ export async function getChzzkLiveStatus(
         thumbnailUrl = content.liveImageUrl
       }
     } else {
-      console.warn(`[Chzzk API] ⚠ liveImageUrl is null, using default thumbnail`)
+      chzzkDbgWarn(`[Chzzk API] ⚠ liveImageUrl is null, using default thumbnail`)
       thumbnailUrl = DEFAULT_THUMBNAIL_URL
     }
 
@@ -620,12 +640,15 @@ export async function getChzzkLiveStatus(
     return processedData
 
   } catch (error) {
-    console.error(`[Chzzk API] ✗ Exception occurred while fetching channel ${channelId}`, error)
-    console.error(`[Chzzk API] Error Type: ${error instanceof Error ? error.constructor.name : typeof error}`)
-    console.error(`[Chzzk API] Error Message:`, error instanceof Error ? error.message : String(error))
-    console.error(`[Chzzk API] Error Stack:`, error instanceof Error ? error.stack : 'N/A')
-    console.warn(`[Chzzk API] Returning offline status to prevent cron failure`)
-    console.error(`[Chzzk API] ========================================\n`)
+    console.error(
+      `[Chzzk API] ✗ Exception channel ${channelId}:`,
+      error instanceof Error ? error.message : String(error),
+    )
+    if (CHZZK_DEBUG_LOGS) {
+      console.error(`[Chzzk API] Error Type:`, error instanceof Error ? error.constructor.name : typeof error)
+      console.error(`[Chzzk API] Error Stack:`, error instanceof Error ? error.stack : "N/A")
+    }
+    chzzkDbgWarn(`[Chzzk API] Returning offline status to prevent cron failure`)
     return createOfflineStatus(channelId)
   }
 }
@@ -707,7 +730,7 @@ export async function getPopularCategories(
 ): Promise<ChzzkPopularCategory[]> {
   try {
     const url = buildChzzkCategoriesLiveUrl()
-    console.log("[Chzzk Request] Fetching live categories:", url)
+    chzzkDbg("[Chzzk Request] Fetching live categories:", url)
 
     const r = await fetchChzzkCategoriesLiveTextFirst(url, {
       next: { revalidate: REVALIDATE_LIVE },
@@ -727,7 +750,7 @@ export async function getPopularCategories(
       .filter((c) => c.title && c.originalId)
       .slice(0, size)
 
-    console.log(`[Chzzk] Fetched ${categories.length} live categories, returning ${result.length}.`)
+    chzzkDbg(`[Chzzk] Fetched ${categories.length} live categories, returning ${result.length}.`)
     return result
   } catch (error) {
     console.error("[Chzzk] Failed to fetch categories:", error)
@@ -750,7 +773,7 @@ export async function getPopularCategories(
 export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]> {
   try {
     const topUrl = buildChzzkCategoriesLiveUrl()
-    console.log("[Chzzk Request] Fetching top live games:", topUrl)
+    chzzkDbg("[Chzzk Request] Fetching top live games:", topUrl)
 
     const r = await fetchChzzkCategoriesLiveTextFirst(topUrl, {
       next: { revalidate: REVALIDATE_LIVE },
@@ -767,7 +790,7 @@ export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]>
     const items: ChzzkLiveCategoryItem[] = r.categories
 
     if (!Array.isArray(items) || items.length === 0) {
-      console.warn("[Chzzk TopLiveGames] Empty response")
+      chzzkDbgWarn("[Chzzk TopLiveGames] Empty response")
       return []
     }
 
@@ -783,7 +806,7 @@ export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]>
       .sort((a, b) => b.concurrentUserCount - a.concurrentUserCount)
       .slice(0, Math.min(size, 50))
 
-    console.log(`[Chzzk] getTopLiveGames: returning ${result.length} games (top by viewers).`)
+    chzzkDbg(`[Chzzk] getTopLiveGames: returning ${result.length} games (top by viewers).`)
     return result
   } catch (error) {
     console.error("[Chzzk TopLiveGames] ✗ Exception:", error instanceof Error ? error.message : String(error))
@@ -816,7 +839,7 @@ export async function fetchChzzkGamePosterImage(categoryId: string): Promise<str
 
     const rawText = await response.text()
     if (!response.ok) {
-      console.error("[Fetch Game Poster Error]:", rawText)
+      console.error("[Fetch Game Poster Error]:", chzzkTruncateErrBody(rawText))
       return null
     }
 
@@ -824,7 +847,7 @@ export async function fetchChzzkGamePosterImage(categoryId: string): Promise<str
     try {
       data = JSON.parse(rawText)
     } catch (e) {
-      console.error("[Fetch Game Poster Error] (JSON parse):", e, rawText)
+      console.error("[Fetch Game Poster Error] (JSON parse):", e, chzzkTruncateErrBody(rawText))
       return null
     }
     const posterUrl = (data?.content?.posterImageUrl ?? data?.posterImageUrl)?.trim()
@@ -843,13 +866,13 @@ export async function getChzzkStreamsByCategory(
   options?: GetChzzkCategoryLivesOptions,
 ): Promise<SearchedStreamData[]> {
   if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
-    console.warn("[Chzzk Category] Skipping invalid categoryId:", JSON.stringify(categoryId))
+    chzzkDbgWarn("[Chzzk Category] Skipping invalid categoryId:", JSON.stringify(categoryId))
     return []
   }
 
   const formattedCategoryId = formatChzzkGameCategoryIdForApi(categoryId)
   const url = CHZZK_CATEGORY_LIVES_URL(formattedCategoryId)
-  console.log("[Chzzk Request] Fetching category lives:", url)
+  chzzkDbg("[Chzzk Request] Fetching category lives:", url)
 
   try {
     const bypass = options?.bypassNextFetchCache === true
@@ -870,7 +893,7 @@ export async function getChzzkStreamsByCategory(
 
     const rawText = await response.text()
     if (!response.ok) {
-      console.error("[Fetch Lives Error]:", rawText)
+      console.error("[Fetch Lives Error]:", chzzkTruncateErrBody(rawText))
       return []
     }
 
@@ -878,16 +901,16 @@ export async function getChzzkStreamsByCategory(
     try {
       dataL = JSON.parse(rawText)
     } catch (e) {
-      console.error("[Fetch Lives Error] (JSON parse):", e, rawText)
+      console.error("[Fetch Lives Error] (JSON parse):", e, chzzkTruncateErrBody(rawText))
       return []
     }
     if (!dataL || dataL.code !== 200) {
-      console.error(`[Fetch Lives Error] (API code):`, dataL?.code, rawText)
+      console.error(`[Fetch Lives Error] (API code):`, dataL?.code, chzzkTruncateErrBody(rawText))
       return []
     }
 
     const items = chzzkListFromContent(dataL.content)
-    console.log(`[Chzzk] Fetched ${items.length} streams for category "${formattedCategoryId}".`)
+    chzzkDbg(`[Chzzk] Fetched ${items.length} streams for category "${formattedCategoryId}".`)
 
     if (items.length === 0) {
       return []
@@ -962,7 +985,7 @@ export async function getChzzkVideosByCategory(
   const empty: ChzzkVideoCategoryResult = { videos: [], nextCursor: null }
 
   if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
-    console.warn("[Chzzk Videos] Skipping invalid categoryId:", JSON.stringify(categoryId))
+    chzzkDbgWarn("[Chzzk Videos] Skipping invalid categoryId:", JSON.stringify(categoryId))
     return empty
   }
 
@@ -972,7 +995,7 @@ export async function getChzzkVideosByCategory(
   if (cursor && Number.isFinite(cursor.publishDateAt)) {
     url += `&publishDateAt=${cursor.publishDateAt}&readCount=${cursor.readCount}`
   }
-  console.log("[Chzzk Request] Fetching category videos:", url)
+  chzzkDbg("[Chzzk Request] Fetching category videos:", url)
 
   try {
     const response = await fetch(url, {
@@ -983,7 +1006,7 @@ export async function getChzzkVideosByCategory(
 
     const rawText = await response.text()
     if (!response.ok) {
-      console.error("[Fetch VODs Error]:", rawText)
+      console.error("[Fetch VODs Error]:", chzzkTruncateErrBody(rawText))
       return empty
     }
 
@@ -991,17 +1014,17 @@ export async function getChzzkVideosByCategory(
     try {
       dataR = JSON.parse(rawText)
     } catch (e) {
-      console.error("[Fetch VODs Error] (JSON parse):", e, rawText)
+      console.error("[Fetch VODs Error] (JSON parse):", e, chzzkTruncateErrBody(rawText))
       return empty
     }
     if (!dataR || dataR.code !== 200) {
-      console.error(`[Fetch VODs Error] (API code):`, dataR?.code, rawText)
+      console.error(`[Fetch VODs Error] (API code):`, dataR?.code, chzzkTruncateErrBody(rawText))
       return empty
     }
 
     const items = chzzkListFromContent(dataR.content)
     const nextCursor = chzzkVideoNextCursorFromContent(dataR.content)
-    console.log(`[Chzzk] Fetched ${items.length} videos for category "${formattedCategoryId}".`)
+    chzzkDbg(`[Chzzk] Fetched ${items.length} videos for category "${formattedCategoryId}".`)
 
     if (!Array.isArray(items) || items.length === 0) {
       return { videos: [], nextCursor: null }
@@ -1059,14 +1082,14 @@ export async function getChzzkClipsByCategory(
   size: number = 50
 ): Promise<ChzzkClipItem[]> {
   if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
-    console.warn("[Chzzk Clips] Skipping invalid categoryId:", JSON.stringify(categoryId))
+    chzzkDbgWarn("[Chzzk Clips] Skipping invalid categoryId:", JSON.stringify(categoryId))
     return []
   }
 
   const formattedCategoryId = formatChzzkGameCategoryIdForApi(categoryId)
   const safeSize = Math.min(50, Math.max(1, size))
   const url = `${CHZZK_CATEGORY_CLIPS_URL(formattedCategoryId)}?filterType=${filterType}&orderType=${orderType}&size=${safeSize}`
-  console.log("[Chzzk Request] Fetching category clips:", url)
+  chzzkDbg("[Chzzk Request] Fetching category clips:", url)
 
   try {
     const response = await fetch(url, {
@@ -1077,7 +1100,7 @@ export async function getChzzkClipsByCategory(
 
     const rawText = await response.text()
     if (!response.ok) {
-      console.error("[Fetch Clips Error]:", rawText)
+      console.error("[Fetch Clips Error]:", chzzkTruncateErrBody(rawText))
       return []
     }
 
@@ -1085,16 +1108,16 @@ export async function getChzzkClipsByCategory(
     try {
       dataC = JSON.parse(rawText)
     } catch (e) {
-      console.error("[Fetch Clips Error] (JSON parse):", e, rawText)
+      console.error("[Fetch Clips Error] (JSON parse):", e, chzzkTruncateErrBody(rawText))
       return []
     }
     if (!dataC || dataC.code !== 200) {
-      console.error(`[Fetch Clips Error] (API code):`, dataC?.code, rawText)
+      console.error(`[Fetch Clips Error] (API code):`, dataC?.code, chzzkTruncateErrBody(rawText))
       return []
     }
 
     const items = chzzkListFromContent(dataC.content)
-    console.log(`[Chzzk] Fetched ${items.length} clips for category "${formattedCategoryId}".`)
+    chzzkDbg(`[Chzzk] Fetched ${items.length} clips for category "${formattedCategoryId}".`)
 
     if (items.length === 0) {
       return []
@@ -1136,14 +1159,14 @@ export async function searchChzzkLives(
   size: number = 20
 ): Promise<SearchedStreamData[]> {
   if (keyword == null || (typeof keyword === "string" && keyword.trim() === "")) {
-    console.warn("[Chzzk Search] Skipping invalid keyword:", JSON.stringify(keyword))
+    chzzkDbgWarn("[Chzzk Search] Skipping invalid keyword:", JSON.stringify(keyword))
     return []
   }
 
   const searchKeyword = typeof keyword === "string" ? keyword.trim() : String(keyword)
 
   const url = `${CHZZK_SEARCH_LIVES_URL}?keyword=${encodeURIComponent(searchKeyword)}&size=${size}&offset=0`
-  console.log("[Chzzk Request] Fetching search:", url)
+  chzzkDbg("[Chzzk Request] Fetching search:", url)
 
   try {
     const response = await fetch(url, {
@@ -1154,7 +1177,7 @@ export async function searchChzzkLives(
 
     const rawText = await response.text()
     if (!response.ok) {
-      console.error("[Fetch Search Lives Error]:", rawText)
+      console.error("[Fetch Search Lives Error]:", chzzkTruncateErrBody(rawText))
       return []
     }
 
@@ -1162,7 +1185,7 @@ export async function searchChzzkLives(
     try {
       data = JSON.parse(rawText) as ChzzkSearchResponse
     } catch (e) {
-      console.error("[Fetch Search Lives Error] (JSON parse):", e, rawText)
+      console.error("[Fetch Search Lives Error] (JSON parse):", e, chzzkTruncateErrBody(rawText))
       return []
     }
 
@@ -1185,7 +1208,7 @@ export async function searchChzzkLives(
       resultsData = data
     }
 
-    console.log(`[Chzzk] Fetched ${resultsData.length} items for "${searchKeyword}".`)
+    chzzkDbg(`[Chzzk] Fetched ${resultsData.length} items for "${searchKeyword}".`)
     if (resultsData.length === 0) {
       return []
     }
@@ -1269,7 +1292,7 @@ export async function searchChzzkLives(
         .filter(item => item.channelId)
         .sort((a, b) => b.concurrentUserCount - a.concurrentUserCount)
 
-    console.log(`[Chzzk] After GAME filter: ${results.length} streams for "${searchKeyword}".`)
+    chzzkDbg(`[Chzzk] After GAME filter: ${results.length} streams for "${searchKeyword}".`)
     return results
   } catch (error) {
     console.error(`[Chzzk Search] ✗ Exception:`, error instanceof Error ? error.message : String(error))

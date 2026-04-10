@@ -12,14 +12,17 @@ import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { LeftSidebar } from "@/components/left-sidebar"
 import { Footer } from "@/components/footer"
 import { MainTabNavShell } from "@/components/main-tab-nav"
+import type { SidebarSpotlightGame } from "@/lib/sidebar-spotlight"
 
 interface AppShellProps {
   children: React.ReactNode
   /** Server-rendered auth slot (Login / account menu). */
   headerAuth: React.ReactNode
+  /** 서버에서 한 번 계산해 전달 — 클라이언트 중복 fetch 방지 (Hobby) */
+  initialSidebarSpotlight: { trending: SidebarSpotlightGame[]; rising: SidebarSpotlightGame[] }
 }
 
-export function AppShell({ children, headerAuth }: AppShellProps) {
+export function AppShell({ children, headerAuth, initialSidebarSpotlight }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
@@ -123,13 +126,13 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
       {/* Mobile Sidebar Sheet */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="w-60 p-0 border-r border-border">
-          <LeftSidebar embedded />
+          <LeftSidebar embedded initialSpotlight={initialSidebarSpotlight} />
         </SheetContent>
       </Sheet>
 
       {/* Main Layout with Sidebar - 사이드바 고정, 메인 영역만 스크롤 */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <LeftSidebar isCollapsed={sidebarCollapsed} />
+        <LeftSidebar isCollapsed={sidebarCollapsed} initialSpotlight={initialSidebarSpotlight} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] transition-[margin] duration-300 ease-in-out">
           <main className="flex min-h-full min-w-0 flex-1 flex-col">
             {showMainTabs ? <MainTabNavShell /> : null}

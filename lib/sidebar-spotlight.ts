@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache"
 import { getTopLiveGames } from "@/lib/chzzk"
 import {
   fetchAllGamesForHome,
@@ -60,4 +61,18 @@ export async function getSidebarSpotlightGames(): Promise<{
     .map(toSpotlight)
 
   return { trending, rising }
+}
+
+/** 레이아웃·Route Handler 공용 — 60초 단위 재사용 (Hobby 함수/치지직 호출 절감) */
+const getSidebarSpotlightGamesCachedInner = unstable_cache(
+  async () => getSidebarSpotlightGames(),
+  ["sidebar-spotlight-payload"],
+  { revalidate: 60 },
+)
+
+export async function getSidebarSpotlightGamesCached(): Promise<{
+  trending: SidebarSpotlightGame[]
+  rising: SidebarSpotlightGame[]
+}> {
+  return getSidebarSpotlightGamesCachedInner()
 }

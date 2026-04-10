@@ -23,6 +23,8 @@ interface LeftSidebarProps {
   embedded?: boolean
   /** When true, sidebar is collapsed (icon-only mode). Controlled by parent. */
   isCollapsed?: boolean
+  /** 루트 레이아웃에서 시드 — `/api/sidebar-spotlight` 중복 호출 방지 */
+  initialSpotlight: { trending: SidebarSpotlightGame[]; rising: SidebarSpotlightGame[] }
 }
 
 // Tag icon mapping
@@ -56,7 +58,12 @@ function getDDayLabel(eventDate: Date, today: Date): { text: string; color: stri
   return { text: `D-${diff}`, color: "text-muted-foreground" }
 }
 
-export function LeftSidebar({ games: _deprecatedGames, embedded = false, isCollapsed = false }: LeftSidebarProps = {}) {
+export function LeftSidebar({
+  games: _deprecatedGames,
+  embedded = false,
+  isCollapsed = false,
+  initialSpotlight,
+}: LeftSidebarProps) {
   const pathname = usePathname()
   const { isAuthenticated, sessionResolved } = useFavoritesSession()
   const showFollowSidebar = sessionResolved && isAuthenticated
@@ -68,37 +75,11 @@ export function LeftSidebar({ games: _deprecatedGames, embedded = false, isColla
   const [isLoadingGames, setIsLoadingGames] = useState(true)
   const [streamerStatuses, setStreamerStatuses] = useState<Record<string, { isLive: boolean; gameTitle?: string }>>({})
   const [isLoadingStreamers, setIsLoadingStreamers] = useState(false)
-  const [spotlight, setSpotlight] = useState<{ trending: SidebarSpotlightGame[]; rising: SidebarSpotlightGame[] } | null>(
-    null,
-  )
-  const [spotlightLoading, setSpotlightLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch("/api/sidebar-spotlight")
-        const json = (await res.json()) as { trending?: SidebarSpotlightGame[]; rising?: SidebarSpotlightGame[] }
-        if (!cancelled) {
-          if (res.ok) {
-            setSpotlight({
-              trending: Array.isArray(json.trending) ? json.trending : [],
-              rising: Array.isArray(json.rising) ? json.rising : [],
-            })
-          } else {
-            setSpotlight({ trending: [], rising: [] })
-          }
-        }
-      } catch {
-        if (!cancelled) setSpotlight({ trending: [], rising: [] })
-      } finally {
-        if (!cancelled) setSpotlightLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const [spotlight] = useState(() => ({
+    trending: Array.isArray(initialSpotlight.trending) ? initialSpotlight.trending : [],
+    rising: Array.isArray(initialSpotlight.rising) ? initialSpotlight.rising : [],
+  }))
+  const spotlightLoading = false
 
   // Fetch games data when favorite IDs change
   useEffect(() => {
