@@ -1189,12 +1189,35 @@ export async function fetchEsportsChannels(): Promise<EsportsChannel[]> {
   )()
 }
 
+/** KST 오늘보다 이전 날짜 중 집계 행이 있는 가장 최근 record_date (RLS·누락일 대비) */
+async function fetchLatestDailyGameStatsDateBeforeToday(
+  supabase: ReturnType<typeof createClientForCache>,
+): Promise<string | null> {
+  const kstToday = formatKstDateString()
+  const { data, error } = await supabase
+    .from("daily_game_stats")
+    .select("record_date")
+    .lt("record_date", kstToday)
+    .order("record_date", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[Trending Fetch Error] fetchLatestDailyGameStatsDateBeforeToday:", error.message, error)
+    return null
+  }
+  const raw = (data as { record_date?: string } | null)?.record_date
+  if (raw == null || typeof raw !== "string") return null
+  return raw.slice(0, 10)
+}
+
 /* ── V2: getHistoricalTrending — daily_game_stats 기반 기간별 트렌딩 ── */
 async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<HistoricalTrendingRow[]> {
   const supabase = createClientForCache()
-  const { start: startDateStr, end: yesterdayStr } = getHistoricalTrendingDateRange(period)
+  let { start: startDateStr, end: yesterdayStr } = getHistoricalTrendingDateRange(period)
+  const intendedRangeEnd = yesterdayStr
 
-  const { data: stats, error: statsErr } = await supabase
+  let { data: stats, error: statsErr } = await supabase
     .from("daily_game_stats")
     .select("game_id, peak_viewers, trend_score")
     .gte("record_date", startDateStr)
@@ -1204,9 +1227,28 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
     console.error("[Trending Fetch Error] getHistoricalTrending daily_game_stats:", statsErr.message, statsErr)
     return []
   }
+
+  if ((!stats || stats.length === 0) && period === "yesterday") {
+    const latest = await fetchLatestDailyGameStatsDateBeforeToday(supabase)
+    if (latest && latest !== yesterdayStr) {
+      const retry = await supabase
+        .from("daily_game_stats")
+        .select("game_id, peak_viewers, trend_score")
+        .eq("record_date", latest)
+      if (!retry.error && retry.data && retry.data.length > 0) {
+        stats = retry.data
+        startDateStr = latest
+        yesterdayStr = latest
+        console.warn(
+          `[Trending Fetch] yesterday ${intendedRangeEnd} empty; using latest data date ${latest}`,
+        )
+      }
+    }
+  }
+
   if (!stats || stats.length === 0) {
     console.warn(
-      `[Trending Fetch] No daily_game_stats rows for period=${period}, range ${startDateStr}..${yesterdayStr}`,
+      `[Trending Fetch] No daily_game_stats rows for period=${period}, range ${startDateStr}..${yesterdayStr} (anon이 SELECT 불가면 RLS 정책·sql/41_daily_game_stats_public_read.sql 확인)`,
     )
     return []
   }
@@ -1403,7 +1445,7 @@ export async function getGamesByTrendScore(tagName?: string): Promise<Historical
   return unstable_cache(
     () => getGamesByTrendScoreImpl(tagName),
     [`games-by-trend-score-${tagName ?? "all"}`],
-    { revalidate: 300 }
+    { revalidate: 300, tags: ["games-by-trend-score"] }
   )()
 }
 
@@ -1416,9 +1458,10 @@ async function getGamesByTrendPeriodForExploreImpl(
   tagName?: string
 ): Promise<HistoricalTrendingRow[]> {
   const supabase = createClientForCache()
-  const { start: startDateStr, end: yesterdayStr } = getHistoricalTrendingDateRange(period)
+  let { start: startDateStr, end: yesterdayStr } = getHistoricalTrendingDateRange(period)
+  const intendedRangeEnd = yesterdayStr
 
-  const { data: stats, error: statsErr } = await supabase
+  let { data: stats, error: statsErr } = await supabase
     .from("daily_game_stats")
     .select("game_id, peak_viewers, trend_score")
     .gte("record_date", startDateStr)
@@ -1428,6 +1471,25 @@ async function getGamesByTrendPeriodForExploreImpl(
     console.error("[Trending Fetch Error] getGamesByTrendPeriodForExplore stats:", statsErr.message, statsErr)
     return []
   }
+
+  if ((!stats || stats.length === 0) && period === "yesterday") {
+    const latest = await fetchLatestDailyGameStatsDateBeforeToday(supabase)
+    if (latest && latest !== intendedRangeEnd) {
+      const retry = await supabase
+        .from("daily_game_stats")
+        .select("game_id, peak_viewers, trend_score")
+        .eq("record_date", latest)
+      if (!retry.error && retry.data && retry.data.length > 0) {
+        stats = retry.data
+        startDateStr = latest
+        yesterdayStr = latest
+        console.warn(
+          `[Trending Fetch] explore yesterday ${intendedRangeEnd} empty; using latest data date ${latest}`,
+        )
+      }
+    }
+  }
+
   if (!stats || stats.length === 0) return []
 
   const gameStats = new Map<string, { peak_viewers: number; trend_score: number }>()

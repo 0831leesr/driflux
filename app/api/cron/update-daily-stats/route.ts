@@ -533,6 +533,7 @@ export async function GET(request: Request) {
       try {
         revalidateTag("historical-trending", "max")
         revalidateTag("explore-trend-period", "max")
+        revalidateTag("games-by-trend-score", "max")
       } catch (tagErr) {
         console.warn("[DailyStats] revalidateTag failed (non-fatal):", tagErr)
       }
