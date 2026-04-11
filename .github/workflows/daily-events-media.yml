@@ -15,9 +15,15 @@ jobs:
       - name: Update Esports Events
         run: |
           set -euo pipefail
+          BASE="$(printf '%s' "$BASE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           if [[ ! "$BASE" =~ ^https?:// ]]; then BASE="https://${BASE}"; fi
-          curl -sfS -X GET "${BASE}/api/cron/update-esports-events" \
-            -H "Authorization: Bearer ${SECRET}"
+          BASE="${BASE%/}"
+          resp=$(curl -sfSL --location-trusted --max-redirs 8 -X GET \
+            "${BASE}/api/cron/update-esports-events" \
+            -H "Authorization: Bearer ${SECRET}" \
+            -H "Accept: application/json")
+          echo "$resp"
+          echo "$resp" | jq -e 'type == "object"' >/dev/null
 
   update-videos:
     runs-on: ubuntu-latest
@@ -29,6 +35,12 @@ jobs:
       - name: Update Chzzk VOD Cache
         run: |
           set -euo pipefail
+          BASE="$(printf '%s' "$BASE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           if [[ ! "$BASE" =~ ^https?:// ]]; then BASE="https://${BASE}"; fi
-          curl -sfS -X GET "${BASE}/api/cron/update-videos?limit=30" \
-            -H "Authorization: Bearer ${SECRET}"
+          BASE="${BASE%/}"
+          resp=$(curl -sfSL --location-trusted --max-redirs 8 -X GET \
+            "${BASE}/api/cron/update-videos?limit=30" \
+            -H "Authorization: Bearer ${SECRET}" \
+            -H "Accept: application/json")
+          echo "$resp"
+          echo "$resp" | jq -e 'type == "object"' >/dev/null
