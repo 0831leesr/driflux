@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
+import type { User } from "@supabase/supabase-js"
 import { AlertCircle } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { isSafeInternalRedirect } from "@/lib/safe-redirect"
@@ -16,12 +17,17 @@ interface LoginPageProps {
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
   const { next, error } = await searchParams
+
+  let user: User | null = null
+  try {
+    const supabase = await createServerClient()
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch (err) {
+    // Vercel 로그: fetch failed / ETIMEDOUT — Supabase Auth 일시 장애·네트워크 시에도 로그인 폼은 표시
+    console.warn("[login] getUser failed, showing login form:", err instanceof Error ? err.message : err)
+  }
 
   if (user) redirect(isSafeInternalRedirect(next) ? next : "/")
 

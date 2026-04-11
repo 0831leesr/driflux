@@ -30,9 +30,12 @@ export async function updateSession(request: NextRequest) {
   )
 
   // 중요: createServerClient와 getUser() 사이에는 다른 로직을 넣지 마세요.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    await supabase.auth.getUser()
+  } catch (err) {
+    // Supabase Auth fetch ETIMEDOUT 등 — 전체 요청 500 방지, 쿠키 갱신만 생략
+    console.warn("[supabase/proxy] getUser failed (network?):", err instanceof Error ? err.message : err)
+  }
 
   // [선택적 라우트 보호 예시]
   // 로그인이 필요한 특정 페이지(예: /mypage)에 접근하려는데 user가 없다면 로그인 페이지로 튕겨냅니다.
