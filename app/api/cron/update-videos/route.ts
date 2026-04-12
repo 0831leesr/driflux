@@ -114,7 +114,22 @@ export async function GET(request: Request) {
           publish_date: v.publishDate?.trim() || null,
         }))
 
-        const { error: insertError } = await adminSupabase.from("game_videos").insert(rows)
+        let { error: insertError } = await adminSupabase.from("game_videos").insert(rows)
+
+        if (
+          insertError &&
+          insertError.code === "PGRST204" &&
+          String(insertError.message).includes("publish_date")
+        ) {
+          const rowsLegacy = rows.map(({ publish_date: _omit, ...rest }) => rest)
+          const retry = await adminSupabase.from("game_videos").insert(rowsLegacy)
+          insertError = retry.error
+          if (!insertError) {
+            console.warn(
+              `[Videos Update] ${categoryId}: inserted without publish_date — run sql/35_game_videos_add_publish_date.sql on Supabase`,
+            )
+          }
+        }
 
         if (insertError) {
           console.error(`[Videos Update] Insert error for ${categoryId}:`, insertError)

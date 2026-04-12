@@ -140,6 +140,18 @@ function computeNewReleases(
    Server Component (page root)
 ───────────────────────────────────────────────────────── */
 
+async function homeSafe<T>(label: string, promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise
+  } catch (err) {
+    console.error(
+      `[RichzemHome] ${label} failed (transient network or upstream):`,
+      err instanceof Error ? err.message : err,
+    )
+    return fallback
+  }
+}
+
 export default async function RichzemHome() {
   const [
     topLiveGames,
@@ -150,13 +162,13 @@ export default async function RichzemHome() {
     upcomingEvents,
     esportsChannels,
   ] = await Promise.all([
-    getTopLiveGames(50),
-    getHistoricalTrending("yesterday"),
-    getHistoricalTrending("week"),
-    getHistoricalTrending("month"),
-    fetchAllGamesForHome(),
-    fetchUpcomingEvents(),
-    fetchEsportsChannels(),
+    homeSafe("getTopLiveGames", getTopLiveGames(50), []),
+    homeSafe("getHistoricalTrending(yesterday)", getHistoricalTrending("yesterday"), []),
+    homeSafe("getHistoricalTrending(week)", getHistoricalTrending("week"), []),
+    homeSafe("getHistoricalTrending(month)", getHistoricalTrending("month"), []),
+    homeSafe("fetchAllGamesForHome", fetchAllGamesForHome(), []),
+    homeSafe("fetchUpcomingEvents", fetchUpcomingEvents(), []),
+    homeSafe("fetchEsportsChannels", fetchEsportsChannels(), []),
   ])
 
   // 공유 DB 룩업 인덱스 (한 번만 생성)

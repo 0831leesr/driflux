@@ -67,6 +67,7 @@ async function main() {
   // Run specific migrations (safe, idempotent - ADD COLUMN IF NOT EXISTS)
   // Add more as needed. Use --all to run all numbered migrations.
   const DEFAULT_MIGRATIONS = [
+    "35_game_videos_add_publish_date.sql",
     "26_add_streams_has_drops.sql",
     "27_add_games_release_date.sql",
     "28_create_games_with_drops_view.sql",
