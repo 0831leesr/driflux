@@ -15,6 +15,8 @@ const IGDB_ALT_NAMES_URL = `${IGDB_BASE}/alternative_names`
 const IGDB_GAME_LOCALIZATIONS_URL = `${IGDB_BASE}/game_localizations`
 const IGDB_EXTERNAL_GAMES_URL = `${IGDB_BASE}/external_games`
 const IGDB_RELEASE_DATES_URL = `${IGDB_BASE}/release_dates`
+const IGDB_POPULARITY_TYPES_URL = `${IGDB_BASE}/popularity_types`
+const IGDB_POPULARITY_PRIMITIVES_URL = `${IGDB_BASE}/popularity_primitives`
 
 const FIELDS =
   "name, cover.url, first_release_date, screenshots.url, artworks.url, category, total_rating_count, summary, aggregated_rating, genres.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher"
@@ -333,6 +335,8 @@ export interface IGDBAnticipatedGame {
   name: string
   slug?: string
   first_release_date?: number
+  /** 0 = 메인 게임 (IGDB Game category enum) */
+  category?: number
   cover?: { url?: string }
   screenshots?: Array<{ url?: string }>
   artworks?: Array<{ url?: string }>
@@ -449,7 +453,7 @@ function igdbErrorSnippet(err: unknown, maxLen = 240): string {
 
 /** 리스트/필터용 — 중첩 필드(cover.url 등)는 일부 환경에서 빈 결과만 돌아오는 사례가 있어 분리 */
 const ANTICIPATED_LIST_FIELDS =
-  "fields id, name, slug, first_release_date, hypes, summary;"
+  "fields id, name, slug, first_release_date, hypes, summary, category;"
 const ANTICIPATED_MEDIA_FIELDS = "fields id, cover.url, screenshots.url, artworks.url;"
 
 function mergeAnticipatedPools(
@@ -465,6 +469,87 @@ function mergeAnticipatedPools(
     .sort((x, y) => (y.hypes ?? 0) - (x.hypes ?? 0))
     .slice(0, cap)
 }
+
+/** IGDB PopScore 문서의 "Most Wishlisted Upcoming" 유형 id 탐색 */
+function isWishlistedUpcomingPopularityName(name: string | undefined): boolean {
+  if (!name?.trim()) return false
+  const n = name.toLowerCase()
+  return (n.includes("wishlist") && n.includes("upcoming")) || n.includes("wishlisted upcoming")
+}
+
+async function findMostWishlistedUpcomingPopularityTypeId(): Promise<number | null> {
+  try {
+    const rows = await igdbFetch<{ id?: number; name?: string }>(
+      IGDB_POPULARITY_TYPES_URL,
+      "fields id, name; sort id asc; limit 100;"
+    )
+    for (const r of rows) {
+      if (typeof r.id !== "number" || !r.name) continue
+      if (isWishlistedUpcomingPopularityName(r.name)) return r.id
+    }
+  } catch (e) {
+    console.error("[IGDB] popularity_types:", e)
+  }
+  return null
+}
+
+async function fetchGameIdsFromPopularityPrimitives(
+  popularityTypeId: number,
+  limit: number
+): Promise<number[]> {
+  const body = `fields game_id, value; where popularity_type = ${popularityTypeId}; sort value desc; limit ${limit};`
+  const rows = await igdbFetch<{ game_id?: number }>(IGDB_POPULARITY_PRIMITIVES_URL, body)
+  const out: number[] = []
+  for (const r of rows) {
+    if (typeof r.game_id === "number") out.push(r.game_id)
+  }
+  return out
+}
+
+function dedupeGameIdsPreserveOrder(ids: number[]): number[] {
+  const seen = new Set<number>()
+  const out: number[] = []
+  for (const id of ids) {
+    if (!Number.isFinite(id) || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out
+}
+
+/** popularity_primitives 순서 유지, 메인 게임(category=0)만 */
+async function fetchAnticipatedGamesByIdsOrdered(ids: number[]): Promise<IGDBAnticipatedGame[]> {
+  const ordered = dedupeGameIdsPreserveOrder(ids)
+  if (ordered.length === 0) return []
+
+  const CHUNK = 45
+  const byId = new Map<number, IGDBAnticipatedGame>()
+  for (let i = 0; i < ordered.length; i += CHUNK) {
+    const chunk = ordered.slice(i, i + CHUNK)
+    const body = `${ANTICIPATED_LIST_FIELDS} where id = (${chunk.join(",")}); limit ${chunk.length + 5};`
+    const rows = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, body)
+    for (const r of rows) {
+      if (typeof r.id === "number") byId.set(r.id, r)
+    }
+    if (i + CHUNK < ordered.length) {
+      await new Promise((r) => setTimeout(r, 260))
+    }
+  }
+
+  const out: IGDBAnticipatedGame[] = []
+  for (const id of ordered) {
+    const g = byId.get(id)
+    if (g != null && (g.category == null || g.category === 0)) out.push(g)
+  }
+  return out
+}
+
+type AnticipatedCandidateSource =
+  | "popularity_wishlist_upcoming"
+  | "hypes_unreleased"
+  | "split_future_tba"
+  | "fallback_broad_hypes"
+  | "fallback_category_limit_only"
 
 /** IGDB 연결·응답 형식 확인 (빈 배열만 올 때 원인 추적) */
 async function igdbGamesConnectivityProbe(): Promise<string> {
@@ -526,8 +611,11 @@ async function enrichAnticipatedGamesWithMedia(
 }
 
 /**
- * IGDB 기대작 후보: 미래 출시 + TBA 풀을 각각 요청한 뒤 합칩니다.
- * 둘 다 비면(쿼리 오류·인증 실패 등) category=0 넓은 폴백 → 그것도 실패 시 sort 없이 최소 쿼리.
+ * IGDB 기대작 후보 (https://www.igdb.com/top-100/anticipated 에 가깝게)
+ * 1) PopScore "Most Wishlisted Upcoming" popularity_primitives 순서
+ * 2) 미출시 메인 게임만 hypes 내림차순 단일 쿼리
+ * 3) 미래 출시 / TBA 풀 분리 후 병합
+ * 4) category=0 넓은 폴백만 (전역 무작위 limit 폴백은 제외 — 잘못된 타이틀 선정 방지)
  */
 async function fetchAnticipatedGameCandidates(
   poolSize: number,
@@ -538,6 +626,7 @@ async function fetchAnticipatedGameCandidates(
   tbaPool: number
   usedFallback: boolean
   errors: string[]
+  candidateSource: AnticipatedCandidateSource
 }> {
   const errors: string[] = []
   const mergeCap = Math.min(500, poolSize * 4)
@@ -545,6 +634,52 @@ async function fetchAnticipatedGameCandidates(
 
   let futureGames: IGDBAnticipatedGame[] = []
   let tbaGames: IGDBAnticipatedGame[] = []
+
+  const wishlistTypeId = await findMostWishlistedUpcomingPopularityTypeId()
+  if (wishlistTypeId != null) {
+    try {
+      const popIds = await fetchGameIdsFromPopularityPrimitives(
+        wishlistTypeId,
+        Math.min(120, mergeCap)
+      )
+      const fromPop = await fetchAnticipatedGamesByIdsOrdered(popIds)
+      if (fromPop.length > 0) {
+        return {
+          games: fromPop.slice(0, mergeCap),
+          futurePool: 0,
+          tbaPool: 0,
+          usedFallback: false,
+          errors,
+          candidateSource: "popularity_wishlist_upcoming",
+        }
+      }
+    } catch (err) {
+      errors.push(`popularity:${igdbErrorSnippet(err)}`)
+      console.error("[IGDB] anticipated popularity wishlist upcoming:", err)
+    }
+  } else {
+    console.warn("[IGDB] No popularity_types row matched wishlisted upcoming; trying hypes unreleased")
+  }
+
+  try {
+    const hGames = await igdbFetch<IGDBAnticipatedGame>(
+      IGDB_GAMES_URL,
+      `${ANTICIPATED_LIST_FIELDS} where category = 0 & (first_release_date = null | first_release_date = 0 | first_release_date > ${nowUnix}); sort hypes desc; limit ${Math.min(100, mergeCap)};`
+    )
+    if (hGames.length > 0) {
+      return {
+        games: hGames,
+        futurePool: 0,
+        tbaPool: 0,
+        usedFallback: false,
+        errors,
+        candidateSource: "hypes_unreleased",
+      }
+    }
+  } catch (err) {
+    errors.push(`hypesUnreleased:${igdbErrorSnippet(err)}`)
+    console.error("[IGDB] anticipated hypes unreleased:", err)
+  }
 
   try {
     futureGames = await igdbFetch<IGDBAnticipatedGame>(
@@ -578,44 +713,50 @@ async function fetchAnticipatedGameCandidates(
   let games = mergeAnticipatedPools(futureGames, tbaGames, mergeCap)
   let usedFallback = false
 
+  if (games.length > 0) {
+    return {
+      games,
+      futurePool: futureGames.length,
+      tbaPool: tbaGames.length,
+      usedFallback: false,
+      errors,
+      candidateSource: "split_future_tba",
+    }
+  }
+
+  try {
+    games = await igdbFetch<IGDBAnticipatedGame>(
+      IGDB_GAMES_URL,
+      `${ANTICIPATED_LIST_FIELDS} where category = 0; sort hypes desc; limit ${broadLimit};`
+    )
+    usedFallback = true
+  } catch (err) {
+    errors.push(`broad:${igdbErrorSnippet(err)}`)
+    console.error("[IGDB] anticipated broad (category=0, hypes):", err)
+  }
+  if (games.length > 0) {
+    return {
+      games,
+      futurePool: futureGames.length,
+      tbaPool: tbaGames.length,
+      usedFallback,
+      errors,
+      candidateSource: "fallback_broad_hypes",
+    }
+  }
+
+  try {
+    games = await igdbFetch<IGDBAnticipatedGame>(
+      IGDB_GAMES_URL,
+      `${ANTICIPATED_LIST_FIELDS} where category = 0; limit ${broadLimit};`
+    )
+    usedFallback = true
+  } catch (err2) {
+    errors.push(`minimal:${igdbErrorSnippet(err2)}`)
+    console.error("[IGDB] anticipated minimal (category=0, no sort):", err2)
+  }
   if (games.length === 0) {
-    try {
-      games = await igdbFetch<IGDBAnticipatedGame>(
-        IGDB_GAMES_URL,
-        `${ANTICIPATED_LIST_FIELDS} where category = 0; sort hypes desc; limit ${broadLimit};`
-      )
-      usedFallback = true
-    } catch (err) {
-      errors.push(`broad:${igdbErrorSnippet(err)}`)
-      console.error("[IGDB] anticipated broad (category=0, hypes):", err)
-    }
-    if (games.length === 0) {
-      try {
-        games = await igdbFetch<IGDBAnticipatedGame>(
-          IGDB_GAMES_URL,
-          `${ANTICIPATED_LIST_FIELDS} where category = 0; limit ${broadLimit};`
-        )
-        usedFallback = true
-      } catch (err2) {
-        errors.push(`minimal:${igdbErrorSnippet(err2)}`)
-        console.error("[IGDB] anticipated minimal (category=0, no sort):", err2)
-      }
-    }
-    if (games.length === 0) {
-      try {
-        games = await igdbFetch<IGDBAnticipatedGame>(
-          IGDB_GAMES_URL,
-          `${ANTICIPATED_LIST_FIELDS} limit ${broadLimit};`
-        )
-        usedFallback = true
-      } catch (err3) {
-        errors.push(`noWhere:${igdbErrorSnippet(err3)}`)
-        console.error("[IGDB] anticipated no-where limit:", err3)
-      }
-    }
-    if (games.length === 0) {
-      errors.push(await igdbGamesConnectivityProbe())
-    }
+    errors.push(await igdbGamesConnectivityProbe())
   }
 
   return {
@@ -624,6 +765,7 @@ async function fetchAnticipatedGameCandidates(
     tbaPool: tbaGames.length,
     usedFallback,
     errors,
+    candidateSource: "fallback_category_limit_only",
   }
 }
 
@@ -638,6 +780,8 @@ export interface FetchAnticipatedGamesStats {
   igdbUsedFallback?: boolean
   /** IGDB 요청 실패 시 마지막 오류 메시지(민감정보 없음, 길이 제한) */
   igdbErrors?: string[]
+  /** 후보 풀: popularity_wishlist_upcoming | hypes_unreleased | split_future_tba | fallback_* */
+  igdbCandidateSource?: string
 }
 
 export interface FetchAnticipatedGamesResult {
@@ -671,6 +815,9 @@ export async function fetchTopAnticipatedGames(
     if (partial.igdbErrors != null && partial.igdbErrors.length > 0) {
       s.igdbErrors = partial.igdbErrors
     }
+    if (partial.igdbCandidateSource != null && partial.igdbCandidateSource !== "") {
+      s.igdbCandidateSource = partial.igdbCandidateSource
+    }
     return s
   }
 
@@ -694,9 +841,14 @@ export async function fetchTopAnticipatedGames(
     }
   }
 
-  const { games: candidates, futurePool, tbaPool, usedFallback, errors: packErrors } = pack
+  const { games: candidates, futurePool, tbaPool, usedFallback, errors: packErrors, candidateSource } =
+    pack
 
-  const statsExtras = (): Pick<FetchAnticipatedGamesStats, "igdbUsedFallback" | "igdbErrors"> => ({
+  const statsExtras = (): Pick<
+    FetchAnticipatedGamesStats,
+    "igdbUsedFallback" | "igdbErrors" | "igdbCandidateSource"
+  > => ({
+    igdbCandidateSource: candidateSource,
     ...(usedFallback ? { igdbUsedFallback: true } : {}),
     ...(packErrors.length > 0 ? { igdbErrors: packErrors } : {}),
   })
