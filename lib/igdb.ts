@@ -456,6 +456,20 @@ const ANTICIPATED_LIST_FIELDS =
   "fields id, name, slug, first_release_date, hypes, summary, category;"
 const ANTICIPATED_MEDIA_FIELDS = "fields id, cover.url, screenshots.url, artworks.url;"
 
+/** IGDB 웹 /top-100/anticipated 과 맞추기 위해 Popularity primitive 상위 N까지만 사용 */
+const ANTICIPATED_POPULARITY_RANK_CAP = 100
+
+/**
+ * 미출시 후보에 적용할 최소 hypes (관심도 낮은 작 제외).
+ * `IGDB_ANTICIPATED_MIN_HYPES=0` 이면 비활성화에 가깝게 완화.
+ */
+function getAnticipatedMinHypes(): number {
+  const raw = process.env.IGDB_ANTICIPATED_MIN_HYPES?.trim()
+  if (raw === "" || raw == null) return 100
+  const n = parseInt(raw, 10)
+  return Number.isFinite(n) && n >= 0 ? n : 100
+}
+
 function mergeAnticipatedPools(
   a: IGDBAnticipatedGame[],
   b: IGDBAnticipatedGame[],
@@ -629,8 +643,10 @@ async function fetchAnticipatedGameCandidates(
   candidateSource: AnticipatedCandidateSource
 }> {
   const errors: string[] = []
-  const mergeCap = Math.min(500, poolSize * 4)
-  const broadLimit = Math.min(500, poolSize * 8)
+  const minHypes = getAnticipatedMinHypes()
+  const topCap = ANTICIPATED_POPULARITY_RANK_CAP
+  const mergeCap = Math.min(topCap, Math.max(poolSize * 2, poolSize))
+  const broadLimit = topCap
 
   let futureGames: IGDBAnticipatedGame[] = []
   let tbaGames: IGDBAnticipatedGame[] = []
@@ -638,14 +654,13 @@ async function fetchAnticipatedGameCandidates(
   const wishlistTypeId = await findMostWishlistedUpcomingPopularityTypeId()
   if (wishlistTypeId != null) {
     try {
-      const popIds = await fetchGameIdsFromPopularityPrimitives(
-        wishlistTypeId,
-        Math.min(120, mergeCap)
-      )
+      const popIds = await fetchGameIdsFromPopularityPrimitives(wishlistTypeId, topCap)
       const fromPop = await fetchAnticipatedGamesByIdsOrdered(popIds)
       if (fromPop.length > 0) {
+        let ranked = fromPop.filter((g) => (g.hypes ?? 0) >= minHypes)
+        if (ranked.length === 0) ranked = fromPop
         return {
-          games: fromPop.slice(0, mergeCap),
+          games: ranked,
           futurePool: 0,
           tbaPool: 0,
           usedFallback: false,
@@ -664,7 +679,7 @@ async function fetchAnticipatedGameCandidates(
   try {
     const hGames = await igdbFetch<IGDBAnticipatedGame>(
       IGDB_GAMES_URL,
-      `${ANTICIPATED_LIST_FIELDS} where category = 0 & (first_release_date = null | first_release_date = 0 | first_release_date > ${nowUnix}); sort hypes desc; limit ${Math.min(100, mergeCap)};`
+      `${ANTICIPATED_LIST_FIELDS} where category = 0 & hypes >= ${minHypes} & (first_release_date = null | first_release_date = 0 | first_release_date > ${nowUnix}); sort hypes desc; limit ${topCap};`
     )
     if (hGames.length > 0) {
       return {
@@ -684,7 +699,7 @@ async function fetchAnticipatedGameCandidates(
   try {
     futureGames = await igdbFetch<IGDBAnticipatedGame>(
       IGDB_GAMES_URL,
-      `${ANTICIPATED_LIST_FIELDS} where category = 0 & first_release_date > ${nowUnix}; sort hypes desc; limit ${poolSize};`
+      `${ANTICIPATED_LIST_FIELDS} where category = 0 & hypes >= ${minHypes} & first_release_date > ${nowUnix}; sort hypes desc; limit ${poolSize};`
     )
   } catch (err) {
     errors.push(`future:${igdbErrorSnippet(err)}`)
@@ -694,7 +709,7 @@ async function fetchAnticipatedGameCandidates(
   try {
     tbaGames = await igdbFetch<IGDBAnticipatedGame>(
       IGDB_GAMES_URL,
-      `${ANTICIPATED_LIST_FIELDS} where category = 0 & (first_release_date = null | first_release_date = 0); sort hypes desc; limit ${poolSize};`
+      `${ANTICIPATED_LIST_FIELDS} where category = 0 & hypes >= ${minHypes} & (first_release_date = null | first_release_date = 0); sort hypes desc; limit ${poolSize};`
     )
   } catch (err) {
     errors.push(`tba:${igdbErrorSnippet(err)}`)
@@ -702,7 +717,7 @@ async function fetchAnticipatedGameCandidates(
     try {
       tbaGames = await igdbFetch<IGDBAnticipatedGame>(
         IGDB_GAMES_URL,
-        `${ANTICIPATED_LIST_FIELDS} where category = 0 & first_release_date = null; sort hypes desc; limit ${poolSize};`
+        `${ANTICIPATED_LIST_FIELDS} where category = 0 & hypes >= ${minHypes} & first_release_date = null; sort hypes desc; limit ${poolSize};`
       )
     } catch (err2) {
       errors.push(`tbaNull:${igdbErrorSnippet(err2)}`)
@@ -727,7 +742,7 @@ async function fetchAnticipatedGameCandidates(
   try {
     games = await igdbFetch<IGDBAnticipatedGame>(
       IGDB_GAMES_URL,
-      `${ANTICIPATED_LIST_FIELDS} where category = 0; sort hypes desc; limit ${broadLimit};`
+      `${ANTICIPATED_LIST_FIELDS} where category = 0 & hypes >= ${minHypes}; sort hypes desc; limit ${broadLimit};`
     )
     usedFallback = true
   } catch (err) {
@@ -748,7 +763,7 @@ async function fetchAnticipatedGameCandidates(
   try {
     games = await igdbFetch<IGDBAnticipatedGame>(
       IGDB_GAMES_URL,
-      `${ANTICIPATED_LIST_FIELDS} where category = 0; limit ${broadLimit};`
+      `${ANTICIPATED_LIST_FIELDS} where category = 0 & hypes >= ${minHypes}; limit ${broadLimit};`
     )
     usedFallback = true
   } catch (err2) {
@@ -782,6 +797,8 @@ export interface FetchAnticipatedGamesStats {
   igdbErrors?: string[]
   /** 후보 풀: popularity_wishlist_upcoming | hypes_unreleased | split_future_tba | fallback_* */
   igdbCandidateSource?: string
+  /** 적용된 최소 hypes 하한 (`IGDB_ANTICIPATED_MIN_HYPES`, 기본 100) */
+  igdbMinHypesApplied?: number
 }
 
 export interface FetchAnticipatedGamesResult {
@@ -802,6 +819,7 @@ export async function fetchTopAnticipatedGames(
   poolSize = 50
 ): Promise<FetchAnticipatedGamesResult> {
   const nowUnix = Math.floor(Date.now() / 1000)
+  const minHypesApplied = getAnticipatedMinHypes()
 
   const buildStats = (partial: Partial<FetchAnticipatedGamesStats>): FetchAnticipatedGamesStats => {
     const s: FetchAnticipatedGamesStats = {
@@ -810,6 +828,7 @@ export async function fetchTopAnticipatedGames(
       mergedCandidates: partial.mergedCandidates ?? 0,
       unreleasedCandidates: partial.unreleasedCandidates ?? 0,
       resolvedWithDate: partial.resolvedWithDate ?? 0,
+      igdbMinHypesApplied: partial.igdbMinHypesApplied ?? minHypesApplied,
     }
     if (partial.igdbUsedFallback) s.igdbUsedFallback = true
     if (partial.igdbErrors != null && partial.igdbErrors.length > 0) {
