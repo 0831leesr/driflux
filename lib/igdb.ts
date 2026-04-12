@@ -312,6 +312,22 @@ export async function fetchEarliestReleaseDateFromIGDB(igdbGameId: number): Prom
   }
 }
 
+/** 가장 이른 *미래* 출시 시각 (초). TBA 게임의 플랫폼별 확정일 조회용 */
+async function fetchNextFutureReleaseDateFromIGDB(
+  igdbGameId: number,
+  nowUnix: number
+): Promise<number | null> {
+  try {
+    const body = `fields date; where game = ${igdbGameId} & date > ${nowUnix}; sort date asc; limit 1;`
+    const res = await igdbFetch<{ date?: number }>(IGDB_RELEASE_DATES_URL, body)
+    const date = res[0]?.date
+    if (date == null || date <= nowUnix) return null
+    return date
+  } catch {
+    return null
+  }
+}
+
 export interface IGDBAnticipatedGame {
   id: number
   name: string
@@ -384,6 +400,7 @@ function pickHeaderImageFromAnticipatedGame(game: IGDBAnticipatedGame): string |
 
 /**
  * 여러 게임에 대해 date > now 인 release_dates 중 게임별 가장 이른 날짜 조회
+ * IGDB는 `(game=a|game=b)` 조합이 빈 배열만 줄 때가 있어 `game = (a,b)` 형식을 우선 시도
  */
 async function fetchFutureReleaseDatesByGameIds(
   gameIds: number[],
@@ -393,21 +410,30 @@ async function fetchFutureReleaseDatesByGameIds(
   if (gameIds.length === 0) return map
 
   const unique = [...new Set(gameIds)]
-  const orClause = unique.map((id) => `game = ${id}`).join(" | ")
-  const body = `fields game, date; where (${orClause}) & date > ${nowUnix}; sort date asc; limit 500;`
-
-  try {
-    const rows = await igdbFetch<{ game?: number; date?: number }>(IGDB_RELEASE_DATES_URL, body)
+  const ingest = (rows: { game?: number; date?: number }[]) => {
     for (const row of rows) {
       const gid = row.game
       const d = row.date
-      if (gid == null || d == null || d <= 0) continue
+      if (gid == null || d == null || d <= nowUnix) continue
       const prev = map.get(gid)
       if (prev === undefined || d < prev) map.set(gid, d)
     }
-  } catch (err) {
-    console.error("[IGDB] fetchFutureReleaseDatesByGameIds error:", err)
   }
+
+  const inListBody = `fields game, date; where game = (${unique.join(",")}) & date > ${nowUnix}; sort date asc; limit 500;`
+  const orClause = unique.map((id) => `game = ${id}`).join(" | ")
+  const orBody = `fields game, date; where (${orClause}) & date > ${nowUnix}; sort date asc; limit 500;`
+
+  for (const body of [inListBody, orBody]) {
+    try {
+      const rows = await igdbFetch<{ game?: number; date?: number }>(IGDB_RELEASE_DATES_URL, body)
+      ingest(rows)
+      if (map.size > 0) break
+    } catch (err) {
+      console.error("[IGDB] fetchFutureReleaseDatesByGameIds:", err)
+    }
+  }
+
   return map
 }
 
@@ -514,8 +540,8 @@ async function fetchAnticipatedGameCandidates(
   errors: string[]
 }> {
   const errors: string[] = []
-  const cap = poolSize * 2
-  const broadLimit = Math.min(100, cap)
+  const mergeCap = Math.min(500, poolSize * 4)
+  const broadLimit = Math.min(500, poolSize * 8)
 
   let futureGames: IGDBAnticipatedGame[] = []
   let tbaGames: IGDBAnticipatedGame[] = []
@@ -549,7 +575,7 @@ async function fetchAnticipatedGameCandidates(
     }
   }
 
-  let games = mergeAnticipatedPools(futureGames, tbaGames, cap)
+  let games = mergeAnticipatedPools(futureGames, tbaGames, mergeCap)
   let usedFallback = false
 
   if (games.length === 0) {
@@ -715,6 +741,10 @@ export async function fetchTopAnticipatedGames(
     const frd = g.first_release_date
     let ts: number | null =
       frd != null && frd > 0 && frd > nowUnix ? frd : (releaseByGame.get(g.id) ?? null)
+    if (ts == null) {
+      await new Promise((r) => setTimeout(r, 250))
+      ts = await fetchNextFutureReleaseDateFromIGDB(g.id, nowUnix)
+    }
     if (ts == null) continue
     const english = g.name.trim()
     const display = koreanByGame.get(g.id)?.trim() || english
