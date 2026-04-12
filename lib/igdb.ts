@@ -314,22 +314,6 @@ export async function fetchEarliestReleaseDateFromIGDB(igdbGameId: number): Prom
   }
 }
 
-/** 가장 이른 *미래* 출시 시각 (초). TBA 게임의 플랫폼별 확정일 조회용 */
-async function fetchNextFutureReleaseDateFromIGDB(
-  igdbGameId: number,
-  nowUnix: number
-): Promise<number | null> {
-  try {
-    const body = `fields date; where game = ${igdbGameId} & date > ${nowUnix}; sort date asc; limit 1;`
-    const res = await igdbFetch<{ date?: number }>(IGDB_RELEASE_DATES_URL, body)
-    const date = res[0]?.date
-    if (date == null || date <= nowUnix) return null
-    return date
-  } catch {
-    return null
-  }
-}
-
 export interface IGDBAnticipatedGame {
   id: number
   name: string
@@ -403,42 +387,83 @@ function pickHeaderImageFromAnticipatedGame(game: IGDBAnticipatedGame): string |
 }
 
 /**
- * 여러 게임에 대해 date > now 인 release_dates 중 게임별 가장 이른 날짜 조회
- * IGDB는 `(game=a|game=b)` 조합이 빈 배열만 줄 때가 있어 `game = (a,b)` 형식을 우선 시도
+ * 플랫폼별 확정 출시일(date>0)만 고려.
+ * 하나라도 now 이하(이미 출시됨)이면 기대작 후보 제외.
+ * 모두 미래이면 그중 가장 이른 시각을 캘린더 출시일로 사용.
  */
-async function fetchFutureReleaseDatesByGameIds(
+function summarizeReleaseDatesForAnticipated(
+  dates: number[],
+  nowUnix: number
+): { excluded: boolean; earliestFuture: number | null } {
+  if (dates.length === 0) return { excluded: false, earliestFuture: null }
+  if (dates.some((d) => d <= nowUnix)) return { excluded: true, earliestFuture: null }
+  return { excluded: false, earliestFuture: Math.min(...dates) }
+}
+
+async function fetchReleaseDateSummaryForGame(
+  igdbGameId: number,
+  nowUnix: number
+): Promise<{ excluded: boolean; earliestFuture: number | null }> {
+  try {
+    const body = `fields date; where game = ${igdbGameId} & date > 0; limit 500;`
+    const rows = await igdbFetch<{ date?: number }>(IGDB_RELEASE_DATES_URL, body)
+    const dates = rows.map((r) => r.date).filter((d): d is number => d != null && d > 0)
+    return summarizeReleaseDatesForAnticipated(dates, nowUnix)
+  } catch {
+    return { excluded: false, earliestFuture: null }
+  }
+}
+
+async function fetchReleaseDateSummariesByGameIds(
   gameIds: number[],
   nowUnix: number
-): Promise<Map<number, number>> {
-  const map = new Map<number, number>()
-  if (gameIds.length === 0) return map
+): Promise<Map<number, { excluded: boolean; earliestFuture: number | null }>> {
+  const result = new Map<number, { excluded: boolean; earliestFuture: number | null }>()
+  if (gameIds.length === 0) return result
 
   const unique = [...new Set(gameIds)]
-  const ingest = (rows: { game?: number; date?: number }[]) => {
-    for (const row of rows) {
-      const gid = row.game
-      const d = row.date
-      if (gid == null || d == null || d <= nowUnix) continue
-      const prev = map.get(gid)
-      if (prev === undefined || d < prev) map.set(gid, d)
+  const allRows: { game?: number; date?: number }[] = []
+  const CHUNK = 25
+
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK)
+    const inList = `fields game, date; where game = (${chunk.join(",")}) & date > 0; limit 500;`
+    const orClause = chunk.map((id) => `game = ${id}`).join(" | ")
+    const orBody = `fields game, date; where (${orClause}) & date > 0; limit 500;`
+
+    let rows: { game?: number; date?: number }[] = []
+    for (const body of [inList, orBody]) {
+      try {
+        const r = await igdbFetch<{ game?: number; date?: number }>(IGDB_RELEASE_DATES_URL, body)
+        if (r.length > 0) {
+          rows = r
+          break
+        }
+      } catch (err) {
+        console.error("[IGDB] fetchReleaseDateSummariesByGameIds:", err)
+      }
+    }
+    allRows.push(...rows)
+    if (i + CHUNK < unique.length) {
+      await new Promise((r) => setTimeout(r, 260))
     }
   }
 
-  const inListBody = `fields game, date; where game = (${unique.join(",")}) & date > ${nowUnix}; sort date asc; limit 500;`
-  const orClause = unique.map((id) => `game = ${id}`).join(" | ")
-  const orBody = `fields game, date; where (${orClause}) & date > ${nowUnix}; sort date asc; limit 500;`
-
-  for (const body of [inListBody, orBody]) {
-    try {
-      const rows = await igdbFetch<{ game?: number; date?: number }>(IGDB_RELEASE_DATES_URL, body)
-      ingest(rows)
-      if (map.size > 0) break
-    } catch (err) {
-      console.error("[IGDB] fetchFutureReleaseDatesByGameIds:", err)
-    }
+  const byGame = new Map<number, number[]>()
+  for (const row of allRows) {
+    const gid = row.game
+    const d = row.date
+    if (gid == null || d == null || d <= 0) continue
+    const arr = byGame.get(gid) ?? []
+    arr.push(d)
+    byGame.set(gid, arr)
   }
 
-  return map
+  for (const id of unique) {
+    const dates = byGame.get(id) ?? []
+    result.set(id, summarizeReleaseDatesForAnticipated(dates, nowUnix))
+  }
+  return result
 }
 
 function isAlreadyReleased(game: IGDBAnticipatedGame, nowUnix: number): boolean {
@@ -790,6 +815,8 @@ export interface FetchAnticipatedGamesStats {
   igdbTbaPool: number
   mergedCandidates: number
   unreleasedCandidates: number
+  /** release_dates 기준 이미 한 플랫폼이라도 출시된 작으로 제외된 수 */
+  igdbExcludedAlreadyShipped?: number
   resolvedWithDate: number
   /** 미래/TBA 전용 쿼리가 비었을 때 category=0 폴백을 썼으면 true */
   igdbUsedFallback?: boolean
@@ -829,6 +856,9 @@ export async function fetchTopAnticipatedGames(
       unreleasedCandidates: partial.unreleasedCandidates ?? 0,
       resolvedWithDate: partial.resolvedWithDate ?? 0,
       igdbMinHypesApplied: partial.igdbMinHypesApplied ?? minHypesApplied,
+    }
+    if (partial.igdbExcludedAlreadyShipped !== undefined) {
+      s.igdbExcludedAlreadyShipped = partial.igdbExcludedAlreadyShipped
     }
     if (partial.igdbUsedFallback) s.igdbUsedFallback = true
     if (partial.igdbErrors != null && partial.igdbErrors.length > 0) {
@@ -896,25 +926,43 @@ export async function fetchTopAnticipatedGames(
     }
   }
 
-  const koreanByGame = await fetchKoreanTitlesByGameIds(unreleased.map((g) => g.id))
-
-  const needReleaseRows = unreleased.filter((g) => {
-    const frd = g.first_release_date
-    return frd == null || frd <= 0 || frd <= nowUnix
-  })
-  const releaseByGame = await fetchFutureReleaseDatesByGameIds(
-    needReleaseRows.map((g) => g.id),
+  const releaseSummaries = await fetchReleaseDateSummariesByGameIds(
+    unreleased.map((g) => g.id),
     nowUnix
   )
+  const platformEligible = unreleased.filter((g) => !releaseSummaries.get(g.id)?.excluded)
+  const igdbExcludedAlreadyShipped = unreleased.length - platformEligible.length
+
+  if (platformEligible.length === 0) {
+    return {
+      games: [],
+      stats: buildStats({
+        igdbFuturePool: futurePool,
+        igdbTbaPool: tbaPool,
+        mergedCandidates: candidates.length,
+        unreleasedCandidates: unreleased.length,
+        igdbExcludedAlreadyShipped,
+        resolvedWithDate: 0,
+        ...statsExtras(),
+      }),
+    }
+  }
+
+  const koreanByGame = await fetchKoreanTitlesByGameIds(platformEligible.map((g) => g.id))
 
   const resolved: IGDBAnticipatedGameResolved[] = []
-  for (const g of unreleased) {
-    const frd = g.first_release_date
-    let ts: number | null =
-      frd != null && frd > 0 && frd > nowUnix ? frd : (releaseByGame.get(g.id) ?? null)
+  for (const g of platformEligible) {
+    const sum = releaseSummaries.get(g.id) ?? { excluded: false, earliestFuture: null }
+    let ts: number | null = sum.earliestFuture
+    if (ts == null) {
+      const frd = g.first_release_date
+      if (frd != null && frd > 0 && frd > nowUnix) ts = frd
+    }
     if (ts == null) {
       await new Promise((r) => setTimeout(r, 250))
-      ts = await fetchNextFutureReleaseDateFromIGDB(g.id, nowUnix)
+      const again = await fetchReleaseDateSummaryForGame(g.id, nowUnix)
+      if (again.excluded) continue
+      ts = again.earliestFuture
     }
     if (ts == null) continue
     const english = g.name.trim()
@@ -938,6 +986,7 @@ export async function fetchTopAnticipatedGames(
       igdbTbaPool: tbaPool,
       mergedCandidates: candidates.length,
       unreleasedCandidates: unreleased.length,
+      igdbExcludedAlreadyShipped,
       resolvedWithDate: enriched.length,
       ...statsExtras(),
     }),

@@ -9,7 +9,8 @@ import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
  * GET /api/cron/update-new-releases
  *
  * PopScore "Most Wishlisted Upcoming" 상위 100 + 최소 hypes(기본 100, `IGDB_ANTICIPATED_MIN_HYPES`)로
- * 관심도 낮은 후보를 줄인 뒤, 출시일이 확정된 상위 10개를
+ * 후보를 좁힌 뒤, `release_dates`에서 한 플랫폼이라도 이미 출시된 작은 제외하고
+ * 전 플랫폼 확정일 중 가장 이른 미래 일정만 출시일로 쓰는 상위 10개를
  * events 테이블에 event_type='New' 로 추가합니다.
  * title=한글 정발명 우선·없으면 영문, game_category=영문, description=`{title} 출시`,
  * external_url=NULL, header_image_url=스크린샷/아트/커버 URL 또는 NULL.
