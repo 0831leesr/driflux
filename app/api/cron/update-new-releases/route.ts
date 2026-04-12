@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   const startedAt = Date.now()
 
   try {
-    const anticipatedGames = await fetchTopAnticipatedGames(10, 50)
+    const { games: anticipatedGames, stats: igdbStats } = await fetchTopAnticipatedGames(10, 50)
     const resolvedCount = anticipatedGames.length
 
     if (resolvedCount === 0) {
@@ -54,8 +54,9 @@ export async function GET(request: Request) {
         resolved: 0,
         inserted: 0,
         skipped: 0,
+        igdb: igdbStats,
         message:
-          "No anticipated games with a future release date (check IGDB credentials or pool had only released/TBA titles)",
+          "No anticipated games with a future release date (see igdb.* pool counts; verify TWITCH_* env and IGDB data)",
       })
     }
 
@@ -101,6 +102,7 @@ export async function GET(request: Request) {
       resolved: resolvedCount,
       inserted: insertedCount,
       skipped: skippedCount,
+      igdb: igdbStats,
     })
   } catch (err) {
     console.error("[update-new-releases] Error:", err)

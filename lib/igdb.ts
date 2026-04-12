@@ -416,38 +416,114 @@ function isAlreadyReleased(game: IGDBAnticipatedGame, nowUnix: number): boolean 
   return frd != null && frd > 0 && frd <= nowUnix
 }
 
+const ANTICIPATED_GAME_FIELDS =
+  "fields id, name, slug, first_release_date, cover.url, screenshots.url, artworks.url, hypes, summary;"
+
+/**
+ * IGDB 기대작 후보: `category=0` 전체를 hypes 정렬하면 이미 출시된 대작만 상단에 몰립니다.
+ * 미래 first_release_date 가 있는 게임 + TBA(null/0) 게임을 각각 hypes 정렬해 합칩니다.
+ */
+async function fetchAnticipatedGameCandidates(
+  poolSize: number,
+  nowUnix: number
+): Promise<{ games: IGDBAnticipatedGame[]; futurePool: number; tbaPool: number }> {
+  const bodyFuture = `${ANTICIPATED_GAME_FIELDS} where category = 0 & first_release_date > ${nowUnix}; sort hypes desc; limit ${poolSize};`
+  const bodyTba = `${ANTICIPATED_GAME_FIELDS} where category = 0 & (first_release_date = null | first_release_date = 0); sort hypes desc; limit ${poolSize};`
+
+  let futureGames: IGDBAnticipatedGame[] = []
+  let tbaGames: IGDBAnticipatedGame[] = []
+  try {
+    futureGames = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, bodyFuture)
+  } catch (err) {
+    console.error("[IGDB] anticipated candidates (future first_release_date):", err)
+  }
+  try {
+    tbaGames = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, bodyTba)
+  } catch (err) {
+    console.error("[IGDB] anticipated candidates (TBA null|0):", err)
+    try {
+      const bodyTbaNullOnly = `${ANTICIPATED_GAME_FIELDS} where category = 0 & first_release_date = null; sort hypes desc; limit ${poolSize};`
+      tbaGames = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, bodyTbaNullOnly)
+    } catch (err2) {
+      console.error("[IGDB] anticipated candidates (TBA null only):", err2)
+    }
+  }
+
+  const byId = new Map<number, IGDBAnticipatedGame>()
+  for (const g of [...futureGames, ...tbaGames]) {
+    if (!byId.has(g.id)) byId.set(g.id, g)
+  }
+
+  const games = [...byId.values()]
+    .sort((a, b) => (b.hypes ?? 0) - (a.hypes ?? 0))
+    .slice(0, poolSize * 2)
+
+  return { games, futurePool: futureGames.length, tbaPool: tbaGames.length }
+}
+
+/** 크론/호출부에서 IGDB 풀 상태를 진단할 때 사용 */
+export interface FetchAnticipatedGamesStats {
+  igdbFuturePool: number
+  igdbTbaPool: number
+  mergedCandidates: number
+  unreleasedCandidates: number
+  resolvedWithDate: number
+}
+
+export interface FetchAnticipatedGamesResult {
+  games: IGDBAnticipatedGameResolved[]
+  stats: FetchAnticipatedGamesStats
+}
+
 /**
  * IGDB Top Anticipated Games → 미래 출시일이 정해진 항목만 상위 N개
  *
- * 웹 /top-100/anticipated 와 같이 hypes 내림차순 후보를 넉넉히 가져온 뒤,
- * `first_release_date`가 없거나 TBA인 게임은 `release_dates`로 보완합니다.
- * (기존: API where에 first_release_date > now 를 넣어 결과가 0건이 되는 경우가 많음)
+ * 미출시 후보만 모은 뒤 hypes 순으로 `release_dates`로 TBA 출시일을 보완합니다.
  *
  * @param take - 반환할 게임 수 (기본 10)
- * @param poolSize - hypes 정렬 풀 크기 (기본 50)
+ * @param poolSize - 미출시 풀당 API limit (기본 50, 두 쿼리 합쳐 최대 ~2×poolSize 후 dedupe)
  */
 export async function fetchTopAnticipatedGames(
   take = 10,
   poolSize = 50
-): Promise<IGDBAnticipatedGameResolved[]> {
+): Promise<FetchAnticipatedGamesResult> {
   const nowUnix = Math.floor(Date.now() / 1000)
-  const body = [
-    "fields id, name, slug, first_release_date, cover.url, screenshots.url, artworks.url, hypes, summary;",
-    "where category = 0;",
-    "sort hypes desc;",
-    `limit ${poolSize};`,
-  ].join(" ")
+  const emptyStats = (partial: Partial<FetchAnticipatedGamesStats> = {}): FetchAnticipatedGamesStats => ({
+    igdbFuturePool: partial.igdbFuturePool ?? 0,
+    igdbTbaPool: partial.igdbTbaPool ?? 0,
+    mergedCandidates: partial.mergedCandidates ?? 0,
+    unreleasedCandidates: partial.unreleasedCandidates ?? 0,
+    resolvedWithDate: partial.resolvedWithDate ?? 0,
+  })
 
-  let candidates: IGDBAnticipatedGame[]
+  let candidates: IGDBAnticipatedGame[] = []
+  let futurePool = 0
+  let tbaPool = 0
   try {
-    candidates = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, body)
+    const pack = await fetchAnticipatedGameCandidates(poolSize, nowUnix)
+    candidates = pack.games
+    futurePool = pack.futurePool
+    tbaPool = pack.tbaPool
   } catch (err) {
-    console.error("[IGDB] fetchTopAnticipatedGames (games) error:", err)
-    return []
+    console.error("[IGDB] fetchTopAnticipatedGames (candidates) error:", err)
+    return { games: [], stats: emptyStats() }
+  }
+
+  if (candidates.length === 0) {
+    return { games: [], stats: emptyStats({ igdbFuturePool: futurePool, igdbTbaPool: tbaPool }) }
   }
 
   const unreleased = candidates.filter((g) => !isAlreadyReleased(g, nowUnix))
-  if (unreleased.length === 0) return []
+  if (unreleased.length === 0) {
+    return {
+      games: [],
+      stats: emptyStats({
+        igdbFuturePool: futurePool,
+        igdbTbaPool: tbaPool,
+        mergedCandidates: candidates.length,
+      }),
+    }
+  }
 
   const koreanByGame = await fetchKoreanTitlesByGameIds(unreleased.map((g) => g.id))
 
@@ -478,7 +554,16 @@ export async function fetchTopAnticipatedGames(
     if (resolved.length >= take) break
   }
 
-  return resolved
+  return {
+    games: resolved,
+    stats: {
+      igdbFuturePool: futurePool,
+      igdbTbaPool: tbaPool,
+      mergedCandidates: candidates.length,
+      unreleasedCandidates: unreleased.length,
+      resolvedWithDate: resolved.length,
+    },
+  }
 }
 
 /**
