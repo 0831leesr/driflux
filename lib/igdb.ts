@@ -416,49 +416,116 @@ function isAlreadyReleased(game: IGDBAnticipatedGame, nowUnix: number): boolean 
   return frd != null && frd > 0 && frd <= nowUnix
 }
 
+function igdbErrorSnippet(err: unknown, maxLen = 240): string {
+  const s = err instanceof Error ? err.message : String(err)
+  return s.length <= maxLen ? s : `${s.slice(0, maxLen)}…`
+}
+
 const ANTICIPATED_GAME_FIELDS =
   "fields id, name, slug, first_release_date, cover.url, screenshots.url, artworks.url, hypes, summary;"
 
+function mergeAnticipatedPools(
+  a: IGDBAnticipatedGame[],
+  b: IGDBAnticipatedGame[],
+  cap: number
+): IGDBAnticipatedGame[] {
+  const byId = new Map<number, IGDBAnticipatedGame>()
+  for (const g of [...a, ...b]) {
+    if (!byId.has(g.id)) byId.set(g.id, g)
+  }
+  return [...byId.values()]
+    .sort((x, y) => (y.hypes ?? 0) - (x.hypes ?? 0))
+    .slice(0, cap)
+}
+
 /**
- * IGDB 기대작 후보: `category=0` 전체를 hypes 정렬하면 이미 출시된 대작만 상단에 몰립니다.
- * 미래 first_release_date 가 있는 게임 + TBA(null/0) 게임을 각각 hypes 정렬해 합칩니다.
+ * IGDB 기대작 후보: 미래 출시 + TBA 풀을 각각 요청한 뒤 합칩니다.
+ * 둘 다 비면(쿼리 오류·인증 실패 등) category=0 넓은 폴백 → 그것도 실패 시 sort 없이 최소 쿼리.
  */
 async function fetchAnticipatedGameCandidates(
   poolSize: number,
   nowUnix: number
-): Promise<{ games: IGDBAnticipatedGame[]; futurePool: number; tbaPool: number }> {
-  const bodyFuture = `${ANTICIPATED_GAME_FIELDS} where category = 0 & first_release_date > ${nowUnix}; sort hypes desc; limit ${poolSize};`
-  const bodyTba = `${ANTICIPATED_GAME_FIELDS} where category = 0 & (first_release_date = null | first_release_date = 0); sort hypes desc; limit ${poolSize};`
+): Promise<{
+  games: IGDBAnticipatedGame[]
+  futurePool: number
+  tbaPool: number
+  usedFallback: boolean
+  errors: string[]
+}> {
+  const errors: string[] = []
+  const cap = poolSize * 2
+  const broadLimit = Math.min(100, cap)
 
   let futureGames: IGDBAnticipatedGame[] = []
   let tbaGames: IGDBAnticipatedGame[] = []
+
   try {
-    futureGames = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, bodyFuture)
+    futureGames = await igdbFetch<IGDBAnticipatedGame>(
+      IGDB_GAMES_URL,
+      `${ANTICIPATED_GAME_FIELDS} where category = 0 & first_release_date > ${nowUnix}; sort hypes desc; limit ${poolSize};`
+    )
   } catch (err) {
+    errors.push(`future:${igdbErrorSnippet(err)}`)
     console.error("[IGDB] anticipated candidates (future first_release_date):", err)
   }
+
   try {
-    tbaGames = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, bodyTba)
+    tbaGames = await igdbFetch<IGDBAnticipatedGame>(
+      IGDB_GAMES_URL,
+      `${ANTICIPATED_GAME_FIELDS} where category = 0 & (first_release_date = null | first_release_date = 0); sort hypes desc; limit ${poolSize};`
+    )
   } catch (err) {
+    errors.push(`tba:${igdbErrorSnippet(err)}`)
     console.error("[IGDB] anticipated candidates (TBA null|0):", err)
     try {
-      const bodyTbaNullOnly = `${ANTICIPATED_GAME_FIELDS} where category = 0 & first_release_date = null; sort hypes desc; limit ${poolSize};`
-      tbaGames = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, bodyTbaNullOnly)
+      tbaGames = await igdbFetch<IGDBAnticipatedGame>(
+        IGDB_GAMES_URL,
+        `${ANTICIPATED_GAME_FIELDS} where category = 0 & first_release_date = null; sort hypes desc; limit ${poolSize};`
+      )
     } catch (err2) {
+      errors.push(`tbaNull:${igdbErrorSnippet(err2)}`)
       console.error("[IGDB] anticipated candidates (TBA null only):", err2)
     }
   }
 
-  const byId = new Map<number, IGDBAnticipatedGame>()
-  for (const g of [...futureGames, ...tbaGames]) {
-    if (!byId.has(g.id)) byId.set(g.id, g)
+  let games = mergeAnticipatedPools(futureGames, tbaGames, cap)
+  let usedFallback = false
+
+  if (games.length === 0) {
+    try {
+      games = await igdbFetch<IGDBAnticipatedGame>(
+        IGDB_GAMES_URL,
+        `${ANTICIPATED_GAME_FIELDS} where category = 0; sort hypes desc; limit ${broadLimit};`
+      )
+      usedFallback = true
+    } catch (err) {
+      errors.push(`broad:${igdbErrorSnippet(err)}`)
+      console.error("[IGDB] anticipated broad (category=0, hypes):", err)
+    }
+    if (games.length === 0) {
+      try {
+        games = await igdbFetch<IGDBAnticipatedGame>(
+          IGDB_GAMES_URL,
+          `${ANTICIPATED_GAME_FIELDS} where category = 0; limit ${broadLimit};`
+        )
+        usedFallback = true
+      } catch (err2) {
+        errors.push(`minimal:${igdbErrorSnippet(err2)}`)
+        console.error("[IGDB] anticipated minimal (category=0, no sort):", err2)
+      }
+    }
+    if (games.length === 0) {
+      errors.push("igdb:all candidate requests returned empty arrays")
+    }
   }
 
-  const games = [...byId.values()]
-    .sort((a, b) => (b.hypes ?? 0) - (a.hypes ?? 0))
-    .slice(0, poolSize * 2)
-
-  return { games, futurePool: futureGames.length, tbaPool: tbaGames.length }
+  return {
+    games,
+    futurePool: futureGames.length,
+    tbaPool: tbaGames.length,
+    usedFallback,
+    errors,
+  }
 }
 
 /** 크론/호출부에서 IGDB 풀 상태를 진단할 때 사용 */
@@ -468,6 +535,10 @@ export interface FetchAnticipatedGamesStats {
   mergedCandidates: number
   unreleasedCandidates: number
   resolvedWithDate: number
+  /** 미래/TBA 전용 쿼리가 비었을 때 category=0 폴백을 썼으면 true */
+  igdbUsedFallback?: boolean
+  /** IGDB 요청 실패 시 마지막 오류 메시지(민감정보 없음, 길이 제한) */
+  igdbErrors?: string[]
 }
 
 export interface FetchAnticipatedGamesResult {
@@ -488,39 +559,69 @@ export async function fetchTopAnticipatedGames(
   poolSize = 50
 ): Promise<FetchAnticipatedGamesResult> {
   const nowUnix = Math.floor(Date.now() / 1000)
-  const emptyStats = (partial: Partial<FetchAnticipatedGamesStats> = {}): FetchAnticipatedGamesStats => ({
-    igdbFuturePool: partial.igdbFuturePool ?? 0,
-    igdbTbaPool: partial.igdbTbaPool ?? 0,
-    mergedCandidates: partial.mergedCandidates ?? 0,
-    unreleasedCandidates: partial.unreleasedCandidates ?? 0,
-    resolvedWithDate: partial.resolvedWithDate ?? 0,
-  })
 
-  let candidates: IGDBAnticipatedGame[] = []
-  let futurePool = 0
-  let tbaPool = 0
-  try {
-    const pack = await fetchAnticipatedGameCandidates(poolSize, nowUnix)
-    candidates = pack.games
-    futurePool = pack.futurePool
-    tbaPool = pack.tbaPool
-  } catch (err) {
-    console.error("[IGDB] fetchTopAnticipatedGames (candidates) error:", err)
-    return { games: [], stats: emptyStats() }
+  const buildStats = (partial: Partial<FetchAnticipatedGamesStats>): FetchAnticipatedGamesStats => {
+    const s: FetchAnticipatedGamesStats = {
+      igdbFuturePool: partial.igdbFuturePool ?? 0,
+      igdbTbaPool: partial.igdbTbaPool ?? 0,
+      mergedCandidates: partial.mergedCandidates ?? 0,
+      unreleasedCandidates: partial.unreleasedCandidates ?? 0,
+      resolvedWithDate: partial.resolvedWithDate ?? 0,
+    }
+    if (partial.igdbUsedFallback) s.igdbUsedFallback = true
+    if (partial.igdbErrors != null && partial.igdbErrors.length > 0) {
+      s.igdbErrors = partial.igdbErrors
+    }
+    return s
   }
 
+  if (!process.env.TWITCH_CLIENT_ID?.trim() || !process.env.TWITCH_CLIENT_SECRET?.trim()) {
+    return {
+      games: [],
+      stats: buildStats({
+        igdbErrors: ["Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET in server environment"],
+      }),
+    }
+  }
+
+  let pack: Awaited<ReturnType<typeof fetchAnticipatedGameCandidates>>
+  try {
+    pack = await fetchAnticipatedGameCandidates(poolSize, nowUnix)
+  } catch (err) {
+    console.error("[IGDB] fetchTopAnticipatedGames (candidates) error:", err)
+    return {
+      games: [],
+      stats: buildStats({ igdbErrors: [`pack:${igdbErrorSnippet(err)}`] }),
+    }
+  }
+
+  const { games: candidates, futurePool, tbaPool, usedFallback, errors: packErrors } = pack
+
+  const statsExtras = (): Pick<FetchAnticipatedGamesStats, "igdbUsedFallback" | "igdbErrors"> => ({
+    ...(usedFallback ? { igdbUsedFallback: true } : {}),
+    ...(packErrors.length > 0 ? { igdbErrors: packErrors } : {}),
+  })
+
   if (candidates.length === 0) {
-    return { games: [], stats: emptyStats({ igdbFuturePool: futurePool, igdbTbaPool: tbaPool }) }
+    return {
+      games: [],
+      stats: buildStats({
+        igdbFuturePool: futurePool,
+        igdbTbaPool: tbaPool,
+        ...statsExtras(),
+      }),
+    }
   }
 
   const unreleased = candidates.filter((g) => !isAlreadyReleased(g, nowUnix))
   if (unreleased.length === 0) {
     return {
       games: [],
-      stats: emptyStats({
+      stats: buildStats({
         igdbFuturePool: futurePool,
         igdbTbaPool: tbaPool,
         mergedCandidates: candidates.length,
+        ...statsExtras(),
       }),
     }
   }
@@ -556,13 +657,14 @@ export async function fetchTopAnticipatedGames(
 
   return {
     games: resolved,
-    stats: {
+    stats: buildStats({
       igdbFuturePool: futurePool,
       igdbTbaPool: tbaPool,
       mergedCandidates: candidates.length,
       unreleasedCandidates: unreleased.length,
       resolvedWithDate: resolved.length,
-    },
+      ...statsExtras(),
+    }),
   }
 }
 
