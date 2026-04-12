@@ -421,8 +421,10 @@ function igdbErrorSnippet(err: unknown, maxLen = 240): string {
   return s.length <= maxLen ? s : `${s.slice(0, maxLen)}…`
 }
 
-const ANTICIPATED_GAME_FIELDS =
-  "fields id, name, slug, first_release_date, cover.url, screenshots.url, artworks.url, hypes, summary;"
+/** 리스트/필터용 — 중첩 필드(cover.url 등)는 일부 환경에서 빈 결과만 돌아오는 사례가 있어 분리 */
+const ANTICIPATED_LIST_FIELDS =
+  "fields id, name, slug, first_release_date, hypes, summary;"
+const ANTICIPATED_MEDIA_FIELDS = "fields id, cover.url, screenshots.url, artworks.url;"
 
 function mergeAnticipatedPools(
   a: IGDBAnticipatedGame[],
@@ -436,6 +438,65 @@ function mergeAnticipatedPools(
   return [...byId.values()]
     .sort((x, y) => (y.hypes ?? 0) - (x.hypes ?? 0))
     .slice(0, cap)
+}
+
+/** IGDB 연결·응답 형식 확인 (빈 배열만 올 때 원인 추적) */
+async function igdbGamesConnectivityProbe(): Promise<string> {
+  try {
+    const token = await getIGDBToken()
+    const clientId = process.env.TWITCH_CLIENT_ID
+    if (!clientId) return "probe:no TWITCH_CLIENT_ID"
+    const res = await fetch(IGDB_GAMES_URL, {
+      method: "POST",
+      headers: {
+        "Client-ID": clientId,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "text/plain",
+      },
+      body: "fields id, name; limit 1;",
+    })
+    const text = await res.text()
+    const preview = text.replace(/\s+/g, " ").slice(0, 200)
+    return `probe status=${res.status} body=${preview}`
+  } catch (e) {
+    return `probe threw ${igdbErrorSnippet(e)}`
+  }
+}
+
+async function enrichAnticipatedGamesWithMedia(
+  games: IGDBAnticipatedGameResolved[]
+): Promise<IGDBAnticipatedGameResolved[]> {
+  if (games.length === 0) return games
+  const ids = games.map((g) => g.id)
+  const body = `${ANTICIPATED_MEDIA_FIELDS} where id = (${ids.join(",")}); limit ${Math.min(500, ids.length + 10)};`
+  try {
+    const rows = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, body)
+    const byId = new Map<number, IGDBAnticipatedGame>()
+    for (const r of rows) {
+      if (typeof r.id === "number") byId.set(r.id, r)
+    }
+    return games.map((g) => {
+      const extra = byId.get(g.id)
+      const merged: IGDBAnticipatedGame = extra
+        ? {
+            ...g,
+            cover: extra.cover ?? g.cover,
+            screenshots: extra.screenshots ?? g.screenshots,
+            artworks: extra.artworks ?? g.artworks,
+          }
+        : g
+      return {
+        ...g,
+        cover: merged.cover,
+        screenshots: merged.screenshots,
+        artworks: merged.artworks,
+        header_image_url: pickHeaderImageFromAnticipatedGame(merged),
+      }
+    })
+  } catch (err) {
+    console.error("[IGDB] enrichAnticipatedGamesWithMedia:", err)
+    return games
+  }
 }
 
 /**
@@ -462,7 +523,7 @@ async function fetchAnticipatedGameCandidates(
   try {
     futureGames = await igdbFetch<IGDBAnticipatedGame>(
       IGDB_GAMES_URL,
-      `${ANTICIPATED_GAME_FIELDS} where category = 0 & first_release_date > ${nowUnix}; sort hypes desc; limit ${poolSize};`
+      `${ANTICIPATED_LIST_FIELDS} where category = 0 & first_release_date > ${nowUnix}; sort hypes desc; limit ${poolSize};`
     )
   } catch (err) {
     errors.push(`future:${igdbErrorSnippet(err)}`)
@@ -472,7 +533,7 @@ async function fetchAnticipatedGameCandidates(
   try {
     tbaGames = await igdbFetch<IGDBAnticipatedGame>(
       IGDB_GAMES_URL,
-      `${ANTICIPATED_GAME_FIELDS} where category = 0 & (first_release_date = null | first_release_date = 0); sort hypes desc; limit ${poolSize};`
+      `${ANTICIPATED_LIST_FIELDS} where category = 0 & (first_release_date = null | first_release_date = 0); sort hypes desc; limit ${poolSize};`
     )
   } catch (err) {
     errors.push(`tba:${igdbErrorSnippet(err)}`)
@@ -480,7 +541,7 @@ async function fetchAnticipatedGameCandidates(
     try {
       tbaGames = await igdbFetch<IGDBAnticipatedGame>(
         IGDB_GAMES_URL,
-        `${ANTICIPATED_GAME_FIELDS} where category = 0 & first_release_date = null; sort hypes desc; limit ${poolSize};`
+        `${ANTICIPATED_LIST_FIELDS} where category = 0 & first_release_date = null; sort hypes desc; limit ${poolSize};`
       )
     } catch (err2) {
       errors.push(`tbaNull:${igdbErrorSnippet(err2)}`)
@@ -495,7 +556,7 @@ async function fetchAnticipatedGameCandidates(
     try {
       games = await igdbFetch<IGDBAnticipatedGame>(
         IGDB_GAMES_URL,
-        `${ANTICIPATED_GAME_FIELDS} where category = 0; sort hypes desc; limit ${broadLimit};`
+        `${ANTICIPATED_LIST_FIELDS} where category = 0; sort hypes desc; limit ${broadLimit};`
       )
       usedFallback = true
     } catch (err) {
@@ -506,7 +567,7 @@ async function fetchAnticipatedGameCandidates(
       try {
         games = await igdbFetch<IGDBAnticipatedGame>(
           IGDB_GAMES_URL,
-          `${ANTICIPATED_GAME_FIELDS} where category = 0; limit ${broadLimit};`
+          `${ANTICIPATED_LIST_FIELDS} where category = 0; limit ${broadLimit};`
         )
         usedFallback = true
       } catch (err2) {
@@ -515,7 +576,19 @@ async function fetchAnticipatedGameCandidates(
       }
     }
     if (games.length === 0) {
-      errors.push("igdb:all candidate requests returned empty arrays")
+      try {
+        games = await igdbFetch<IGDBAnticipatedGame>(
+          IGDB_GAMES_URL,
+          `${ANTICIPATED_LIST_FIELDS} limit ${broadLimit};`
+        )
+        usedFallback = true
+      } catch (err3) {
+        errors.push(`noWhere:${igdbErrorSnippet(err3)}`)
+        console.error("[IGDB] anticipated no-where limit:", err3)
+      }
+    }
+    if (games.length === 0) {
+      errors.push(await igdbGamesConnectivityProbe())
     }
   }
 
@@ -655,14 +728,16 @@ export async function fetchTopAnticipatedGames(
     if (resolved.length >= take) break
   }
 
+  const enriched = await enrichAnticipatedGamesWithMedia(resolved)
+
   return {
-    games: resolved,
+    games: enriched,
     stats: buildStats({
       igdbFuturePool: futurePool,
       igdbTbaPool: tbaPool,
       mergedCandidates: candidates.length,
       unreleasedCandidates: unreleased.length,
-      resolvedWithDate: resolved.length,
+      resolvedWithDate: enriched.length,
       ...statsExtras(),
     }),
   }
