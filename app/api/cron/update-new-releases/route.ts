@@ -10,7 +10,9 @@ import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
  *
  * IGDB hypes 기준 상위 10개 미출시 기대작 중 출시일이 확정된 게임을
  * events 테이블에 event_type='New' 로 추가합니다.
- * external_id(igdb-anticipated-{id}) 기준으로 이미 추가된 게임은 건너뜁니다.
+ * title=한글 정발명 우선·없으면 영문, game_category=영문, description=`{title} 출시`,
+ * external_url=NULL, header_image_url=스크린샷/아트/커버 URL 또는 NULL.
+ * external_id(igdb-anticipated-{id})로 중복 삽입을 건너뜁니다.
  */
 export const maxDuration = 60
 
@@ -43,59 +45,34 @@ export async function GET(request: Request) {
   const startedAt = Date.now()
 
   try {
-    const anticipatedGames = await fetchTopAnticipatedGames(10)
-    const totalFetched = anticipatedGames.length
+    const anticipatedGames = await fetchTopAnticipatedGames(10, 50)
+    const resolvedCount = anticipatedGames.length
 
-    if (totalFetched === 0) {
+    if (resolvedCount === 0) {
       return NextResponse.json({
         success: true,
-        fetched: 0,
+        resolved: 0,
         inserted: 0,
         skipped: 0,
-        message: "No anticipated games returned from IGDB",
+        message:
+          "No anticipated games with a future release date (check IGDB credentials or pool had only released/TBA titles)",
       })
     }
 
-    /* 출시일이 확정된 게임만 필터링 */
-    const nowUnix = Math.floor(Date.now() / 1000)
-    const gamesWithDate = anticipatedGames.filter(
-      (g) => g.first_release_date != null && g.first_release_date > nowUnix
-    )
-
-    if (gamesWithDate.length === 0) {
-      return NextResponse.json({
-        success: true,
-        fetched: totalFetched,
-        inserted: 0,
-        skipped: totalFetched,
-        message: "All anticipated games lack a confirmed future release date",
-      })
-    }
-
-    const formattedEvents = gamesWithDate.map((game) => {
-      const releaseDate = new Date(game.first_release_date! * 1000).toISOString()
-
-      const rawCoverUrl = game.cover?.url?.trim() ?? null
-      const coverUrl = rawCoverUrl
-        ? (rawCoverUrl.startsWith("//") ? `https:${rawCoverUrl}` : rawCoverUrl).replace(
-            /t_thumb/g,
-            "t_cover_big"
-          )
-        : null
-
-      const slug = game.slug?.trim() ?? game.name.toLowerCase().replace(/\s+/g, "-")
-      const externalUrl = `https://www.igdb.com/games/${slug}`
+    const formattedEvents = anticipatedGames.map((game) => {
+      const releaseDate = new Date(game.resolved_release_date * 1000).toISOString()
+      const title = game.display_title
 
       return {
         external_id: `igdb-anticipated-${game.id}`,
-        title: game.name,
-        description: game.summary?.trim() ?? null,
+        title,
+        description: `${title} 출시`,
         event_type: "New",
         start_date: releaseDate,
         end_date: null,
-        game_category: game.name,
-        header_image_url: coverUrl,
-        external_url: externalUrl,
+        game_category: game.english_title,
+        header_image_url: game.header_image_url,
+        external_url: null,
       }
     })
 
@@ -121,8 +98,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      fetched: totalFetched,
-      withDate: gamesWithDate.length,
+      resolved: resolvedCount,
       inserted: insertedCount,
       skipped: skippedCount,
     })

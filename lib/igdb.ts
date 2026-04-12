@@ -318,33 +318,167 @@ export interface IGDBAnticipatedGame {
   slug?: string
   first_release_date?: number
   cover?: { url?: string }
+  screenshots?: Array<{ url?: string }>
+  artworks?: Array<{ url?: string }>
   hypes?: number
   summary?: string
 }
 
+/** 기대작 후보 + 캘린더에 쓸 확정 미래 출시 시각(Unix 초) */
+export interface IGDBAnticipatedGameResolved extends IGDBAnticipatedGame {
+  resolved_release_date: number
+  /** IGDB games.name (영문/표준 타이틀, game_category 용) */
+  english_title: string
+  /** 한글 정발명이 있으면 한글, 없으면 english_title */
+  display_title: string
+  /** 스크린샷 → 아트워크 → 커버 순, 없으면 null */
+  header_image_url: string | null
+}
+
+const HANGUL_RE = /[가-힣]/
+
 /**
- * IGDB Top Anticipated Games 조회
- *
- * hypes(팔로우 수) 기준 내림차순으로 출시일이 확정된 미출시 게임 상위 N개를 반환.
- * IGDB /top-100/anticipated 페이지와 동일한 정렬 기준(hypes desc).
- *
- * @param limit - 가져올 게임 수 (기본값 10)
- * @returns IGDBAnticipatedGame 배열 (오류 시 빈 배열)
+ * game_localizations에서 한글 이름이 있는 항목만 모아 게임별로 가장 긴 이름을 선택
  */
-export async function fetchTopAnticipatedGames(limit = 10): Promise<IGDBAnticipatedGame[]> {
+async function fetchKoreanTitlesByGameIds(gameIds: number[]): Promise<Map<number, string>> {
+  const map = new Map<number, string>()
+  if (gameIds.length === 0) return map
+
+  const unique = [...new Set(gameIds)]
+  const orClause = unique.map((id) => `game = ${id}`).join(" | ")
+  const body = `fields game, name; where (${orClause}); limit 500;`
+
+  try {
+    const rows = await igdbFetch<{ game?: number; name?: string }>(IGDB_GAME_LOCALIZATIONS_URL, body)
+    for (const row of rows) {
+      const gid = row.game
+      const name = row.name?.trim()
+      if (gid == null || !name || !HANGUL_RE.test(name)) continue
+      const prev = map.get(gid)
+      if (prev === undefined || name.length > prev.length) map.set(gid, name)
+    }
+  } catch (err) {
+    console.error("[IGDB] fetchKoreanTitlesByGameIds error:", err)
+  }
+  return map
+}
+
+function pickHeaderImageFromAnticipatedGame(game: IGDBAnticipatedGame): string | null {
+  const shot = game.screenshots?.[0]?.url?.trim()
+  const art = game.artworks?.[0]?.url?.trim()
+  const cov = game.cover?.url?.trim()
+  let raw: string | null = null
+  let useCoverSizing = false
+  if (shot) raw = shot
+  else if (art) raw = art
+  else if (cov) {
+    raw = cov
+    useCoverSizing = true
+  }
+  if (!raw) return null
+  let u = raw.startsWith("//") ? `https:${raw}` : raw
+  if (!u.startsWith("http")) u = `https://${u}`
+  u = useCoverSizing ? u.replace(/t_thumb/g, "t_cover_big") : u.replace(/t_thumb/g, "t_1080p")
+  return u
+}
+
+/**
+ * 여러 게임에 대해 date > now 인 release_dates 중 게임별 가장 이른 날짜 조회
+ */
+async function fetchFutureReleaseDatesByGameIds(
+  gameIds: number[],
+  nowUnix: number
+): Promise<Map<number, number>> {
+  const map = new Map<number, number>()
+  if (gameIds.length === 0) return map
+
+  const unique = [...new Set(gameIds)]
+  const orClause = unique.map((id) => `game = ${id}`).join(" | ")
+  const body = `fields game, date; where (${orClause}) & date > ${nowUnix}; sort date asc; limit 500;`
+
+  try {
+    const rows = await igdbFetch<{ game?: number; date?: number }>(IGDB_RELEASE_DATES_URL, body)
+    for (const row of rows) {
+      const gid = row.game
+      const d = row.date
+      if (gid == null || d == null || d <= 0) continue
+      const prev = map.get(gid)
+      if (prev === undefined || d < prev) map.set(gid, d)
+    }
+  } catch (err) {
+    console.error("[IGDB] fetchFutureReleaseDatesByGameIds error:", err)
+  }
+  return map
+}
+
+function isAlreadyReleased(game: IGDBAnticipatedGame, nowUnix: number): boolean {
+  const frd = game.first_release_date
+  return frd != null && frd > 0 && frd <= nowUnix
+}
+
+/**
+ * IGDB Top Anticipated Games → 미래 출시일이 정해진 항목만 상위 N개
+ *
+ * 웹 /top-100/anticipated 와 같이 hypes 내림차순 후보를 넉넉히 가져온 뒤,
+ * `first_release_date`가 없거나 TBA인 게임은 `release_dates`로 보완합니다.
+ * (기존: API where에 first_release_date > now 를 넣어 결과가 0건이 되는 경우가 많음)
+ *
+ * @param take - 반환할 게임 수 (기본 10)
+ * @param poolSize - hypes 정렬 풀 크기 (기본 50)
+ */
+export async function fetchTopAnticipatedGames(
+  take = 10,
+  poolSize = 50
+): Promise<IGDBAnticipatedGameResolved[]> {
   const nowUnix = Math.floor(Date.now() / 1000)
   const body = [
-    "fields id, name, slug, first_release_date, cover.url, hypes, summary;",
-    `where first_release_date > ${nowUnix} & category = 0 & hypes > 0;`,
+    "fields id, name, slug, first_release_date, cover.url, screenshots.url, artworks.url, hypes, summary;",
+    "where category = 0;",
     "sort hypes desc;",
-    `limit ${limit};`,
+    `limit ${poolSize};`,
   ].join(" ")
+
+  let candidates: IGDBAnticipatedGame[]
   try {
-    return await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, body)
+    candidates = await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, body)
   } catch (err) {
-    console.error("[IGDB] fetchTopAnticipatedGames error:", err)
+    console.error("[IGDB] fetchTopAnticipatedGames (games) error:", err)
     return []
   }
+
+  const unreleased = candidates.filter((g) => !isAlreadyReleased(g, nowUnix))
+  if (unreleased.length === 0) return []
+
+  const koreanByGame = await fetchKoreanTitlesByGameIds(unreleased.map((g) => g.id))
+
+  const needReleaseRows = unreleased.filter((g) => {
+    const frd = g.first_release_date
+    return frd == null || frd <= 0 || frd <= nowUnix
+  })
+  const releaseByGame = await fetchFutureReleaseDatesByGameIds(
+    needReleaseRows.map((g) => g.id),
+    nowUnix
+  )
+
+  const resolved: IGDBAnticipatedGameResolved[] = []
+  for (const g of unreleased) {
+    const frd = g.first_release_date
+    let ts: number | null =
+      frd != null && frd > 0 && frd > nowUnix ? frd : (releaseByGame.get(g.id) ?? null)
+    if (ts == null) continue
+    const english = g.name.trim()
+    const display = koreanByGame.get(g.id)?.trim() || english
+    resolved.push({
+      ...g,
+      resolved_release_date: ts,
+      english_title: english,
+      display_title: display,
+      header_image_url: pickHeaderImageFromAnticipatedGame(g),
+    })
+    if (resolved.length >= take) break
+  }
+
+  return resolved
 }
 
 /**
