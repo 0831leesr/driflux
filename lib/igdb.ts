@@ -312,6 +312,41 @@ export async function fetchEarliestReleaseDateFromIGDB(igdbGameId: number): Prom
   }
 }
 
+export interface IGDBAnticipatedGame {
+  id: number
+  name: string
+  slug?: string
+  first_release_date?: number
+  cover?: { url?: string }
+  hypes?: number
+  summary?: string
+}
+
+/**
+ * IGDB Top Anticipated Games 조회
+ *
+ * hypes(팔로우 수) 기준 내림차순으로 출시일이 확정된 미출시 게임 상위 N개를 반환.
+ * IGDB /top-100/anticipated 페이지와 동일한 정렬 기준(hypes desc).
+ *
+ * @param limit - 가져올 게임 수 (기본값 10)
+ * @returns IGDBAnticipatedGame 배열 (오류 시 빈 배열)
+ */
+export async function fetchTopAnticipatedGames(limit = 10): Promise<IGDBAnticipatedGame[]> {
+  const nowUnix = Math.floor(Date.now() / 1000)
+  const body = [
+    "fields id, name, slug, first_release_date, cover.url, hypes, summary;",
+    `where first_release_date > ${nowUnix} & category = 0 & hypes > 0;`,
+    "sort hypes desc;",
+    `limit ${limit};`,
+  ].join(" ")
+  try {
+    return await igdbFetch<IGDBAnticipatedGame>(IGDB_GAMES_URL, body)
+  } catch (err) {
+    console.error("[IGDB] fetchTopAnticipatedGames error:", err)
+    return []
+  }
+}
+
 /**
  * IGDB 게임 ID로 Steam App ID 조회 (external_games)
  * @param igdbGameId - IGDB game id

@@ -25,6 +25,26 @@ jobs:
           echo "$resp"
           echo "$resp" | jq -e 'type == "object"' >/dev/null
 
+  update-new-releases:
+    runs-on: ubuntu-latest
+    needs: []  # 독립 실행
+    env:
+      BASE: ${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}
+      SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Update New Releases (IGDB Anticipated)
+        run: |
+          set -euo pipefail
+          BASE="$(printf '%s' "$BASE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          if [[ ! "$BASE" =~ ^https?:// ]]; then BASE="https://${BASE}"; fi
+          BASE="${BASE%/}"
+          resp=$(curl -sfSL --location-trusted --max-redirs 8 -X GET \
+            "${BASE}/api/cron/update-new-releases" \
+            -H "Authorization: Bearer ${SECRET}" \
+            -H "Accept: application/json")
+          echo "$resp"
+          echo "$resp" | jq -e 'type == "object"' >/dev/null
+
   update-videos:
     runs-on: ubuntu-latest
     needs: []  # 독립 실행
