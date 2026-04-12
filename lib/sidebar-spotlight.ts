@@ -11,6 +11,7 @@ const SPOTLIGHT_LIMIT = 3
 
 export type SidebarSpotlightGame = {
   id: number
+  slug?: string | null
   title: string
   cover_image_url: string | null
   header_image_url: string | null
@@ -20,6 +21,7 @@ export type SidebarSpotlightGame = {
 function toSpotlight(g: TrendingGameRow): SidebarSpotlightGame {
   return {
     id: g.id,
+    slug: g.slug ?? null,
     title: g.title,
     cover_image_url: g.cover_image_url,
     header_image_url: g.header_image_url ?? null,

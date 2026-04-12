@@ -93,7 +93,8 @@ function mapApiVideosToVideoData(
   items: unknown[],
   gameCover: string,
   gameTitle: string,
-  gameId: number
+  gameId: number,
+  gameSlug: string | null | undefined,
 ): VideoData[] {
   return items.map((raw) => {
     const v = raw as Record<string, unknown>
@@ -115,6 +116,7 @@ function mapApiVideosToVideoData(
       gameCover,
       gameTitle,
       gameId,
+      gameSlug,
     }
   })
 }
@@ -202,14 +204,14 @@ export function GameMedia({ game, streams, onStreamClick, onVideoClick, onClipCl
     )
       .then((data) => {
         const items = (data.videos as unknown[] | undefined) ?? []
-        const mapped = mapApiVideosToVideoData(items, gameCover, gameTitle, game.id)
+        const mapped = mapApiVideosToVideoData(items, gameCover, gameTitle, game.id, game.slug)
         setVideos(sortChzzkVodList(mapped, vodSortKey))
         const next = parseVodNextCursor(data)
         setVideoNextCursor(next)
         setHasMoreVideos(next != null && items.length > 0)
       })
       .finally(() => setVideosLoading(false))
-  }, [activeTab, categoryId, gameCover, gameTitle, game.id, chzzkVodSort])
+  }, [activeTab, categoryId, gameCover, gameTitle, game.id, game.slug, chzzkVodSort])
 
   useEffect(() => {
     if (activeTab !== "clip" || !categoryId) return
@@ -237,13 +239,14 @@ export function GameMedia({ game, streams, onStreamClick, onVideoClick, onClipCl
               gameCover,
               gameTitle,
               gameId: game.id,
+              gameSlug: game.slug ?? null,
               createdDate: String(c.createdDate ?? ""),
             }
           })
         )
       })
       .finally(() => setClipsLoading(false))
-  }, [activeTab, categoryId, chzzkClipListFilter, gameCover, gameTitle, game.id])
+  }, [activeTab, categoryId, chzzkClipListFilter, gameCover, gameTitle, game.id, game.slug])
 
   const handleLoadMoreVideos = () => {
     if (!categoryId || loadMoreLoading || !hasMoreVideos || !videoNextCursor) return
@@ -255,7 +258,7 @@ export function GameMedia({ game, streams, onStreamClick, onVideoClick, onClipCl
     )
       .then((data) => {
         const items = (data.videos as unknown[] | undefined) ?? []
-        const newVideos = mapApiVideosToVideoData(items, gameCover, gameTitle, game.id)
+        const newVideos = mapApiVideosToVideoData(items, gameCover, gameTitle, game.id, game.slug)
         setVideos((prev) =>
           sortChzzkVodList(mergeVideosDedupe([...prev, ...newVideos]), vodSortKey)
         )

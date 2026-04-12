@@ -79,6 +79,7 @@ function exploreLiveItemToCardData(
 
   return {
     id: db?.id ?? 0,
+    slug: db?.slug ?? null,
     title: db
       ? getDisplayGameTitle({ korean_title: db.korean_title, title: db.title })
       : live.title,
@@ -113,6 +114,7 @@ function trendToCardData(
 ): GameCardData {
   return {
     id: game.id,
+    slug: game.slug ?? null,
     title: game.title,
     cover_image_url: game.cover_image_url,
     header_image_url: game.header_image_url ?? undefined,

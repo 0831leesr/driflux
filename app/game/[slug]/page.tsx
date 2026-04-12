@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation"
+import { notFound, permanentRedirect } from "next/navigation"
 import type { Metadata } from "next"
 import {
-  fetchGameById,
+  fetchGameForDetailPath,
   fetchGameTopStreamersRow,
   fetchTodayDailyGameStatsByGameIds,
   getHistoricalTrending,
@@ -13,6 +13,7 @@ import {
   formatViewerCountShort,
   normalizeChzzkStreamerNameForMatch,
 } from "@/lib/utils"
+import { encodeGameUrlSegment } from "@/lib/game-path"
 import { GameDetailsPage } from "@/components/game-details-page"
 import { GameEvaluations } from "@/components/game/game-evaluations"
 import type { StreamData } from "@/components/stream-card"
@@ -65,20 +66,19 @@ function buildGameDetailTopStreamerSlots(
 }
 
 interface PageProps {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { id } = await params
-  const gameId = parseInt(id, 10)
-
-  if (isNaN(gameId) || gameId <= 0) {
+  const { slug: raw } = await params
+  const resolved = await fetchGameForDetailPath(raw)
+  if (!resolved) {
     return { title: "게임을 찾을 수 없음" }
   }
-
-  const game = await fetchGameById(gameId)
-  if (!game) {
-    return { title: "게임을 찾을 수 없음" }
+  const { game, openedByNumericId } = resolved
+  const canonicalSlug = game.slug?.trim()
+  if (openedByNumericId && canonicalSlug) {
+    permanentRedirect(`/game/${encodeGameUrlSegment(canonicalSlug)}`)
   }
 
   const displayTitle = getDisplayGameTitle(game)
@@ -109,13 +109,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
  * 3. GameMedia — 라이브 / 다시보기 / 클립
  */
 export default async function GamePage({ params }: PageProps) {
-  const { id } = await params
-  const gameId = parseInt(id, 10)
+  const { slug: raw } = await params
+  const resolved = await fetchGameForDetailPath(raw)
+  if (!resolved) notFound()
 
-  if (isNaN(gameId) || gameId <= 0) notFound()
-
-  const game = await fetchGameById(gameId)
-  if (!game) notFound()
+  const { game, openedByNumericId } = resolved
+  const canonicalSlug = game.slug?.trim()
+  if (openedByNumericId && canonicalSlug) {
+    permanentRedirect(`/game/${encodeGameUrlSegment(canonicalSlug)}`)
+  }
 
   const gameCover = getBestGameImage(game.header_image_url, game.cover_image_url)
   const gameTitle = getDisplayGameTitle(game)
@@ -153,6 +155,7 @@ export default async function GamePage({ params }: PageProps) {
     isLive: true,
     hasDrops: s.hasDrops,
     gameId: game.id,
+    gameSlug: game.slug ?? null,
     channelId: s.channelId,
     channelImageUrl: s.channelImageUrl?.trim() || null,
   }))

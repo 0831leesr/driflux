@@ -14,6 +14,7 @@ import GameImage from "@/components/ui/game-image"
 import { useFavoriteGames } from "@/contexts/favorites-context"
 import { Button } from "@/components/ui/button"
 import type { FeatureTagItem, FeatureTagPreset } from "@/lib/feature-tags"
+import { gameHref } from "@/lib/game-path"
 
 export interface GameCardData {
   id: number
@@ -36,7 +37,8 @@ export interface GameCardData {
    * buildFeatureTags() 헬퍼로 생성하세요. (lib/feature-tags.ts)
    */
   featureTags?: FeatureTagItem[]
-  /** 설정 시 이 경로로 이동 (치지직 카테고리 등). 내부 `/game/:id` 대신 사용 */
+  slug?: string | null
+  /** 설정 시 이 경로로 이동 (치지직 카테고리 등). 내부 게임 상세 대신 사용 */
   cardHref?: string
   /** true면 팔로우(하트) 숨김 — 외부 전용 카드용 */
   hideFavorite?: boolean
@@ -53,7 +55,7 @@ const NEW_RELEASE_BADGE_CLASS = "bg-amber-500"
 export function GameCard({ game, priority }: { game: GameCardData; priority?: boolean }) {
   const hasDiscount = game.discount_rate && game.discount_rate > 0
   const isFree = game.is_free || game.price_krw === 0
-  const href = game.cardHref ?? `/game/${game.id}`
+  const href = game.cardHref ?? gameHref({ id: game.id, slug: game.slug })
   const isExternal = Boolean(game.cardHref)
 
   const { isFavorite, toggleFavorite } = useFavoriteGames()

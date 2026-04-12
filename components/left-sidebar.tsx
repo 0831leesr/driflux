@@ -9,6 +9,7 @@ import { useFavoriteGames, useFavoriteTags, useFavoriteStreamers, useFavoritesSe
 import { useEffect, useState } from "react"
 import { fetchGamesByIds, type GameRow } from "@/lib/data"
 import { getBestGameImage, getDisplayGameTitle, formatViewerCountShort } from "@/lib/utils"
+import { gameHref, gamePathnameMatches } from "@/lib/game-path"
 import type { SidebarSpotlightGame } from "@/lib/sidebar-spotlight"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFollowedEvents } from "@/contexts/followed-events-context"
@@ -151,10 +152,7 @@ export function LeftSidebar({
     loadStatuses()
   }, [favoriteStreamers, streamersInitialized])
 
-  // Check if current path matches a game page by ID
-  const isGameActive = (gameId: number) => {
-    return pathname === `/game/${gameId}`
-  }
+  const isGameActive = (game: Pick<GameRow, "id" | "slug">) => gamePathnameMatches(pathname, game)
 
   // Check if current path matches a tag page
   const isTagActive = (tagName: string) => {
@@ -268,8 +266,8 @@ export function LeftSidebar({
                 ))
               ) : games.length > 0 ? (
                 games.map((game) => {
-                  const href = `/game/${game.id}`
-                  const isActive = isGameActive(game.id)
+                  const href = gameHref({ id: game.id, slug: game.slug })
+                  const isActive = isGameActive(game)
 
                   return (
                     <Link
@@ -494,8 +492,8 @@ export function LeftSidebar({
                   ))
                 ) : (spotlight?.trending.length ?? 0) > 0 ? (
                   spotlight!.trending.map((game) => {
-                    const href = `/game/${game.id}`
-                    const isActive = isGameActive(game.id)
+                    const href = gameHref({ id: game.id, slug: game.slug })
+                    const isActive = isGameActive(game)
                     const meta = `${formatViewerCountShort(game.totalViewers)} 시청`
                     return (
                       <Link
@@ -561,8 +559,8 @@ export function LeftSidebar({
                   ))
                 ) : (spotlight?.rising.length ?? 0) > 0 ? (
                   spotlight!.rising.map((game) => {
-                    const href = `/game/${game.id}`
-                    const isActive = isGameActive(game.id)
+                    const href = gameHref({ id: game.id, slug: game.slug })
+                    const isActive = isGameActive(game)
                     const meta = `${formatViewerCountShort(game.totalViewers)} 시청`
                     return (
                       <Link

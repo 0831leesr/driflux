@@ -38,6 +38,7 @@ function toGameCardData(
   const topTags = getTopTags(game)
   return {
     id: game.id,
+    slug: game.slug ?? null,
     title: game.title,
     korean_title: game.korean_title ?? undefined,
     cover_image_url: game.cover_image_url ?? null,

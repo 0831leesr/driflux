@@ -8,6 +8,7 @@ import { buildFeatureTags } from "@/lib/feature-tags"
 function toCardData(games: GamesWithDropsRow[], yesterdayTrendingIds: Set<number>): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
+    slug: game.slug ?? null,
     title: game.title,
     cover_image_url: game.cover_image_url,
     header_image_url: game.header_image_url ?? game.cover_image_url ?? undefined,

@@ -31,6 +31,8 @@ const CACHE_REVALIDATE_EVENTS = 120
 export interface GameRow {
   id: number
   title: string
+  /** URL 세그먼트 — 제목 기반 유니크 슬러그(없으면 상세는 /game/{id}) */
+  slug?: string | null
   korean_title?: string | null
   english_title?: string | null
   steam_appid: number | null
@@ -121,6 +123,47 @@ export async function fetchGameById(id: number): Promise<GameRow | null> {
   const mappings = await getGameMappings()
   const mapping = resolveMapping(mappings, game.title ?? "", game.english_title ?? null, game.korean_title ?? null)
   return applyMappingOverridesToGame(game, mapping) as GameRow
+}
+
+export async function fetchGameBySlug(slug: string): Promise<GameRow | null> {
+  const s = slug.trim()
+  if (!s) return null
+  const supabase = await createClient()
+  const { data, error } = await supabase.from("games").select("*").eq("slug", s).limit(1)
+  if (error || !data || data.length === 0) return null
+  const game = data[0] as GameRow
+  const mappings = await getGameMappings()
+  const mapping = resolveMapping(mappings, game.title ?? "", game.english_title ?? null, game.korean_title ?? null)
+  return applyMappingOverridesToGame(game, mapping) as GameRow
+}
+
+/**
+ * `/game/[segment]` 해석: 슬러그 우선, 없으면 숫자만이면 id 조회.
+ * id로 열렸고 slug가 있으면 canonical 슬러그로 리다이렉트해야 함.
+ */
+export async function fetchGameForDetailPath(
+  segment: string,
+): Promise<{ game: GameRow; openedByNumericId: boolean } | null> {
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(segment)
+    } catch {
+      return segment
+    }
+  })()
+
+  const bySlug = await fetchGameBySlug(decoded)
+  if (bySlug) return { game: bySlug, openedByNumericId: false }
+
+  if (/^\d+$/.test(decoded)) {
+    const id = parseInt(decoded, 10)
+    if (id > 0) {
+      const byId = await fetchGameById(id)
+      if (byId) return { game: byId, openedByNumericId: true }
+    }
+  }
+
+  return null
 }
 
 export type GameTopStreamersDbRow = {
@@ -217,7 +260,9 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
   // 팔로우 태그를 포함한 게임 목록 조회 (태그당 최대 5개, 전체 최대 10개)
   const { data: games } = await supabase
     .from("games")
-    .select("id, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate")
+    .select(
+      "id, slug, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate",
+    )
     .or(allowedTags.map((tag) => `top_tags.cs.{${tag}}`).join(","))
     .limit(10)
 
@@ -265,6 +310,7 @@ export async function fetchStreamsForFollowedTags(tagNames: string[]) {
         saleDiscount,
         hasDrops: s.hasDrops ?? false,
         gameId: game.id,
+        gameSlug: game.slug ?? null,
         channelId: s.channelId,
         channelImageUrl: s.channelImageUrl,
       })
@@ -471,6 +517,7 @@ export async function searchStreams(
 /* ── Fetch games with active drops (드롭스 활성화 방송이 있는 게임) ── */
 export interface GamesWithDropsRow {
   id: number
+  slug?: string | null
   title: string
   cover_image_url: string | null
   header_image_url: string | null
@@ -484,6 +531,7 @@ export interface GamesWithDropsRow {
 /* ── Fetch hidden gems games (숨겨진 꿀잼 게임 - stream 5~29, viewers >= 100) ── */
 export interface HiddenGemsRow {
   id: number
+  slug?: string | null
   title: string
   cover_image_url: string | null
   header_image_url: string | null
@@ -498,6 +546,7 @@ export interface HiddenGemsRow {
 /* ── Fetch new releases (따끈따끈 신작 - 30일 이내 출시, 치지직 화제) ── */
 export interface NewReleasesRow {
   id: number
+  slug?: string | null
   title: string
   cover_image_url: string | null
   header_image_url: string | null
@@ -526,6 +575,7 @@ export type TrendingPeriod = "yesterday" | "week" | "month"
 
 export interface HistoricalTrendingRow {
   id: number
+  slug?: string | null
   title: string
   cover_image_url: string | null
   header_image_url: string | null
@@ -585,6 +635,7 @@ export async function fetchTodayDailyGameStatsByGameIds(
 /* ── V2: 홈 서버 컨퓨테이션용 게임 DB 데이터 ── */
 export interface HomeGameRow {
   id: number
+  slug?: string | null
   title: string
   korean_title: string | null
   english_title: string | null
@@ -638,7 +689,9 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
 
   const { data: games } = await supabase
     .from("games")
-    .select("id, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate")
+    .select(
+      "id, slug, title, korean_title, english_title, header_image_url, cover_image_url, discount_rate",
+    )
     .in("id", filteredIds)
 
   if (!games?.length) return []
@@ -684,6 +737,7 @@ export async function fetchStreamsForFollowedGames(gameIds: number[]) {
         saleDiscount,
         hasDrops: s.hasDrops ?? false,
         gameId: game.id,
+        gameSlug: game.slug ?? null,
         channelId: s.channelId,
         channelImageUrl: s.channelImageUrl,
       } as any)
@@ -1093,11 +1147,12 @@ async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
   ])
   const { data: gamesData } = await supabase
     .from("games")
-    .select("id, title, korean_title, cover_image_url, header_image_url")
+    .select("id, slug, title, korean_title, cover_image_url, header_image_url")
     .or(orTerms.join(","))
 
   const games = (gamesData ?? []) as Array<{
     id: number
+    slug?: string | null
     title: string
     korean_title?: string | null
     cover_image_url: string | null
@@ -1120,6 +1175,7 @@ async function fetchUpcomingEventsImpl(): Promise<EventRow[]> {
     const gamesPayload = gamesMatch
       ? {
           id: gamesMatch.id,
+          slug: gamesMatch.slug ?? null,
           title: gamesMatch.title,
           cover_image_url: gamesMatch.cover_image_url,
           header_image_url: gamesMatch.header_image_url,
@@ -1280,7 +1336,9 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
 
   const { data: games, error: gErr } = await supabase
     .from("games")
-    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
+    .select(
+      "id, slug, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags",
+    )
     .in("id", numericTopIds)
 
   if (gErr) {
@@ -1312,6 +1370,7 @@ async function getHistoricalTrendingImpl(period: TrendingPeriod): Promise<Histor
       const effectiveDiscount = getEffectiveDiscountRate(g.discount_rate)
       return {
         id: g.id,
+        slug: (g as { slug?: string | null }).slug ?? null,
         title: getDisplayGameTitle({ korean_title: (g as any).korean_title, title: g.title }),
         cover_image_url: g.cover_image_url,
         header_image_url: g.header_image_url ?? g.cover_image_url,
@@ -1347,7 +1406,7 @@ async function fetchAllGamesForHomeImpl(): Promise<HomeGameRow[]> {
   const { data, error } = await supabase
     .from("games")
     .select(
-      "id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags, release_date, steam_appid"
+      "id, slug, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags, release_date, steam_appid"
     )
     .limit(500)
 
@@ -1397,7 +1456,9 @@ async function getGamesByTrendScoreImpl(tagName?: string): Promise<HistoricalTre
 
   const baseQuery = supabase
     .from("games")
-    .select("id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags")
+    .select(
+      "id, slug, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags",
+    )
     .limit(500)
 
   const { data: games, error: gamesErr } = tagName
@@ -1420,6 +1481,7 @@ async function getGamesByTrendScoreImpl(tagName?: string): Promise<HistoricalTre
       const effectiveDiscount = getEffectiveDiscountRate(mg.discount_rate)
       return {
         id: mg.id,
+        slug: mg.slug ?? null,
         title: getDisplayGameTitle({ korean_title: mg.korean_title, title: mg.title }),
         cover_image_url: mg.cover_image_url,
         header_image_url: mg.header_image_url ?? mg.cover_image_url,
@@ -1507,7 +1569,7 @@ async function getGamesByTrendPeriodForExploreImpl(
   const baseQuery = supabase
     .from("games")
     .select(
-      "id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags, release_date"
+      "id, slug, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags, release_date",
     )
     .limit(500)
 
@@ -1531,6 +1593,7 @@ async function getGamesByTrendPeriodForExploreImpl(
       const effectiveDiscount = getEffectiveDiscountRate(mg.discount_rate)
       return {
         id: mg.id,
+        slug: mg.slug ?? null,
         title: getDisplayGameTitle({ korean_title: mg.korean_title, title: mg.title }),
         cover_image_url: mg.cover_image_url,
         header_image_url: mg.header_image_url ?? mg.cover_image_url,

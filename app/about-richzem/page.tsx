@@ -180,7 +180,9 @@ export default function RichzemAboutPage() {
           게임 상세 페이지
         </h2>
         <p className="mt-3 text-sm leading-7 text-muted-foreground">
-          각 게임은 <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">/game/[게임ID]</code>{" "}
+          각 게임은{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">/game/[슬러그]</code>{" "}
+          (DB에 저장된 제목 기반 주소; 숫자 ID URL은 슬러그로 안내){" "}
           경로로 열립니다. 한 게임에 대해 치지직 콘텐츠와 스토어 정보를 한 화면에서 정리합니다.
         </p>
         <div className="mt-5 rounded-xl border border-border bg-card p-5">

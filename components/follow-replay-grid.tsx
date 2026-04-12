@@ -88,6 +88,7 @@ export function FollowReplayGrid({
                 gameCover,
                 gameTitle,
                 gameId: game.id,
+                gameSlug: game.slug ?? null,
               })
             }
           })

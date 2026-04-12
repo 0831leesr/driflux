@@ -8,7 +8,7 @@ export default function GamePageLoading() {
         {/* Hero Section */}
         <section className="relative">
           <Skeleton className="h-[400px] w-full" />
-          
+
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/90 to-transparent p-6">
             <div className="mx-auto flex max-w-7xl items-end gap-6">
               <Skeleton className="h-48 w-36 shrink-0" />
@@ -43,9 +43,9 @@ export default function GamePageLoading() {
                   <Skeleton className="mb-4 h-7 w-40" />
                   <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
                     <div className="card-grid-4">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <StreamCardSkeleton key={i} />
-                    ))}
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <StreamCardSkeleton key={i} />
+                      ))}
                     </div>
                   </div>
                 </div>

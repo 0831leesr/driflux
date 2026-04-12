@@ -23,6 +23,7 @@ interface TagDetailsPageProps {
 function trendToCardData(game: HistoricalTrendingRow, yesterdaySet: Set<number>): GameCardData {
   return {
     id: game.id,
+    slug: game.slug ?? null,
     title: game.title,
     cover_image_url: game.cover_image_url,
     header_image_url: game.header_image_url ?? undefined,
@@ -41,6 +42,7 @@ function trendToCardData(game: HistoricalTrendingRow, yesterdaySet: Set<number>)
 function liveToCardData(game: TrendingGameRow, yesterdaySet: Set<number>): GameCardData {
   return {
     id: game.id,
+    slug: game.slug ?? null,
     title: game.title,
     cover_image_url: game.cover_image_url,
     header_image_url: game.header_image_url ?? undefined,

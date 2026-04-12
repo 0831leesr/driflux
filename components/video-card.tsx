@@ -12,6 +12,7 @@ import {
   getGameImageSrc,
   DEFAULT_STREAMING_IMAGE,
 } from "@/lib/utils"
+import { gameHref } from "@/lib/game-path"
 import { useFavoriteVideos } from "@/contexts/favorites-context"
 
 export interface VideoData {
@@ -26,6 +27,7 @@ export interface VideoData {
   gameCover: string
   gameTitle: string
   gameId?: number
+  gameSlug?: string | null
   /** 치지직 API publishDate (ISO) — 게시 시각 표시 */
   publishDate?: string | null
   /** API publishDateAt (ms) — 정렬 */
@@ -147,7 +149,7 @@ export function VideoCard({
         {/* Bottom-LEFT: game cover mini thumbnail */}
         {video.gameId ? (
           <Link
-            href={`/game/${video.gameId}`}
+            href={gameHref({ id: video.gameId, slug: video.gameSlug })}
             className="game-link absolute -bottom-3 left-3 h-14 w-10 overflow-hidden rounded-md border-2 border-card shadow-lg transition-transform hover:scale-105 hover:border-[hsl(var(--neon-purple))]"
             onClick={(e) => e.stopPropagation()}
           >
@@ -181,7 +183,7 @@ export function VideoCard({
         <div className="mb-0.5 flex items-baseline gap-1.5">
           {video.gameId ? (
             <Link
-              href={`/game/${video.gameId}`}
+              href={gameHref({ id: video.gameId, slug: video.gameSlug })}
               className="game-link truncate text-sm font-bold text-foreground transition-colors hover:text-[hsl(var(--neon-purple))]"
               onClick={(e) => e.stopPropagation()}
             >

@@ -28,6 +28,7 @@ function formatDotDate(isoYmd: string): string {
 function liveToCardData(games: TrendingGameRow[], yesterdayTrendingIds: Set<number>): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
+    slug: game.slug ?? null,
     title: game.title,
     cover_image_url: game.cover_image_url,
     header_image_url: game.header_image_url ?? game.cover_image_url ?? undefined,
@@ -54,6 +55,7 @@ function historicalToCardData(
 ): GameCardData[] {
   return games.map((game) => ({
     id: game.id,
+    slug: game.slug ?? null,
     title: game.title,
     cover_image_url: game.cover_image_url,
     header_image_url: game.header_image_url ?? game.cover_image_url ?? undefined,

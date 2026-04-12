@@ -50,7 +50,11 @@ export interface EventRow {
   game_category: string | null
   header_image_url: string | null
   external_url: string | null
-  games?: Pick<GameRow, "id" | "title" | "cover_image_url" | "header_image_url"> | null
+  games?:
+    | (Pick<GameRow, "id" | "title" | "cover_image_url" | "header_image_url"> & {
+        slug?: string | null
+      })
+    | null
 }
 
 /** 게임 상세 헤더: `game_top_streamers` TOP3 슬롯(비어 있으면 "---") */

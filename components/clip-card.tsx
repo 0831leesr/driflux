@@ -12,6 +12,7 @@ import {
   getGameImageSrc,
   DEFAULT_STREAMING_IMAGE,
 } from "@/lib/utils"
+import { gameHref } from "@/lib/game-path"
 import { useFavoriteClips } from "@/contexts/favorites-context"
 
 export interface ClipData {
@@ -25,6 +26,7 @@ export interface ClipData {
   gameCover: string
   gameTitle: string
   gameId?: number
+  gameSlug?: string | null
   /** 치지직 API createdDate — 게시 시각 표시(다시보기 카드와 동일) */
   createdDate?: string | null
 }
@@ -137,7 +139,7 @@ export function ClipCard({
 
         {clip.gameId ? (
           <Link
-            href={`/game/${clip.gameId}`}
+            href={gameHref({ id: clip.gameId, slug: clip.gameSlug })}
             className="game-link absolute -bottom-3 left-3 h-14 w-10 overflow-hidden rounded-md border-2 border-card shadow-lg transition-transform hover:scale-105 hover:border-[hsl(var(--neon-purple))]"
             onClick={(e) => e.stopPropagation()}
           >
@@ -170,7 +172,7 @@ export function ClipCard({
         <div className="mb-0.5 flex items-baseline gap-1.5">
           {clip.gameId ? (
             <Link
-              href={`/game/${clip.gameId}`}
+              href={gameHref({ id: clip.gameId, slug: clip.gameSlug })}
               className="game-link truncate text-sm font-bold text-foreground transition-colors hover:text-[hsl(var(--neon-purple))]"
               onClick={(e) => e.stopPropagation()}
             >

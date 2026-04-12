@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Eye, UserPlus, User, Loader2 } from "lucide-react"
 import { formatViewerCountShort, getGameImageSrc, DEFAULT_STREAMING_IMAGE } from "@/lib/utils"
+import { gameHref } from "@/lib/game-path"
 import { useFavoriteStreamers } from "@/contexts/favorites-context"
 
 export interface StreamData {
@@ -21,6 +22,7 @@ export interface StreamData {
   saleDiscount?: string
   hasDrops?: boolean
   gameId?: number
+  gameSlug?: string | null
   /** Chzzk channel ID for external link */
   channelId?: string | null
   /** Channel profile image URL */
@@ -132,7 +134,7 @@ export function StreamCard({
         {/* Bottom-LEFT: game cover mini thumbnail */}
         {stream.gameId ? (
           <Link
-            href={`/game/${stream.gameId}`}
+            href={gameHref({ id: stream.gameId, slug: stream.gameSlug })}
             className="game-link absolute -bottom-3 left-3 h-14 w-10 overflow-hidden rounded-md border-2 border-card shadow-lg transition-transform hover:scale-105 hover:border-[hsl(var(--neon-purple))]"
             onClick={(e) => e.stopPropagation()}
           >
@@ -186,7 +188,7 @@ export function StreamCard({
           <div className="flex items-center gap-1">
             {stream.gameId ? (
               <Link
-                href={`/game/${stream.gameId}`}
+                href={gameHref({ id: stream.gameId, slug: stream.gameSlug })}
                 className="game-link min-w-0 truncate text-sm font-bold text-foreground transition-colors hover:text-[hsl(var(--neon-purple))]"
                 onClick={(e) => e.stopPropagation()}
               >

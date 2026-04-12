@@ -69,6 +69,7 @@ function computeHiddenGems(
         {
           score,
           id: db.id,
+          slug: db.slug ?? null,
           title: getDisplayGameTitle({ korean_title: db.korean_title, title: db.title }),
           cover_image_url: db.cover_image_url,
           header_image_url: db.header_image_url ?? db.cover_image_url,
@@ -116,6 +117,7 @@ function computeNewReleases(
         {
           score,
           id: db.id,
+          slug: db.slug ?? null,
           title: getDisplayGameTitle({ korean_title: db.korean_title, title: db.title }),
           cover_image_url: db.cover_image_url,
           header_image_url: db.header_image_url ?? db.cover_image_url,

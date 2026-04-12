@@ -8,7 +8,7 @@ import { createClientForCache } from "@/lib/supabase/server"
 import { getGameMappings, resolveMapping } from "@/lib/mappings"
 
 const HOME_GAME_SELECT =
-  "id, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags, release_date, steam_appid"
+  "id, slug, title, korean_title, english_title, cover_image_url, header_image_url, price_krw, original_price_krw, discount_rate, is_free, top_tags, release_date, steam_appid"
 
 /** 공백·언더스코어 제거 + 소문자 — 표기 차이 완화 */
 function compactLookupKey(s: string): string {
@@ -188,6 +188,7 @@ export function matchTopLiveGamesToTrendingRows(
     const effectiveDiscount = getEffectiveDiscountRate(db.discount_rate)
     result.push({
       id: db.id,
+      slug: db.slug ?? null,
       title: getDisplayGameTitle({ korean_title: db.korean_title, title: db.title }),
       korean_title: db.korean_title,
       english_title: db.english_title,

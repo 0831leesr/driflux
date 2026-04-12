@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { EventRow } from "@/lib/types"
 import { getBestGameImage, getDisplayGameTitle, getGameImageSrc, DEFAULT_IMAGES } from "@/lib/utils"
+import { gameHref } from "@/lib/game-path"
 import { useCalendarSettings, type EventCategory } from "@/contexts/calendar-settings-context"
 import { useCustomEvents } from "@/contexts/custom-events-context"
 import { useFollowedEvents } from "@/contexts/followed-events-context"
@@ -58,6 +59,7 @@ interface GameEvent {
   image: string
   externalUrl?: string
   gameId?: number
+  gameSlug?: string | null
   gameCover?: string
   isCustom?: boolean
 }
@@ -151,6 +153,7 @@ function mapEventsToGameEvents(events: EventRow[]): GameEvent[] {
       image,
       externalUrl: ev.external_url ?? undefined,
       gameId: ev.games?.id,
+      gameSlug: ev.games?.slug ?? null,
       gameCover,
       isCustom: false,
     }
@@ -450,7 +453,7 @@ function EventCard({
         )}
         {event.gameCover && event.gameId && (
           <Link
-            href={`/game/${event.gameId}`}
+            href={gameHref({ id: event.gameId, slug: event.gameSlug })}
             className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-90"
             aria-label={`${event.subtitle} 게임 상세 보기`}
           >
