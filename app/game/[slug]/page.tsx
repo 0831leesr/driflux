@@ -6,7 +6,8 @@ import {
   fetchTodayDailyGameStatsByGameIds,
   getHistoricalTrending,
 } from "@/lib/data"
-import { getChzzkStreamsByCategory, getTopLiveGames } from "@/lib/chzzk"
+import { getChzzkStreamsByCategory, getTopLiveGames, type TopLiveGame } from "@/lib/chzzk"
+import { summarizeLogError } from "@/lib/format-log-error"
 import {
   getBestGameImage,
   getDisplayGameTitle,
@@ -123,12 +124,41 @@ export default async function GamePage({ params }: PageProps) {
   const gameTitle = getDisplayGameTitle(game)
   const categoryId = game.english_title?.trim() ?? ""
 
-  const [chzzkStreams, topLiveGames, yesterdayTrending, topStreamersRow] = await Promise.all([
+  const gameDataLabels = ["chzzkStreams", "topLiveGames", "yesterdayTrending", "topStreamersRow"] as const
+  const settled = await Promise.allSettled([
     categoryId ? getChzzkStreamsByCategory(categoryId) : Promise.resolve([]),
     getTopLiveGames(50),
     getHistoricalTrending("yesterday"),
     fetchGameTopStreamersRow(game.id),
   ])
+
+  let chzzkStreams: Awaited<ReturnType<typeof getChzzkStreamsByCategory>> = []
+  let topLiveGames: TopLiveGame[] = []
+  let yesterdayTrending: Awaited<ReturnType<typeof getHistoricalTrending>> = []
+  let topStreamersRow: Awaited<ReturnType<typeof fetchGameTopStreamersRow>> = null
+
+  settled.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.warn(`[GamePage] ${gameDataLabels[i]}:`, summarizeLogError(result.reason))
+      return
+    }
+    switch (i) {
+      case 0:
+        chzzkStreams = result.value as Awaited<ReturnType<typeof getChzzkStreamsByCategory>>
+        break
+      case 1:
+        topLiveGames = result.value as TopLiveGame[]
+        break
+      case 2:
+        yesterdayTrending = result.value as Awaited<ReturnType<typeof getHistoricalTrending>>
+        break
+      case 3:
+        topStreamersRow = result.value as Awaited<ReturnType<typeof fetchGameTopStreamersRow>>
+        break
+      default:
+        break
+    }
+  })
 
   const isYesterdayTrending = yesterdayTrending.some((g) => g.id === game.id)
   const todayStatsMap = await fetchTodayDailyGameStatsByGameIds([game.id])

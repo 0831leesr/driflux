@@ -15,6 +15,7 @@ import {
   normalizeStreamerName,
 } from "@/lib/actions/update-top-streamers"
 import { isPostgrestMissingColumnError } from "@/lib/postgrest-utils"
+import { summarizeLogError } from "@/lib/format-log-error"
 
 /**
  * Cron Job API: 일일 피크 통계 + 급상승(Momentum) 갱신
@@ -572,7 +573,7 @@ export async function GET(request: Request) {
         `[DailyStats] streamer_game_logs — kst: ${streamerLogs.kstLogDate}, games: ${gamesFetched}, rows: ${logRows.length}, upserted: ${streamerLogs.upserted}, failed: ${streamerLogs.failed}`,
       )
     } catch (e) {
-      streamerLogs.error = e instanceof Error ? e.message : String(e)
+      streamerLogs.error = summarizeLogError(e)
       console.error("[DailyStats] streamer_game_logs pipeline failed:", streamerLogs.error)
     }
 

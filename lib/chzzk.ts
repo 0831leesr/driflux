@@ -839,6 +839,19 @@ export async function fetchChzzkGamePosterImage(categoryId: string): Promise<str
 
     const rawText = await response.text()
     if (!response.ok) {
+      // 카테고리 미존재(404)는 흔함 — error 대신 warn으로 노이즈 감소
+      if (response.status === 404) {
+        try {
+          const j = JSON.parse(rawText) as { code?: number; message?: string }
+          if (j.code === 404 || /찾을 수 없/.test(String(j.message ?? ""))) {
+            console.warn(`[Chzzk Poster] 404 (no category): ${formattedCategoryId}`)
+            return null
+          }
+        } catch {
+          console.warn(`[Chzzk Poster] 404 (no category): ${formattedCategoryId}`)
+          return null
+        }
+      }
       console.error("[Fetch Game Poster Error]:", chzzkTruncateErrBody(rawText))
       return null
     }
