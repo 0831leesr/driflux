@@ -17,14 +17,14 @@ export function Footer() {
         {/* Disclaimer */}
         <p className="mt-2 leading-relaxed">
           Richzem is an independent project and is not affiliated with, endorsed by, or sponsored
-          by NAVER Corp., Valve Corporation, or Twitch Interactive, Inc.
+          by NAVER Corp., Valve Corporation, IGDB, or any game publisher or streaming platform referenced.
         </p>
 
         {/* Trademark notices */}
         <div className="mt-2 space-y-0.5 opacity-75">
           <p>Chzzk and the Chzzk logo are trademarks of NAVER Corp.</p>
           <p>Steam and the Steam logo are trademarks of Valve Corporation.</p>
-          <p>Game metadata and imagery are provided by IGDB.com.</p>
+          <p>Game metadata and cover imagery are provided by IGDB.com and Steam.</p>
           <p>All other trademarks are property of their respective owners.</p>
         </div>
 

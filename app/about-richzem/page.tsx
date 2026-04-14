@@ -80,7 +80,7 @@ export default function RichzemAboutPage() {
                 나열합니다.
               </li>
               <li>
-                <strong className="text-foreground">따끈한 신작</strong>(화면 표시명과 동일): DB 출시일이 약 30일 이내인
+                <strong className="text-foreground">따끈따끈 신작</strong>(화면 표시명과 동일): DB 출시일이 약 30일 이내인
                 게임 중 현재 라이브가 있는 항목만 남기고, 시청자 수와 출시 경과 일수를 반영한 내부 점수로 순서를 매겨
                 나열합니다.
               </li>
@@ -190,9 +190,10 @@ export default function RichzemAboutPage() {
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             헤더 이미지·표지, 표시 제목(한글 타이틀 우선),{" "}
             <strong className="text-foreground">라이브 채널 수·시청자 수</strong>, Steam 할인 배지,{" "}
-            태그(#)
-            링크, <strong className="text-foreground">게임 팔로우</strong>, Steam 스토어 열기가 있습니다.
-            스팀 사용자 평가(도넛 차트)·크리틱 스코어가 있으면 함께 표시됩니다.
+            태그(#) 링크, <strong className="text-foreground">게임 팔로우</strong>, Steam 스토어 열기가 있습니다.
+            스팀 사용자 평가(도넛 차트)·크리틱 스코어가 있으면 함께 표시됩니다.{" "}
+            최근 집계 데이터를 바탕으로 한 <strong className="text-foreground">인기 스트리머 TOP3</strong> 슬롯도
+            함께 표시됩니다(집계된 데이터가 없으면 자리만 표시됩니다).
           </p>
           <h3 className="mt-4 font-semibold text-foreground">콘텐츠 탭</h3>
           <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm text-muted-foreground">
