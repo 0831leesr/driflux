@@ -24,8 +24,6 @@ interface LeftSidebarProps {
   embedded?: boolean
   /** When true, sidebar is collapsed (icon-only mode). Controlled by parent. */
   isCollapsed?: boolean
-  /** 루트 레이아웃에서 시드 — `/api/sidebar-spotlight` 중복 호출 방지 */
-  initialSpotlight: { trending: SidebarSpotlightGame[]; rising: SidebarSpotlightGame[] }
 }
 
 // Tag icon mapping
@@ -63,7 +61,6 @@ export function LeftSidebar({
   games: _deprecatedGames,
   embedded = false,
   isCollapsed = false,
-  initialSpotlight,
 }: LeftSidebarProps) {
   const pathname = usePathname()
   const { isAuthenticated, sessionResolved } = useFavoritesSession()
@@ -76,11 +73,30 @@ export function LeftSidebar({
   const [isLoadingGames, setIsLoadingGames] = useState(true)
   const [streamerStatuses, setStreamerStatuses] = useState<Record<string, { isLive: boolean; gameTitle?: string }>>({})
   const [isLoadingStreamers, setIsLoadingStreamers] = useState(false)
-  const [spotlight] = useState(() => ({
-    trending: Array.isArray(initialSpotlight.trending) ? initialSpotlight.trending : [],
-    rising: Array.isArray(initialSpotlight.rising) ? initialSpotlight.rising : [],
-  }))
-  const spotlightLoading = false
+  const [spotlight, setSpotlight] = useState<{ trending: SidebarSpotlightGame[]; rising: SidebarSpotlightGame[] }>({
+    trending: [],
+    rising: [],
+  })
+  const [spotlightLoading, setSpotlightLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/sidebar-spotlight")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) {
+          setSpotlight({
+            trending: Array.isArray(data.trending) ? data.trending : [],
+            rising: Array.isArray(data.rising) ? data.rising : [],
+          })
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setSpotlightLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   // Fetch games data when favorite IDs change
   useEffect(() => {

@@ -2,7 +2,6 @@
 
 import { useState, FormEvent, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { useTheme } from "next-themes"
 import Link from "next/link"
 import { Search, Menu, PanelLeftClose, PanelLeftOpen, Info } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -12,26 +11,19 @@ import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { LeftSidebar } from "@/components/left-sidebar"
 import { Footer } from "@/components/footer"
 import { MainTabNavShell } from "@/components/main-tab-nav"
-import type { SidebarSpotlightGame } from "@/lib/sidebar-spotlight"
 
 interface AppShellProps {
   children: React.ReactNode
   /** Server-rendered auth slot (Login / account menu). */
   headerAuth: React.ReactNode
-  /** 서버에서 한 번 계산해 전달 — 클라이언트 중복 fetch 방지 (Hobby) */
-  initialSidebarSpotlight: { trending: SidebarSpotlightGame[]; rising: SidebarSpotlightGame[] }
 }
 
-export function AppShell({ children, headerAuth, initialSidebarSpotlight }: AppShellProps) {
+export function AppShell({ children, headerAuth }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const { resolvedTheme } = useTheme()
-  const logoMiniSrc = resolvedTheme === "light" ? "/logo_mini_light.png" : "/logo_mini_dark.png"
-  const logoTextSrc = resolvedTheme === "light" ? "/logo_light.png" : "/logo_dark.png"
-
   // Close mobile menu when route changes (e.g. user clicked a link)
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -75,18 +67,41 @@ export function AppShell({ children, headerAuth, initialSidebarSpotlight }: AppS
           </Button>
           <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <Link href="/" className="flex h-8 shrink-0 items-center gap-2">
+              {/* dark/light 두 버전을 모두 SSR하여 CSS로 토글 — JS hydration 후 src 교체 없음 → CLS 0 */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={logoMiniSrc}
+                src="/logo_mini_dark.webp"
                 alt=""
-                className="h-8 w-auto object-contain"
+                width={32}
+                height={32}
+                className="h-8 w-auto object-contain dark:block hidden"
                 fetchPriority="high"
               />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={logoTextSrc}
+                src="/logo_mini_light.webp"
+                alt=""
+                width={32}
+                height={32}
+                className="h-8 w-auto object-contain dark:hidden block"
+                fetchPriority="high"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo_dark.webp"
                 alt="Richzem"
-                className="h-5 w-auto object-contain"
+                width={120}
+                height={20}
+                className="h-5 w-auto object-contain dark:block hidden"
+                fetchPriority="high"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo_light.webp"
+                alt="Richzem"
+                width={120}
+                height={20}
+                className="h-5 w-auto object-contain dark:hidden block"
                 fetchPriority="high"
               />
             </Link>
@@ -126,13 +141,13 @@ export function AppShell({ children, headerAuth, initialSidebarSpotlight }: AppS
       {/* Mobile Sidebar Sheet */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="w-60 p-0 border-r border-border">
-          <LeftSidebar embedded initialSpotlight={initialSidebarSpotlight} />
+          <LeftSidebar embedded />
         </SheetContent>
       </Sheet>
 
       {/* Main Layout with Sidebar - 사이드바 고정, 메인 영역만 스크롤 */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <LeftSidebar isCollapsed={sidebarCollapsed} initialSpotlight={initialSidebarSpotlight} />
+        <LeftSidebar isCollapsed={sidebarCollapsed} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] transition-[margin] duration-300 ease-in-out">
           <main className="flex min-h-full min-w-0 flex-1 flex-col">
             {showMainTabs ? <MainTabNavShell /> : null}

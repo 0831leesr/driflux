@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { AppHeaderAuth } from "@/components/header";
-import { getSidebarSpotlightGamesCached } from "@/lib/sidebar-spotlight";
 import { FavoritesProvider } from "@/contexts/favorites-context";
 import { CalendarSettingsProvider } from "@/contexts/calendar-settings-context";
 import { CustomEventsProvider } from "@/contexts/custom-events-context";
@@ -53,22 +53,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const headerAuth = <AppHeaderAuth />;
-
-  let initialSidebarSpotlight: Awaited<ReturnType<typeof getSidebarSpotlightGamesCached>> = {
-    trending: [],
-    rising: [],
-  };
-  try {
-    initialSidebarSpotlight = await getSidebarSpotlightGamesCached();
-  } catch (e) {
-    console.error("[layout] getSidebarSpotlightGamesCached:", e);
-  }
+  const headerAuth = (
+    <Suspense fallback={<div className="h-8 w-8 rounded-full bg-muted animate-pulse" />}>
+      <AppHeaderAuth />
+    </Suspense>
+  );
 
   return (
     <html lang="ko" className="h-full" suppressHydrationWarning>
@@ -82,7 +76,7 @@ export default async function RootLayout({
               <CalendarSettingsProvider>
                 <CustomEventsProvider>
                   <FollowedEventsProvider>
-                    <AppShell headerAuth={headerAuth} initialSidebarSpotlight={initialSidebarSpotlight}>
+                    <AppShell headerAuth={headerAuth}>
                       {children}
                     </AppShell>
                   </FollowedEventsProvider>
