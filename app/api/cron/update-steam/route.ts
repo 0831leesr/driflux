@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { getSteamGameDetails, processSteamData, findSteamAppIdWithConfidence, getSteamReviewSummary } from "@/lib/steam"
-import { getGameMappings, resolveMapping, type GameMapping } from "@/lib/mappings"
+import { getGameMappings, normalizeChzzkMappingKey, resolveMapping, type GameMapping } from "@/lib/mappings"
 import { delay } from "@/lib/utils"
 import { searchIGDBGame, fetchSteamAppIdFromIGDB, fetchEarliestReleaseDateFromIGDB } from "@/lib/igdb"
 import { fetchChzzkGamePosterImage } from "@/lib/chzzk"
@@ -14,6 +14,149 @@ const STEAM_SKIP_APP_IDS = new Set([238960, 212200, 495910, 1599340])
 
 /** Vercel serverless timeout: 300초 (cron 제한) */
 export const maxDuration = 300
+
+const FORCE_UPDATE_LIMIT = 10
+const GAME_SELECT =
+  "id, title, korean_title, english_title, slug, steam_appid, header_image_url, discount_rate, last_data_update, game_data_update"
+
+type SteamUpdateGame = {
+  id: number
+  title: string
+  korean_title?: string | null
+  english_title?: string | null
+  slug?: string | null
+  steam_appid: number | null
+  header_image_url?: string | null
+  discount_rate?: number | null
+  last_data_update?: string | null
+  game_data_update?: string | null
+}
+
+type QueuedSteamUpdateGame = SteamUpdateGame & {
+  forceUpdateMappingTitle?: string
+}
+
+type SupabaseQueryError = { message: string } | null
+type SelectQueryResult<T> = { data: T[] | null; error: SupabaseQueryError }
+type SelectQuery<T> = {
+  eq(column: string, value: string | number): SelectQuery<T>
+  in(column: string, values: string[]): SelectQuery<T>
+  limit(count: number): PromiseLike<SelectQueryResult<T>>
+}
+type MutationQuery = {
+  eq(column: string, value: string | number | boolean): MutationQuery & PromiseLike<{ error: SupabaseQueryError }>
+}
+type AdminSupabaseClient = {
+  from(table: "games"): { select(columns: string): SelectQuery<SteamUpdateGame> }
+  from(table: "game_mappings"): { update(values: Record<string, string | boolean>): MutationQuery }
+  from(table: "game_tags"): { delete(): MutationQuery }
+}
+
+function uniqueMappings(mappings: Record<string, GameMapping>): GameMapping[] {
+  return Array.from(
+    new Map(Object.values(mappings).map((mapping) => [mapping.chzzk_title, mapping])).values(),
+  )
+}
+
+/** resolveMapping과 동일한 제목 후보(원문 + 공백 제거 키) — games 컬럼과의 정확 일치 조회용 */
+function buildForceLookupTitles(mapping: GameMapping): string[] {
+  const raw = [mapping.chzzk_title, mapping.steam_title, mapping.igdb_title]
+  const out = new Set<string>()
+  for (const t of raw) {
+    const s = t?.trim()
+    if (!s) continue
+    out.add(s)
+    const compact = normalizeChzzkMappingKey(s)
+    if (compact) out.add(compact)
+  }
+  return [...out]
+}
+
+async function fetchForceUpdateGames(
+  adminSupabase: AdminSupabaseClient,
+  forceMappings: GameMapping[],
+  allMappings: Record<string, GameMapping>,
+): Promise<QueuedSteamUpdateGame[]> {
+  const queued = new Map<number, QueuedSteamUpdateGame>()
+
+  for (const mapping of forceMappings) {
+    const titles = buildForceLookupTitles(mapping)
+
+    const considerRow = (row: SteamUpdateGame, match: "steam_appid" | "title") => {
+      if (match === "steam_appid") {
+        if (mapping.steam_appid == null) return
+        if (row.steam_appid !== mapping.steam_appid) return
+      } else {
+        const resolved = resolveMapping(allMappings, row.title?.trim() ?? "", row.english_title, row.korean_title)
+        if (resolved?.chzzk_title !== mapping.chzzk_title) return
+      }
+      if (!queued.has(row.id)) {
+        queued.set(row.id, {
+          ...row,
+          forceUpdateMappingTitle: mapping.chzzk_title,
+        })
+      }
+    }
+
+    if (mapping.steam_appid != null) {
+      const { data, error } = await adminSupabase
+        .from("games")
+        .select(GAME_SELECT)
+        .eq("steam_appid", mapping.steam_appid)
+        .limit(10)
+      if (error) {
+        console.error(`[Steam Update] force_update steam_appid lookup failed (${mapping.chzzk_title}):`, error.message)
+      } else {
+        for (const row of (data as SteamUpdateGame[] | null) ?? []) {
+          considerRow(row, "steam_appid")
+        }
+      }
+    }
+
+    if (titles.length > 0) {
+      for (const column of ["title", "korean_title", "english_title"] as const) {
+        const { data, error } = await adminSupabase
+          .from("games")
+          .select(GAME_SELECT)
+          .in(column, titles)
+          .limit(20)
+        if (error) {
+          console.error(`[Steam Update] force_update ${column} lookup failed (${mapping.chzzk_title}):`, error.message)
+        } else {
+          for (const row of (data as SteamUpdateGame[] | null) ?? []) {
+            considerRow(row, "title")
+          }
+        }
+      }
+    }
+
+    if (!Array.from(queued.values()).some((game) => game.forceUpdateMappingTitle === mapping.chzzk_title)) {
+      console.warn(
+        `[Steam Update] force_update: no game matched mapping "${mapping.chzzk_title}". ` +
+          `Ensure games.title / korean_title / english_title 중 하나가 resolveMapping(↔chzzk_title)에 맞거나, ` +
+          `games.steam_appid가 game_mappings.steam_appid과 일치합니다.`,
+      )
+    }
+  }
+
+  return Array.from(queued.values())
+}
+
+async function clearForceUpdateFlag(
+  adminSupabase: AdminSupabaseClient,
+  mappingTitle?: string,
+) {
+  if (!mappingTitle) return
+  const { error } = await adminSupabase
+    .from("game_mappings")
+    .update({ force_update: false })
+    .eq("chzzk_title", mappingTitle)
+    .eq("force_update", true)
+
+  if (error) {
+    console.error(`[Steam Update] Failed to clear force_update for ${mappingTitle}:`, error.message)
+  }
+}
 
 /**
  * Cron Job API: Update Steam Game Data
@@ -73,6 +216,7 @@ export async function GET(request: Request) {
         persistSession: false,
       },
     })
+    const forceUpdateSupabase = adminSupabase as unknown as AdminSupabaseClient
 
     // Regular client for read operations
     const supabase = await createClient()
@@ -81,17 +225,31 @@ export async function GET(request: Request) {
 
     // 사전 로드: skip_steam & skip_igdb 필터링을 위해 mappings 먼저 조회
     const mappings = await getGameMappings()
-    const uniqueMappings = new Set(Object.values(mappings).map((m) => m.chzzk_title)).size
-    console.log(`[Steam Update] Loaded ${uniqueMappings} game mappings from DB`)
+    const uniqueMappingCount = new Set(Object.values(mappings).map((m) => m.chzzk_title)).size
+    console.log(`[Steam Update] Loaded ${uniqueMappingCount} game mappings from DB`)
 
-    // 갱신 대상 선정: game_data_update 오래된 순 → last_data_update 오래된 순.
-    // game_data_update=성공 시각, last_data_update=시도 시각. skip_steam&skip_igdb 모두 TRUE인 게임 제외.
     const limit = limitParam ? parseInt(limitParam, 10) : 50
-    const fetchLimit = Math.max(limit + 30, 80) // 필터링 여유 확보
+    const forceUpdateMappings = !appIdParam
+      ? uniqueMappings(mappings).filter((mapping) => mapping.force_update).slice(0, FORCE_UPDATE_LIMIT)
+      : []
+    const forceUpdateGames = forceUpdateMappings.length > 0
+      ? (await fetchForceUpdateGames(forceUpdateSupabase, forceUpdateMappings, mappings)).slice(0, limit)
+      : []
+    const forceUpdateGameIds = new Set(forceUpdateGames.map((game) => game.id))
+    if (forceUpdateMappings.length > 0) {
+      console.log(
+        `[Steam Update] force_update mappings: ${forceUpdateMappings.length}, matched games: ${forceUpdateGames.length}`,
+      )
+    }
+
+    // 갱신 대상 선정: force_update 게임 우선 → game_data_update 오래된 순 → last_data_update 오래된 순.
+    // game_data_update=성공 시각, last_data_update=시도 시각. 일반 배치에서는 skip_steam&skip_igdb 모두 TRUE인 게임 제외.
+    const regularLimit = Math.max(limit - forceUpdateGames.length, 0)
+    const fetchLimit = Math.max(regularLimit + 30, 80) // 필터링 여유 확보
 
     let query = supabase
       .from("games")
-      .select("id, title, korean_title, english_title, slug, steam_appid, header_image_url, discount_rate, last_data_update, game_data_update")
+      .select(GAME_SELECT)
       .order("game_data_update", { ascending: true, nullsFirst: true })
       .order("last_data_update", { ascending: true, nullsFirst: true })
 
@@ -106,11 +264,13 @@ export async function GET(request: Request) {
       }
       query = query.eq("steam_appid", appId)
       // appid 지정 시 limit만 적용 (필터링 생략)
-    } else {
+    } else if (regularLimit > 0) {
       query = query.limit(fetchLimit)
     }
 
-    const { data: rawGames, error: fetchError } = await query
+    const { data: rawGames, error: fetchError } = regularLimit > 0 || appIdParam
+      ? await query
+      : { data: [], error: null }
 
     if (fetchError) {
       console.error("[Steam Update] Database fetch error:", fetchError)
@@ -121,22 +281,24 @@ export async function GET(request: Request) {
     }
 
     // skip_steam & skip_igdb 모두 TRUE인 게임 제외 후 limit개 선정
-    let games = rawGames ?? []
-    if (!appIdParam && games.length > 0) {
-      const filtered: typeof games = []
-      for (const g of games) {
+    let regularGames = (rawGames ?? []) as QueuedSteamUpdateGame[]
+    if (!appIdParam && regularGames.length > 0) {
+      const filtered: QueuedSteamUpdateGame[] = []
+      for (const g of regularGames) {
+        if (forceUpdateGameIds.has(g.id)) continue
         const koreanTitle = (g as { korean_title?: string | null }).korean_title?.trim() || null
         const englishTitle = (g as { english_title?: string | null }).english_title?.trim() || null
         const fallbackTitle = g.title?.trim() || ""
         const mapping = resolveMapping(mappings, fallbackTitle, englishTitle, koreanTitle)
         if (mapping?.skip_steam && mapping?.skip_igdb) continue // 의도적 제외
         filtered.push(g)
-        if (filtered.length >= limit) break
+        if (filtered.length >= regularLimit) break
       }
-      games = filtered
-    } else if (appIdParam && games.length > 1) {
-      games = games.slice(0, 1) // appid 지정 시 1건만
+      regularGames = filtered
+    } else if (appIdParam && regularGames.length > 1) {
+      regularGames = regularGames.slice(0, 1) // appid 지정 시 1건만
     }
+    const games: QueuedSteamUpdateGame[] = appIdParam ? regularGames : [...forceUpdateGames, ...regularGames]
 
     if (!games || games.length === 0) {
       return NextResponse.json({
@@ -147,6 +309,8 @@ export async function GET(request: Request) {
           updated: 0,
           failed: 0,
           skipped: 0,
+          forceUpdateMappings: forceUpdateMappings.length,
+          forceUpdateMatched: forceUpdateGames.length,
         },
         duration: Date.now() - startTime,
       })
@@ -159,6 +323,8 @@ export async function GET(request: Request) {
       updated: 0,
       failed: 0,
       skipped: 0,
+      forceUpdateMappings: forceUpdateMappings.length,
+      forceUpdateMatched: forceUpdateGames.length,
       details: [] as Array<{
         id: number
         title: string
@@ -284,6 +450,7 @@ export async function GET(request: Request) {
               })
               .eq("id", game.id)
             if (!chzzkUpdateErr) {
+              await clearForceUpdateFlag(forceUpdateSupabase, game.forceUpdateMappingTitle)
               console.log(`[Steam Update] Chzzk-only update for cover/header: ${game.title}`)
               results.updated++
               results.details.push({ id: game.id, title: game.title, steam_appid: game.steam_appid ?? null, status: "updated" })
@@ -414,6 +581,7 @@ export async function GET(request: Request) {
             message: updateError.message,
           })
         } else {
+          await clearForceUpdateFlag(forceUpdateSupabase, game.forceUpdateMappingTitle)
           if (tags.length > 0) {
             try {
               const tagIds: number[] = []
@@ -439,6 +607,14 @@ export async function GET(request: Request) {
               }
             } catch (tagErr) {
               console.error(`[Steam Update] Tag sync error:`, tagErr)
+            }
+          } else if (game.forceUpdateMappingTitle && mapping?.skip_steam && mapping?.skip_igdb) {
+            const { error: tagDeleteError } = await adminSupabase
+              .from("game_tags")
+              .delete()
+              .eq("game_id", game.id)
+            if (tagDeleteError) {
+              console.error(`[Steam Update] Tag cleanup error:`, tagDeleteError.message)
             }
           }
           console.log(`[Steam Update] ✓ Updated: ${game.title}`)
@@ -471,6 +647,8 @@ export async function GET(request: Request) {
         updated: results.updated,
         failed: results.failed,
         skipped: results.skipped,
+        forceUpdateMappings: results.forceUpdateMappings,
+        forceUpdateMatched: results.forceUpdateMatched,
       },
       details: results.details,
       duration,

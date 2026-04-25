@@ -15,6 +15,12 @@
 import { readFileSync, readdirSync } from "fs"
 import { join } from "path"
 
+type PgClient = {
+  connect(): Promise<unknown>
+  query(sql: string): Promise<unknown>
+  end(): Promise<void>
+}
+
 async function loadEnv() {
   try {
     const envPath = join(process.cwd(), ".env.local")
@@ -79,6 +85,7 @@ async function main() {
     "39_fetch_game_ids_for_top_streamer_rpc.sql",
     "40_fetch_game_ids_recent_only.sql",
     "41_daily_game_stats_public_read.sql",
+    "42_game_mappings_force_update.sql",
   ]
   const useAll = process.argv.includes("--all")
   const toRun = useAll
@@ -99,11 +106,12 @@ async function main() {
     return
   }
 
-  let client: any
+  let client: PgClient | undefined
   try {
     const { default: pg } = await import("pg")
-    client = new pg.Client({ connectionString: databaseUrl })
-    await client.connect()
+    const pgClient: PgClient = new pg.Client({ connectionString: databaseUrl })
+    client = pgClient
+    await pgClient.connect()
   } catch (err) {
     console.error(
       "❌ Failed to connect. Install pg: npm install -D pg @types/pg\n",
@@ -113,17 +121,19 @@ async function main() {
   }
 
   try {
+    if (!client) throw new Error("Database client was not initialized")
     for (const file of toRun) {
       const filePath = join(sqlDir, file)
       const sql = readFileSync(filePath, "utf-8")
       try {
         await client.query(sql)
         console.log(`  ✅ ${file}`)
-      } catch (e: any) {
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e)
         // Skip "already exists" for idempotent migrations (ADD COLUMN IF NOT EXISTS, etc.)
         if (
-          e.message?.includes("already exists") ||
-          e.message?.includes("duplicate key")
+          message.includes("already exists") ||
+          message.includes("duplicate key")
         ) {
           console.log(`  ⏭️  ${file} (already applied)`)
         } else {
@@ -136,7 +146,7 @@ async function main() {
     console.error("\n❌ Migration failed:", err)
     process.exit(1)
   } finally {
-    await client.end()
+    await client?.end()
   }
 }
 
