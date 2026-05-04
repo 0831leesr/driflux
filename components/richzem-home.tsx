@@ -2,7 +2,7 @@ import {
   fetchUpcomingEvents,
   fetchEsportsChannels,
   fetchAllGamesForHome,
-  fetchTodayDailyGameStatsByGameIds,
+  fetchTodayDailyGameStatsForKstToday,
   getHistoricalTrending,
   type HomeGameRow,
   type HiddenGemsRow,
@@ -161,6 +161,7 @@ export default async function RichzemHome() {
     dbGames,
     upcomingEvents,
     esportsChannels,
+    todayDailyStatsByGameId,
   ] = await Promise.all([
     homeSafe("getTopLiveGames", getTopLiveGames(50), []),
     homeSafe("getHistoricalTrending(yesterday)", getHistoricalTrending("yesterday"), []),
@@ -169,6 +170,7 @@ export default async function RichzemHome() {
     homeSafe("fetchAllGamesForHome", fetchAllGamesForHome(), []),
     homeSafe("fetchUpcomingEvents", fetchUpcomingEvents(), []),
     homeSafe("fetchEsportsChannels", fetchEsportsChannels(), []),
+    homeSafe("fetchTodayDailyGameStatsForKstToday", fetchTodayDailyGameStatsForKstToday(), new Map()),
   ])
 
   // 공유 DB 룩업 인덱스 (한 번만 생성)
@@ -177,9 +179,8 @@ export default async function RichzemHome() {
   // 서버 사이드 컨퓨테이션 — 라이브 매칭 전체 + 당일 daily_game_stats 병합 (클라이언트에서 트렌드/급상승 정렬)
   const dbGamesForLiveMatch = await fetchAndMergeHomeGamesForTopLive(topLiveGames, dbGames)
   const allMatchedLive = matchTopLiveGamesToTrendingRows(topLiveGames, dbGamesForLiveMatch)
-  const todayStatsMap = await fetchTodayDailyGameStatsByGameIds(allMatchedLive.map((g) => g.id))
   const trendingLive: TrendingGameRow[] = allMatchedLive.map((g) => {
-    const s = todayStatsMap.get(String(g.id))
+    const s = todayDailyStatsByGameId.get(String(g.id))
     return {
       ...g,
       trend_score: s?.trend_score ?? 0,

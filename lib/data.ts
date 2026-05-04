@@ -597,6 +597,55 @@ export type TodayGameStatRow = {
   current_viewers: number
 }
 
+function rowToTodayGameStat(row: {
+  game_id: number
+  trend_score?: number | null
+  momentum_score?: number | null
+  current_viewers?: number | null
+}): TodayGameStatRow {
+  return {
+    trend_score: Number(row.trend_score) || 0,
+    momentum_score: Number(row.momentum_score) || 0,
+    current_viewers: Number(row.current_viewers) || 0,
+  }
+}
+
+/**
+ * KST 오늘 `record_date`의 `daily_game_stats` 전체 (페이지네이션).
+ * 홈 등에서 상위 라이브 매칭 전에 병렬로 조회해 직렬 대기를 제거할 때 사용.
+ */
+export async function fetchTodayDailyGameStatsForKstToday(): Promise<Map<string, TodayGameStatRow>> {
+  const map = new Map<string, TodayGameStatRow>()
+  const supabase = createClientForCache()
+  const today = formatKstDateString()
+  let offset = 0
+  const pageSize = 1000
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("daily_game_stats")
+      .select("game_id, trend_score, momentum_score, current_viewers")
+      .eq("record_date", today)
+      .order("game_id", { ascending: true })
+      .range(offset, offset + pageSize - 1)
+
+    if (error) {
+      console.error("[Trending Fetch Error] fetchTodayDailyGameStatsForKstToday:", error.message, error)
+      return map
+    }
+    if (!data?.length) break
+
+    for (const row of data) {
+      map.set(String(row.game_id), rowToTodayGameStat(row))
+    }
+
+    if (data.length < pageSize) break
+    offset += pageSize
+  }
+
+  return map
+}
+
 export async function fetchTodayDailyGameStatsByGameIds(
   gameIds: number[]
 ): Promise<Map<string, TodayGameStatRow>> {
@@ -623,11 +672,7 @@ export async function fetchTodayDailyGameStatsByGameIds(
 
   for (const row of data) {
     const id = String(row.game_id)
-    map.set(id, {
-      trend_score: Number(row.trend_score) || 0,
-      momentum_score: Number((row as { momentum_score?: number }).momentum_score) || 0,
-      current_viewers: Number((row as { current_viewers?: number }).current_viewers) || 0,
-    })
+    map.set(id, rowToTodayGameStat(row))
   }
   return map
 }
