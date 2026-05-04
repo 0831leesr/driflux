@@ -9,7 +9,12 @@
 import { unstable_cache } from "next/cache"
 import { createClient, createClientForCache } from "@/lib/supabase/server"
 import type { EventRow } from "@/lib/types"
-import { getBestGameImage, getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
+import {
+  escapePostgrestOrValue,
+  getBestGameImage,
+  getDisplayGameTitle,
+  getEffectiveDiscountRate,
+} from "@/lib/utils"
 import { getGameMappings, resolveMapping, applyMappingOverridesToGame, type GameMapping } from "@/lib/mappings"
 import { getChzzkStreamsByCategory, searchChzzkLives, getTopLiveGames } from "@/lib/chzzk"
 import { addKstCalendarDays, formatKstDateString } from "@/lib/kst-dates"
@@ -74,13 +79,6 @@ function formatViewers(count: number | null): string {
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`
   return String(count)
 }
-
-/** PostgREST .or() 필터 값 이스케이프 (쉼표, 따옴표 등 특수문자 처리) */
-function escapePostgrestOrValue(val: string): string {
-  const escaped = val.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-  return `"${escaped}"`
-}
-
 
 /* ── Fetch all games ── */
 export async function fetchGames(): Promise<GameRow[]> {

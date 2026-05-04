@@ -5,6 +5,7 @@
  * https://api.chzzk.naver.com/service/v1/channels/{channelId}/live-detail
  */
 
+import { unstable_cache } from "next/cache"
 import { delay } from "@/lib/utils"
 import { sortChzzkVodList } from "@/lib/chzzk-vod-order"
 
@@ -765,13 +766,14 @@ export async function getPopularCategories(
  * 치지직 categories/live API를 직접 호출하여 현재 시청자 수·방송 수 포함.
  *
  * API: GET /service/v1/categories/live?categoryType=GAME&size=50 (최대 50)
- * 캐싱: Next.js ISR 60초 (Vercel Edge Cache 활용)
+ * 캐싱: `unstable_cache`(60초) + 내부 fetch `next.revalidate`(60초)
  *
  * @param size - 반환할 게임 수 (기본: 50, 최대: 50)
  * @returns 시청자 수 내림차순 정렬된 TopLiveGame 배열
  */
-export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]> {
+async function fetchTopLiveGamesUncached(size: number = 50): Promise<TopLiveGame[]> {
   try {
+    const capped = Math.min(Math.max(Number(size) || 50, 1), 50)
     const topUrl = buildChzzkCategoriesLiveUrl()
     chzzkDbg("[Chzzk Request] Fetching top live games:", topUrl)
 
@@ -804,7 +806,7 @@ export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]>
         posterImageUrl: item.posterImageUrl ?? null,
       }))
       .sort((a, b) => b.concurrentUserCount - a.concurrentUserCount)
-      .slice(0, Math.min(size, 50))
+      .slice(0, capped)
 
     chzzkDbg(`[Chzzk] getTopLiveGames: returning ${result.length} games (top by viewers).`)
     return result
@@ -813,6 +815,10 @@ export async function getTopLiveGames(size: number = 50): Promise<TopLiveGame[]>
     return []
   }
 }
+
+export const getTopLiveGames = unstable_cache(fetchTopLiveGamesUncached, ["chzzk-getTopLiveGames"], {
+  revalidate: REVALIDATE_LIVE,
+})
 
 /**
  * 치지직 게임 정보 API - posterImageUrl(포스터 이미지) 조회

@@ -2,7 +2,11 @@
  * Chzzk TopLive + DB 게임 매칭 (동기 유틸 — "use server" 모듈에서 분리)
  */
 import type { TopLiveGame } from "@/lib/chzzk"
-import { getDisplayGameTitle, getEffectiveDiscountRate } from "@/lib/utils"
+import {
+  escapePostgrestOrValue,
+  getDisplayGameTitle,
+  getEffectiveDiscountRate,
+} from "@/lib/utils"
 import { fetchAllGamesForHome, type TrendingGameRow, type HomeGameRow } from "@/lib/data"
 import { createClientForCache } from "@/lib/supabase/server"
 import { getGameMappings, resolveMapping } from "@/lib/mappings"
@@ -30,10 +34,10 @@ async function fetchSupplementGamesBySteamAppIds(steamIds: number[]): Promise<Ho
   return data as HomeGameRow[]
 }
 
-async function fetchSupplementGamesByExactTitles(titles: string[]): Promise<HomeGameRow[]> {
-  const uniq = [...new Set(titles.map((t) => t.trim()).filter((t) => t.length > 0))]
-  if (uniq.length === 0) return []
-  const supabase = createClientForCache()
+async function fetchSupplementGamesByExactTitlesSplitQueries(
+  supabase: ReturnType<typeof createClientForCache>,
+  uniq: string[],
+): Promise<HomeGameRow[]> {
   const byId = new Map<number, HomeGameRow>()
   for (const col of ["korean_title", "english_title", "title"] as const) {
     const { data, error } = await supabase.from("games").select(HOME_GAME_SELECT).in(col, uniq)
@@ -42,6 +46,25 @@ async function fetchSupplementGamesByExactTitles(titles: string[]): Promise<Home
       const g = row as HomeGameRow
       if (!byId.has(g.id)) byId.set(g.id, g)
     }
+  }
+  return [...byId.values()]
+}
+
+async function fetchSupplementGamesByExactTitles(titles: string[]): Promise<HomeGameRow[]> {
+  const uniq = [...new Set(titles.map((t) => t.trim()).filter((t) => t.length > 0))]
+  if (uniq.length === 0) return []
+  const supabase = createClientForCache()
+  const inList = uniq.map(escapePostgrestOrValue).join(",")
+  const orFilter = `korean_title.in.(${inList}),english_title.in.(${inList}),title.in.(${inList})`
+  const { data, error } = await supabase.from("games").select(HOME_GAME_SELECT).or(orFilter)
+  if (error) {
+    console.warn("[TopLiveMatch] fetchSupplementGamesByExactTitles .or fallback:", error.message)
+    return fetchSupplementGamesByExactTitlesSplitQueries(supabase, uniq)
+  }
+  const byId = new Map<number, HomeGameRow>()
+  for (const row of data ?? []) {
+    const g = row as HomeGameRow
+    if (!byId.has(g.id)) byId.set(g.id, g)
   }
   return [...byId.values()]
 }

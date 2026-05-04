@@ -13,6 +13,12 @@ export function normalizeChzzkStreamerNameForMatch(s: string): string {
   return s.trim().toLowerCase()
 }
 
+/** PostgREST `.or()`, `.filter()` 등에서 사용하는 값 이스케이프 (쉼표·따옴표 처리) */
+export function escapePostgrestOrValue(val: string): string {
+  const escaped = val.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+  return `"${escaped}"`
+}
+
 /**
  * Format number to Korean Won (원화)
  * @param price - Price in KRW (e.g., 4500000 for 45,000원)
