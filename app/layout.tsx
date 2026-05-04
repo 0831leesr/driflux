@@ -66,6 +66,11 @@ export default function RootLayout({
 
   return (
     <html lang="ko" className="h-full" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://images.igdb.com" />
+        <link rel="preconnect" href="https://cdn.cloudflare.steamstatic.com" />
+        <link rel="preconnect" href="https://image.chzzk.naver.com" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen flex flex-col antialiased bg-background`}
         suppressHydrationWarning

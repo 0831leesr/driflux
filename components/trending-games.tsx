@@ -163,7 +163,11 @@ export function TrendingGames({
         <div className="card-grid-home-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="card-grid-home">
             {cardData.map((game, index) => (
-              <GameCard key={`${activeTab}-${game.id}`} game={game} priority={index < 4} />
+              <GameCard
+                key={`${activeTab}-${game.id}`}
+                game={game}
+                priority={index === 0}
+              />
             ))}
           </div>
         </div>
