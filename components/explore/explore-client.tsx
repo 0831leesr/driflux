@@ -348,8 +348,8 @@ export function ExploreClient({
                   />
                 ) : (
                   <>
-                    <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-                      <div className="card-grid-4">
+                    <div className="card-grid-home-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+                      <div className="card-grid-home">
                         {visibleExploreLive.map((item, i) => (
                           <GameCard
                             key={item.live.categoryId}
@@ -561,8 +561,8 @@ export function ExploreClient({
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="card-grid-4-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
-                  <div className="card-grid-4">
+                <div className="card-grid-home-wrapper -mx-4 px-4 sm:mx-0 sm:px-0">
+                  <div className="card-grid-home">
                     {visibleTrend.map((game, i) => (
                       <GameCard key={game.id} game={game} priority={i < 4} />
                     ))}
