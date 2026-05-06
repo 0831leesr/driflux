@@ -610,14 +610,14 @@ function rowToTodayGameStat(row: {
 
 /**
  * KST 오늘 `record_date`의 `daily_game_stats` 전체 (페이지네이션).
- * 홈 등에서 상위 라이브 매칭 전에 병렬로 조회해 직렬 대기를 제거할 때 사용.
+ * unstable_cache는 Map을 직렬화할 수 없으므로 배열로 캐싱하고 호출 측에서 Map으로 변환.
  */
-export async function fetchTodayDailyGameStatsForKstToday(): Promise<Map<string, TodayGameStatRow>> {
-  const map = new Map<string, TodayGameStatRow>()
+async function fetchTodayDailyGameStatsRaw(): Promise<Array<{ game_id: number } & TodayGameStatRow>> {
   const supabase = createClientForCache()
   const today = formatKstDateString()
   let offset = 0
   const pageSize = 1000
+  const all: Array<{ game_id: number } & TodayGameStatRow> = []
 
   while (true) {
     const { data, error } = await supabase
@@ -629,18 +629,33 @@ export async function fetchTodayDailyGameStatsForKstToday(): Promise<Map<string,
 
     if (error) {
       console.error("[Trending Fetch Error] fetchTodayDailyGameStatsForKstToday:", error.message, error)
-      return map
+      return all
     }
     if (!data?.length) break
 
     for (const row of data) {
-      map.set(String(row.game_id), rowToTodayGameStat(row))
+      all.push({ game_id: row.game_id, ...rowToTodayGameStat(row) })
     }
 
     if (data.length < pageSize) break
     offset += pageSize
   }
 
+  return all
+}
+
+const fetchTodayDailyGameStatsCached = unstable_cache(
+  fetchTodayDailyGameStatsRaw,
+  ["today-daily-game-stats"],
+  { revalidate: 60 }
+)
+
+export async function fetchTodayDailyGameStatsForKstToday(): Promise<Map<string, TodayGameStatRow>> {
+  const rows = await fetchTodayDailyGameStatsCached()
+  const map = new Map<string, TodayGameStatRow>()
+  for (const { game_id, ...stat } of rows) {
+    map.set(String(game_id), stat)
+  }
   return map
 }
 

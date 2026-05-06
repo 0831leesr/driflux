@@ -67,9 +67,14 @@ export default function RootLayout({
   return (
     <html lang="ko" className="h-full" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://images.igdb.com" />
+        {/* LCP 이미지 CDN — TCP/TLS 핸드셰이크를 HTML 수신 즉시 선행 */}
         <link rel="preconnect" href="https://cdn.cloudflare.steamstatic.com" />
+        <link rel="preconnect" href="https://cdn.akamai.steamstatic.com" />
+        <link rel="preconnect" href="https://livecloud-thumb.akamaized.net" />
         <link rel="preconnect" href="https://image.chzzk.naver.com" />
+        <link rel="preconnect" href="https://nng-phinf.pstatic.net" />
+        <link rel="dns-prefetch" href="https://images.igdb.com" />
+        <link rel="dns-prefetch" href="https://shared.akamai.steamstatic.com" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen flex flex-col antialiased bg-background`}

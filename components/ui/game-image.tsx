@@ -40,6 +40,10 @@ export default function GameImage({ src, type, alt, priority, ...props }: GameIm
     }
   }
 
+  // priority 이미지(첫 번째 행)는 Next.js 최적화 활성화: 안정적인 Steam URL은 30일 캐시로 변환 재사용.
+  // 나머지는 Vercel Hobby 플랜 변환 한도(1,000/월) 절약을 위해 unoptimized 유지.
+  const unoptimized = !priority || isLocalDefault
+
   return (
     <Image
       {...props}
@@ -48,7 +52,7 @@ export default function GameImage({ src, type, alt, priority, ...props }: GameIm
       priority={priority}
       placeholder={isLocalDefault ? "empty" : "blur"}
       blurDataURL={isLocalDefault ? undefined : BLUR_DATA_URL}
-      unoptimized
+      unoptimized={unoptimized}
       onError={handleError}
     />
   )
