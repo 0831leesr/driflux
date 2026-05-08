@@ -3,11 +3,10 @@ import { logCronAgainstHobbyTarget } from "@/lib/cron-hobby-log"
 import { updateTopStreamersForAllGames } from "@/lib/actions/update-top-streamers"
 
 /**
- * Vercel Hobby: 단일 호출은 보통 60초 이내가 안전. 전체 갱신은 분할 호출 권장.
- * 예: parts=6 이면 part=0..5 를 6회 순차(또는 stagger) 호출 — 각 응답의 subsetCount 확인.
- * Pro/Fluid에서 상한이 더 크면 이 값을 올려도 됩니다.
+ * Vercel Hobby: 단일 호출 상한 300초 (다른 크론 라우트와 동일).
+ * 게임 수가 많을 경우 parts 분할 호출 권장 (워크플로에서 part=0..N-1 순차 호출).
  */
-export const maxDuration = 60
+export const maxDuration = 300
 
 /**
  * 게임별 최근 인기 스트리머 TOP 3 병합 갱신 (일 1회 권장)
