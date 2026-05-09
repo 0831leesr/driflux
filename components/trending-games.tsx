@@ -1,8 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { Flame } from "lucide-react"
 import { GameCard, type GameCardData } from "@/components/game-card"
+import { Button } from "@/components/ui/button"
 import type { TrendingGameRow, HistoricalTrendingRow } from "@/lib/data"
 import type { HistoricalTrendingRanges } from "@/lib/trending-date-range"
 import { buildFeatureTags } from "@/lib/feature-tags"
@@ -122,6 +124,11 @@ export function TrendingGames({
     return `${formatDotDate(start)} ~ ${formatDotDate(end)}`
   })()
 
+  const trendingExploreMoreHref =
+    activeTab === "live"
+      ? "/explore?mode=live"
+      : `/explore?mode=trend&period=${activeTab}`
+
   return (
     <section className="pb-1">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -172,6 +179,12 @@ export function TrendingGames({
           </div>
         </div>
       )}
+
+      <div className="mt-4 flex justify-center sm:mt-5">
+        <Button variant="outline" size="sm" className="min-w-[120px] border-border" asChild>
+          <Link href={trendingExploreMoreHref}>더 보기</Link>
+        </Button>
+      </div>
     </section>
   )
 }

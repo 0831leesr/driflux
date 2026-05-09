@@ -48,6 +48,8 @@ function formatDotDate(isoYmd: string): string {
 
 interface ExploreClientProps {
   initialMode: "live" | "trend"
+  /** URL `period` when `mode=trend` (어제 / 주간 / 월간) */
+  initialTrendPeriod: ExploreTrendPeriod
   exploreLiveItems: ExploreLiveListItem[]
   trendGamesYesterday: HistoricalTrendingRow[]
   trendGamesWeek: HistoricalTrendingRow[]
@@ -136,6 +138,7 @@ function trendToCardData(
 
 export function ExploreClient({
   initialMode,
+  initialTrendPeriod,
   exploreLiveItems,
   trendGamesYesterday,
   trendGamesWeek,
@@ -149,7 +152,13 @@ export function ExploreClient({
 }: ExploreClientProps) {
   const router = useRouter()
   const [shownCount, setShownCount] = useState(PAGE_SIZE)
-  const [activeTrendPeriod, setActiveTrendPeriod] = useState<ExploreTrendPeriod>("yesterday")
+  const [activeTrendPeriod, setActiveTrendPeriod] =
+    useState<ExploreTrendPeriod>(initialTrendPeriod)
+
+  useEffect(() => {
+    if (initialMode !== "trend") return
+    setActiveTrendPeriod(initialTrendPeriod)
+  }, [initialMode, initialTrendPeriod])
 
   const yesterdaySet = useMemo(
     () => new Set(yesterdayTrendingIdsProp ?? []),
@@ -179,9 +188,12 @@ export function ExploreClient({
   const pushTrendExplore = (patch: {
     tagName?: string | null
     badges?: ExploreTrendBadgeKey[]
+    period?: ExploreTrendPeriod
   }) => {
     const params = new URLSearchParams()
     params.set("mode", "trend")
+    const period = patch.period ?? activeTrendPeriod
+    params.set("period", period)
     const tag =
       patch.tagName !== undefined ? patch.tagName : selectedTagName
     if (tag) params.set("tags", encodeURIComponent(tag))
@@ -478,7 +490,10 @@ export function ExploreClient({
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveTrendPeriod(tab.id)}
+                    onClick={() => {
+                      setActiveTrendPeriod(tab.id)
+                      pushTrendExplore({ period: tab.id })
+                    }}
                     className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       activeTrendPeriod === tab.id
                         ? "bg-background text-foreground shadow-sm"

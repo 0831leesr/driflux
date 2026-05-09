@@ -21,13 +21,25 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 
+const EXPLORE_TREND_PERIOD_VALUES = ["yesterday", "week", "month"] as const
+type ExploreTrendPeriod = (typeof EXPLORE_TREND_PERIOD_VALUES)[number]
+
+function parseExploreTrendPeriodParam(raw: string | undefined): ExploreTrendPeriod {
+  if (raw && EXPLORE_TREND_PERIOD_VALUES.includes(raw as ExploreTrendPeriod)) {
+    return raw as ExploreTrendPeriod
+  }
+  return "yesterday"
+}
+
 interface ExplorePageProps {
-  searchParams: Promise<{ mode?: string; tags?: string; badges?: string }>
+  searchParams: Promise<{ mode?: string; tags?: string; badges?: string; period?: string }>
 }
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
-  const { mode: modeParam, tags: tagsParam, badges: badgesParam } = await searchParams
+  const { mode: modeParam, tags: tagsParam, badges: badgesParam, period: periodParam } =
+    await searchParams
   const mode = modeParam === "trend" ? "trend" : "live"
+  const initialTrendPeriod = mode === "trend" ? parseExploreTrendPeriodParam(periodParam) : "yesterday"
   const rawTag = tagsParam
     ? decodeURIComponent(tagsParam.split(",")[0].trim())
     : undefined
@@ -93,6 +105,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   return (
     <ExploreClient
       initialMode={mode}
+      initialTrendPeriod={initialTrendPeriod}
       exploreLiveItems={exploreLiveItems}
       trendGamesYesterday={trendGamesYesterday}
       trendGamesWeek={trendGamesWeek}
