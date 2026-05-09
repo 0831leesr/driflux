@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og"
 
-export const alt = "Richzem - Discover Game Streams & Sales"
+export const alt = "리치젬 — 치지직 라이브 방송 트렌드, 게임·스트리머 탐색"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
@@ -59,21 +59,21 @@ export default async function Image() {
             fontSize: 24,
             color: "#a1a1aa",
             margin: 0,
-            maxWidth: 600,
+            maxWidth: 720,
             textAlign: "center",
+            lineHeight: 1.35,
           }}
         >
-          Discover Game Streams &amp; Sales
+          치지직 라이브 방송 트렌드, 게임·스트리머 탐색
         </p>
         <p
           style={{
             fontSize: 18,
             color: "#71717a",
-            marginTop: 12,
-            margin: 0,
+            margin: "12px 0 0 0",
           }}
         >
-          Watch live streams • Find Steam sales • Explore games
+          실시간 트렌드 · Steam 할인 · 게임 상세
         </p>
       </div>
     ),

@@ -39,12 +39,20 @@ export const metadata: Metadata = {
     title: "리치젬",
     description:
       "치지직 라이브 방송 트렌드, 게임·스트리머 탐색",
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Richzem" }],
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "리치젬 — 치지직 라이브 방송 트렌드, 게임·스트리머 탐색",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "리치젬",
     description: "치지직 라이브 방송 트렌드, 게임·스트리머 탐색",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "리치젬" }],
   },
   verification: {
     other: {
