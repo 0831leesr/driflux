@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { GameDetailHeaderBadgesRow } from "@/components/game/game-detail-header-badges"
 import { buildFeatureTags } from "@/lib/feature-tags"
 import { newReleaseDPlusForBadge } from "@/lib/release-date"
+import { ReportButton } from "@/components/game/report-button"
 
 export type GameHeaderProps = {
   game: GameRow
@@ -177,6 +178,7 @@ export function GameHeader({
                   스토어 열기
                 </Button>
               )}
+              <ReportButton gameId={String(game.id)} />
             </div>
           </div>
 
