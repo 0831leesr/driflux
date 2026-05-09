@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next"
 import { createClientForCache } from "@/lib/supabase/server"
 import { encodeGameUrlSegment } from "@/lib/game-path"
 
-const BASE_URL = "https://richzem.xyz"
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://richzem.xyz"
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = [

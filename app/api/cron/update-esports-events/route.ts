@@ -56,7 +56,7 @@ async function fetchWithRetry(
       const res = await fetch(url, {
         ...options,
         headers: {
-          "User-Agent": "Richzem/1.0 (+https://richzem.vercel.app)",
+          "User-Agent": "Richzem/1.0 (+https://richzem.xyz)",
           ...options.headers,
         },
         signal: controller.signal,
