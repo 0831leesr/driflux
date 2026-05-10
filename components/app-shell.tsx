@@ -43,7 +43,7 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Top Navigation */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
-        <div className="flex h-14 items-center justify-between px-4 lg:px-6">
+        <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center justify-between px-4 lg:px-6">
           <div className="flex items-center gap-2">
           {/* Mobile menu button - visible on < lg */}
           <Button
@@ -151,7 +151,9 @@ export function AppShell({ children, headerAuth }: AppShellProps) {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] transition-[margin] duration-300 ease-in-out">
           <main className="flex min-h-full min-w-0 flex-1 flex-col">
             {showMainTabs ? <MainTabNavShell /> : null}
-            {children}
+            <div className="mx-auto w-full max-w-[1440px] flex-1 flex flex-col">
+              {children}
+            </div>
             <Footer />
           </main>
         </div>
